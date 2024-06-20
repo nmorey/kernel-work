@@ -1,0 +1,58 @@
+#!/usr/bin/ruby
+
+require 'optparse'
+
+BACKPORT_LIB_DIR = File.dirname(File.readlink(__FILE__)) + '/../lib'
+$LOAD_PATH.push(BACKPORT_LIB_DIR)
+require 'common'
+$LOAD_PATH.pop()
+
+opts = {
+}
+ACTION_HELPS = KernelWork::getActionAttr("ACTION_HELP")
+actionParser = OptionParser.new(nil, 60)
+actionParser.banner = "Usage: #{__FILE__} <action> [action options]"
+actionParser.separator ""
+actionParser.separator "Options:"
+actionParser.on("-h", "--help", "Display usage.") { |val| puts actionParser.to_s; exit 0 }
+actionParser.separator "Possible actions:"
+lColS = 0
+ACTION_HELPS.each(){|k, x|
+    l = k.length() + 38
+    lColS = l if l > lColS
+}
+ACTION_HELPS.each(){|k, x|
+    indent = lColS - k.length()
+    actionParser.separator "\t * " + k.to_s() + (" " * indent )+ x
+}
+
+rest = actionParser.order!(ARGV);
+if rest.length <= 0 then
+    STDERR.puts("Error: No action provided")
+    puts actionParser.to_s()
+    exit 1
+end
+
+action_s = ARGV[0]
+action = action_s.to_sym()
+raise("Invalid action '#{action_s}'") if KernelWork::getActionAttr("ACTION_LIST").index(action) == nil
+opts[:action] = action
+ARGV.shift()
+
+optsParser = OptionParser.new(nil, 60)
+optsParser.banner = "Usage: #{__FILE__} #{action_s} "
+optsParser.separator "# " + ACTION_HELPS[action].to_s()
+optsParser.separator ""
+optsParser.separator "Options:"
+optsParser.on("-h", "--help", "Display usage.") { |val| puts optsParser.to_s; exit 0 }
+optsParser.on("--verbose", "Displays more informations.") {
+    |val| KernelWork::setVerbose(true)}
+KernelWork::setOpts(action, optsParser, opts)
+
+rest = optsParser.order!(ARGV);
+raise("Extra Unexpected extra arguments provided: " + rest.map(){|x|"'" + x + "'"}.join(", ")) if rest.length != 0
+
+KernelWork::checkOpts(opts)
+ret =  KernelWork::execAction(opts, opts[:action])
+exit ret
+
