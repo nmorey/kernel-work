@@ -121,15 +121,14 @@ module KernelWork
                     return 1
                 end
             end
-            run("rm -f 0001*.patch")
-            runGit("format-patch -n1 HEAD")
-            return $?.to_i if $?.to_i != 0
 
             if @suse.extract_patch(opts) != 0 then
                 log(:ERROR, "Failed to extract patch in KERNEL_SOURCE_DIR, reverting in LINUX_GIT")
                 runGitInteractive("reset --hard HEAD~1")
                 return 1
             end
+            run("rm -f 0001*.patch")
+            runGit("format-patch -n1 HEAD")
 
             while @suse.checkpatch(opts) != 0 do
                 @suse.meld_lastpatch(opts)
