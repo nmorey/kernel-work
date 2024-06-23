@@ -131,8 +131,10 @@ module KernelWork
             runGit("format-patch -n1 HEAD")
 
             while @suse.checkpatch(opts) != 0 do
-                @suse.meld_lastpatch(opts)
+                ret = @suse.meld_lastpatch(opts)
+                return ret if ret != 0
             end
+            return 0
         end
 
         def build_oldconfig(opts)
