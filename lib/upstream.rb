@@ -38,7 +38,11 @@ module KernelWork
 
         def initialize(suse = nil)
             @path=ENV["LINUX_GIT"].chomp()
-            @branch = `cd #{@path} && git branch`.split("\n").each().grep(/^\*/)[0].split('/')[2..-2].join('/')
+            begin
+                @branch = runGit("branch").split("\n").each().grep(/^\*/)[0].split('/')[2..-2].join('/')
+            rescue
+                raise "Failed to detect branch name"
+            end
 
             @suse = suse
             @suse = Suse.new(self) if @suse == nil

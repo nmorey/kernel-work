@@ -89,7 +89,11 @@ module KernelWork
 
         def initialize(upstream = nil)
             @path=ENV["KERNEL_SOURCE_DIR"].chomp()
-            @branch = `cd #{@path} && git branch`.split("\n").each().grep(/^\*/)[0].split('/')[2..-2].join('/')
+            begin
+                @branch = runGit("branch").split("\n").each().grep(/^\*/)[0].split('/')[2..-2].join('/')
+            rescue
+                raise "Failed to detect branch name"
+            end
             @patch_path = "patches.suse"
 
             @upstream = upstream
