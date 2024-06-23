@@ -2,7 +2,7 @@
 
 require 'optparse'
 
-BACKPORT_LIB_DIR = File.dirname(File.readlink(__FILE__)) + '/../lib'
+BACKPORT_LIB_DIR = File.dirname(File.realdirpath(__FILE__)) + '/../lib'
 $LOAD_PATH.push(BACKPORT_LIB_DIR)
 require 'common'
 $LOAD_PATH.pop()
