@@ -208,7 +208,7 @@ module KernelWork
             pname = opts[:filename] if opts[:filename] != nil
             fpath=ENV["KERNEL_SOURCE_DIR"] + "/" + @patch_path + "/" + pname
             if File.exist?(fpath) then
-                log(:ERROR, "File '#{pname}' already exists")
+                log(:ERROR, "File '#{pname}' already exists in KERNEL_SOURCE_DIR")
                 return 1
             end
             i = File.open(ENV["LINUX_GIT"] + "/" + full_pname,"r")
