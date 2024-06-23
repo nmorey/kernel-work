@@ -282,7 +282,7 @@ module KernelWork
                 ret = extract_single_patch(opts, sha)
                 return ret if ret != 0
             }
-            return ret
+            return 0
         end
         def fix_series(opts)
             run("checkout -f HEAD -- series.conf")
