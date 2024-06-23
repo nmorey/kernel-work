@@ -18,6 +18,8 @@ _kernel_work(){
 	local direct_call=${1:-1}
 	local cmd_word=$(expr $direct_call + 1)
 
+        cword=$cmd_word
+
 	__git_has_doubledash && return
 
 	_get_comp_words_by_ref cur
