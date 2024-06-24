@@ -102,7 +102,7 @@ module KernelWork
 
             idx = @@BR_LIST.index(@branch)
             if idx == nil then
-                raise "Branch '#{@branch}' not supported"
+                log(:WARNING, "Branch '#{@branch}' not in supported list")
             else
                 @branch_infos = @@MAINT_BRANCHES[idx]
                 @patch_path = @branch_infos[:patch_path] if @branch_infos[:patch_path] != nil
