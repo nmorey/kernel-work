@@ -285,7 +285,7 @@ module KernelWork
             return 0
         end
         def fix_series(opts)
-            run("checkout -f HEAD -- series.conf")
+            runGit("checkout -f HEAD -- series.conf")
             patch = get_current_patch()
             runSystem("./scripts/git_sort/series_insert.py \"#{patch}\"")
             return $?.to_i() if $?.to_i() != 0
