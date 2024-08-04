@@ -97,8 +97,9 @@ module KernelWork
 
             sha = opts[:sha1][0]
             rep="t"
+            desc=runGit("log -n1 --abbrev=12 --pretty='%h (\"%s\")' #{sha}")
             while rep != "y"
-                rep = KernelWork::confirm(opts, "pick commit '#{sha}' up?",
+                rep = KernelWork::confirm(opts, "pick commit '#{desc}' up",
                                           true, ["y", "n", "?"])
                 case rep
                 when "n"
