@@ -1,7 +1,15 @@
 module KernelWork
     class Upstream
         @@UPSTREAM_REMOTE="SUSE"
-
+        SUPPORTED_ARCHS = {
+            "x86_64" => {
+                :CC => "CC=\"ccache gcc\"",
+            },
+            "arm64" => {
+                :CROSS_COMPILE => "CROSS_COMPILE=aarch64-suse-linux-",
+                :ARCH => "ARCH=arm64",
+            }
+        }
         ACTION_LIST = [
             :apply_pending,
             :scp,
@@ -22,12 +30,20 @@ module KernelWork
 
         def self.set_opts(action, optsParser, opts)
             opts[:sha1] = []
+            opts[:arch] = "x86_64"
             case action
             when :scp
                 optsParser.on("-c", "--sha1 <SHA1>", String, "Commit to backport.") {
                     |val| opts[:sha1] << val}
                 optsParser.on("-r", "--ref <ref>", String, "Bug reference.") {
                     |val| opts[:ref] = val}
+            when :build_oldconfig, :build_all, :build_infiniband
+                optsParser.on("-a", "--arch <arch>", String, "Arch to build for. Default=x86_64. Supported=" +
+                                                             SUPPORTED_ARCHS.map(){|x, y| x}.join(", ")) {
+                    |val|
+                    raise ("Unsupported arch '#{val}'") if SUPPORTED_ARCHS[val] == nil
+                    opts[:arch] = val
+                }
             else
             end
         end
@@ -139,20 +155,36 @@ module KernelWork
         end
 
         def build_oldconfig(opts)
-            runSystem("git purge && " +
-                      "cp #{ENV["KERNEL_SOURCE_DIR"]}/config/x86_64/default .config && " +
-                      "make olddefconfig")
+            archName=opts[:arch]
+            arch=SUPPORTED_ARCHS[archName]
+            bDir="build-#{archName}/"
+
+            runSystem("rm -Rf #{bDir} && " +
+                      "mkdir #{bDir} && " +
+                      "cp #{ENV["KERNEL_SOURCE_DIR"]}/config/#{archName}/default #{bDir}/.config && "+
+                      "make olddefconfig #{arch[:ARCH].to_s()} O=#{bDir}")
             return $?.to_i()
         end
         def build_all(opts)
-            runSystem("make CC=\"ccache gcc\" -j$(nproc --all --ignore=8)")
+            archName=opts[:arch]
+            arch=SUPPORTED_ARCHS[archName]
+            bDir="build-#{archName}/"
+
+            runSystem("make #{arch[:CC].to_s()} -j$(nproc --all --ignore=8) O=#{bDir} "+
+                      " #{arch[:ARCH].to_s()} #{arch[:CROSS_COMPILE].to_s()} ")
             return $?.to_i()
         end
         def build_infiniband(opts)
-            runSystem("make CC=\"ccache gcc\" -j$(nproc --all --ignore=8) " +
+            archName=opts[:arch]
+            arch=SUPPORTED_ARCHS[archName]
+            bDir="build-#{archName}/"
+
+            runSystem("make #{arch[:CC].to_s()} -j$(nproc --all --ignore=8) O=#{bDir} " +
+                      " #{arch[:ARCH].to_s()} #{arch[:CROSS_COMPILE].to_s()} " +
                       "SUBDIRS=drivers/infiniband/ M=drivers/infiniband")
             return $?.to_i()
         end
+
         def diffpaths(opts)
             puts runGit("diff #{@@UPSTREAM_REMOTE}/#{@branch}..HEAD --stat=500").split("\n").map() {|l|
                 next if l =~ /files changed/
