@@ -17,6 +17,7 @@ module KernelWork
             :build_all,
             :build_infiniband,
             :diffpaths,
+            :kabi_check
         ]
         ACTION_HELP = {
             :"*** LINUX_GIT commands *** *" => "",
@@ -26,6 +27,7 @@ module KernelWork
             :build_all => "Build all",
             :build_infiniband => "Build infiniband subdirs",
             :diffpaths => "List changed paths (dir) since reference branch",
+            :kabi_check => "Check kABI compatibility",
         }
 
         def self.set_opts(action, optsParser, opts)
@@ -37,7 +39,7 @@ module KernelWork
                     |val| opts[:sha1] << val}
                 optsParser.on("-r", "--ref <ref>", String, "Bug reference.") {
                     |val| opts[:ref] = val}
-            when :build_oldconfig, :build_all, :build_infiniband
+            when :build_oldconfig, :build_all, :build_infiniband, :kabi_check
                 optsParser.on("-a", "--arch <arch>", String, "Arch to build for. Default=x86_64. Supported=" +
                                                              SUPPORTED_ARCHS.map(){|x, y| x}.join(", ")) {
                     |val|
@@ -88,8 +90,12 @@ module KernelWork
         def get_mainline(sha)
             return runGit("describe --contains --match 'v*' #{sha}").gsub(/~.*/, '')
         end
-
-
+        def optsToBDir(opts)
+            archName=opts[:arch]
+            raise ("Unsupported arch '#{archName}'") if SUPPORTED_ARCHS[archName] == nil
+            arch=SUPPORTED_ARCHS[archName]
+            return bDir="build-#{archName}/"
+        end
         #
         # ACTIONS
         #
@@ -155,9 +161,7 @@ module KernelWork
         end
 
         def build_oldconfig(opts)
-            archName=opts[:arch]
-            arch=SUPPORTED_ARCHS[archName]
-            bDir="build-#{archName}/"
+            bDir=optsToBDir(opts)
 
             runSystem("rm -Rf #{bDir} && " +
                       "mkdir #{bDir} && " +
@@ -166,18 +170,14 @@ module KernelWork
             return $?.to_i()
         end
         def build_all(opts)
-            archName=opts[:arch]
-            arch=SUPPORTED_ARCHS[archName]
-            bDir="build-#{archName}/"
+            bDir=optsToBDir(opts)
 
             runSystem("make #{arch[:CC].to_s()} -j$(nproc --all --ignore=8) O=#{bDir} "+
                       " #{arch[:ARCH].to_s()} #{arch[:CROSS_COMPILE].to_s()} ")
             return $?.to_i()
         end
         def build_infiniband(opts)
-            archName=opts[:arch]
-            arch=SUPPORTED_ARCHS[archName]
-            bDir="build-#{archName}/"
+            bDir=optsToBDir(opts)
 
             runSystem("make #{arch[:CC].to_s()} -j$(nproc --all --ignore=8) O=#{bDir} " +
                       " #{arch[:ARCH].to_s()} #{arch[:CROSS_COMPILE].to_s()} " +
@@ -193,6 +193,15 @@ module KernelWork
             return 0
         end
 
+        def kabi_check(opts)
+            bDir=optsToBDir(opts)
+            kDir=ENV["KERNEL_SOURCE_DIR"]
+
+            runSystem("#{kDir}/rpm/kabi.pl --rules #{kDir}/kabi/severities " +
+                      " #{kDir}/kabi/#{opts[:arch]}/symvers-default "+
+                      " #{bDir}/Module.symvers")
+            return $?.to_i()
+        end
 
    end
 end
