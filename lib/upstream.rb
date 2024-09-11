@@ -94,7 +94,8 @@ module KernelWork
             archName=opts[:arch]
             raise ("Unsupported arch '#{archName}'") if SUPPORTED_ARCHS[archName] == nil
             arch=SUPPORTED_ARCHS[archName]
-            return bDir="build-#{archName}/"
+            bDir="build-#{archName}/"
+            return archName, arch, bDir
         end
         #
         # ACTIONS
@@ -161,7 +162,7 @@ module KernelWork
         end
 
         def build_oldconfig(opts)
-            bDir=optsToBDir(opts)
+            archName, arch, bDir=optsToBDir(opts)
 
             runSystem("rm -Rf #{bDir} && " +
                       "mkdir #{bDir} && " +
@@ -170,14 +171,14 @@ module KernelWork
             return $?.to_i()
         end
         def build_all(opts)
-            bDir=optsToBDir(opts)
+            archName, arch, bDir=optsToBDir(opts)
 
             runSystem("make #{arch[:CC].to_s()} -j$(nproc --all --ignore=8) O=#{bDir} "+
                       " #{arch[:ARCH].to_s()} #{arch[:CROSS_COMPILE].to_s()} ")
             return $?.to_i()
         end
         def build_infiniband(opts)
-            bDir=optsToBDir(opts)
+            archName, arch, bDir=optsToBDir(opts)
 
             runSystem("make #{arch[:CC].to_s()} -j$(nproc --all --ignore=8) O=#{bDir} " +
                       " #{arch[:ARCH].to_s()} #{arch[:CROSS_COMPILE].to_s()} " +
@@ -194,11 +195,11 @@ module KernelWork
         end
 
         def kabi_check(opts)
-            bDir=optsToBDir(opts)
+            archName, arch, bDir=optsToBDir(opts)
             kDir=ENV["KERNEL_SOURCE_DIR"]
 
             runSystem("#{kDir}/rpm/kabi.pl --rules #{kDir}/kabi/severities " +
-                      " #{kDir}/kabi/#{opts[:arch]}/symvers-default "+
+                      " #{kDir}/kabi/#{archName}/symvers-default "+
                       " #{bDir}/Module.symvers")
             return $?.to_i()
         end
