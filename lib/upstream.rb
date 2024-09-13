@@ -6,6 +6,7 @@ module KernelWork
                 :CC => "CC=\"ccache gcc\"",
             },
             "arm64" => {
+                :CC => "CC=\"ccache aarch64-suse-linux-gcc\"",
                 :CROSS_COMPILE => "CROSS_COMPILE=aarch64-suse-linux-",
                 :ARCH => "ARCH=arm64",
             }
