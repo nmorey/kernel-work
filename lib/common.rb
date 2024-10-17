@@ -79,12 +79,6 @@ module KernelWork
             next if x::ACTION_LIST.index(opts[:action]) == nil
             next if x.singleton_methods().index(:check_opts) == nil
             x.check_opts(opts)
-
-            # Try to add repo specific opts
-            y = getClass(x)
-            if x != y && y.singleton_methods().index(:check_opts) != nil then
-                y.check_opts(opts)
-            end
         }
     end
     module_function :checkOpts
