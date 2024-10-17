@@ -1,6 +1,7 @@
 module KernelWork
     class Upstream
         @@UPSTREAM_REMOTE="SUSE"
+        DEFAULT_J_OPT="$(nproc --all --ignore=4)"
         SUPPORTED_ARCHS = {
             "x86_64" => {
                 :CC => "CC=\"ccache gcc\"",
@@ -34,6 +35,7 @@ module KernelWork
         def self.set_opts(action, optsParser, opts)
             opts[:sha1] = []
             opts[:arch] = "x86_64"
+            opts[:j] = DEFAULT_J_OPT
             case action
             when :scp
                 optsParser.on("-c", "--sha1 <SHA1>", String, "Commit to backport.") {
@@ -46,6 +48,10 @@ module KernelWork
                     |val|
                     raise ("Unsupported arch '#{val}'") if SUPPORTED_ARCHS[val] == nil
                     opts[:arch] = val
+                }
+                optsParser.on("-j<num>", Integer, "Number of // builds. Default '#{DEFAULT_J_OPT}'") {
+                    |val|
+                    opts[:j] = val
                 }
             else
             end
@@ -174,14 +180,14 @@ module KernelWork
         def build_all(opts)
             archName, arch, bDir=optsToBDir(opts)
 
-            runSystem("make #{arch[:CC].to_s()} -j$(nproc --all --ignore=8) O=#{bDir} "+
+            runSystem("make #{arch[:CC].to_s()} -j#{opts[:j]} O=#{bDir} "+
                       " #{arch[:ARCH].to_s()} #{arch[:CROSS_COMPILE].to_s()} ")
             return $?.to_i()
         end
         def build_infiniband(opts)
             archName, arch, bDir=optsToBDir(opts)
 
-            runSystem("make #{arch[:CC].to_s()} -j$(nproc --all --ignore=8) O=#{bDir} " +
+            runSystem("make #{arch[:CC].to_s()} -j#{opts[:j]} O=#{bDir} " +
                       " #{arch[:ARCH].to_s()} #{arch[:CROSS_COMPILE].to_s()} " +
                       "SUBDIRS=drivers/infiniband/ M=drivers/infiniband")
             return $?.to_i()
