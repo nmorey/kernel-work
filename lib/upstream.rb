@@ -96,7 +96,7 @@ module KernelWork
         end
         def runBuild(opts, flags="")
             archName, arch, bDir=optsToBDir(opts)
-            runSystem("make #{arch[:CC].to_s()} -j#{opts[:j]} O=#{bDir} "+
+            runSystem("nice -n 19 make #{arch[:CC].to_s()} -j#{opts[:j]} O=#{bDir} "+
                       " #{arch[:ARCH].to_s()} #{arch[:CROSS_COMPILE].to_s()} " + flags)
             return $?.to_i()
         end
