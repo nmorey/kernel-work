@@ -94,6 +94,12 @@ module KernelWork
             log(:DEBUG, "Running interactive git command '#{cmd}'")
             return system("cd #{@path} && git #{cmd}")
         end
+        def runBuild(opts, flags="")
+            archName, arch, bDir=optsToBDir(opts)
+            runSystem("make #{arch[:CC].to_s()} -j#{opts[:j]} O=#{bDir} "+
+                      " #{arch[:ARCH].to_s()} #{arch[:CROSS_COMPILE].to_s()} " + flags)
+            return $?.to_i()
+        end
         def get_mainline(sha)
             return runGit("describe --contains --match 'v*' #{sha}").gsub(/~.*/, '')
         end
@@ -178,19 +184,10 @@ module KernelWork
             return $?.to_i()
         end
         def build_all(opts)
-            archName, arch, bDir=optsToBDir(opts)
-
-            runSystem("make #{arch[:CC].to_s()} -j#{opts[:j]} O=#{bDir} "+
-                      " #{arch[:ARCH].to_s()} #{arch[:CROSS_COMPILE].to_s()} ")
-            return $?.to_i()
+            return runBuild(opts)
         end
         def build_infiniband(opts)
-            archName, arch, bDir=optsToBDir(opts)
-
-            runSystem("make #{arch[:CC].to_s()} -j#{opts[:j]} O=#{bDir} " +
-                      " #{arch[:ARCH].to_s()} #{arch[:CROSS_COMPILE].to_s()} " +
-                      "SUBDIRS=drivers/infiniband/ M=drivers/infiniband")
-            return $?.to_i()
+            return runBuild(opts, "SUBDIRS=drivers/infiniband/ M=drivers/infiniband")
         end
 
         def diffpaths(opts)
