@@ -225,7 +225,7 @@ module KernelWork
             return runBuild(opts)
         end
         def build_infiniband(opts)
-            return runBuild(opts, "SUBDIRS=drivers/infiniband/ M=drivers/infiniband")
+            return runBuild(opts, "SUBDIRS=drivers/infiniband/ drivers/infiniband/")
         end
 
         def diffpaths(opts)
