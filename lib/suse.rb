@@ -173,6 +173,14 @@ module KernelWork
             }
         end
 
+        def gen_commit_id_list()
+            h={}
+            run("git grep Git-commit: patches.suse | awk '{ print $NF}'").
+                chomp().split("\n").map(){|x|
+                h[x] = true
+            }
+            return h
+        end
         #
         # ACTIONS
         #

@@ -19,7 +19,8 @@ module KernelWork
             :build_all,
             :build_infiniband,
             :diffpaths,
-            :kabi_check
+            :kabi_check,
+            :backport_todo,
         ]
         ACTION_HELP = {
             :"*** LINUX_GIT commands *** *" => "",
@@ -30,6 +31,7 @@ module KernelWork
             :build_infiniband => "Build infiniband subdirs",
             :diffpaths => "List changed paths (dir) since reference branch",
             :kabi_check => "Check kABI compatibility",
+            :backport_todo => "List all patches in origin/master that are not applied to the specified tree",
         }
 
         def self.set_opts(action, optsParser, opts)
@@ -53,7 +55,17 @@ module KernelWork
                     |val|
                     opts[:j] = val
                 }
+            when :backport_todo
+                optsParser.on("-p", "--path <path>", String,
+                              "Path to subtree to monitor for non-backported patches.") {
+                    |val| opts[:path] = val}
             else
+            end
+        end
+        def self.check_opts(opts)
+            case opts[:action]
+            when :backport_todo
+                raise("Path to sub-tree is needed") if opts[:path].to_s() == ""
             end
         end
         def self.execAction(opts, action)
@@ -109,6 +121,32 @@ module KernelWork
             arch=SUPPORTED_ARCHS[archName]
             bDir="build-#{archName}/"
             return archName, arch, bDir
+        end
+
+        def genBackportList(ahead, trailing, path)
+            return runGit("log --no-merges --format=oneline #{ahead} ^#{trailing} -- #{path}").
+                       split("\n").map(){|x|
+                sha = x.gsub(/^([0-9a-f]*) .*$/, '\1')
+                name = x.gsub(/^[0-9a-f]* (.*)$/, '\1')
+                patch_id = run("git format-patch -n1 #{sha} --stdout | git patch-id | awk '{ print $1}'").chomp()
+
+                { :sha => sha, :name => name, :patch_id => patch_id}
+            }
+        end
+        def filterInHouse(head, house)
+            houseList = house.inject({}){|h, x|
+                h[x[:patch_id]] = true
+                h
+            }
+            # Filter the easy one first
+            head.delete_if(){|x| houseList[x[:patch_id]] == true }
+            # Some patches may have conflicted and the fix changes the patch-id
+            # so look for the originalcommit id in the .patches files in the SUSE tree.
+            # We could do only this, but it's much much slower, so filter as much as we can first
+
+            houseList = @suse.gen_commit_id_list()
+            head.delete_if(){|x| houseList[x[:sha]] == true }
+
         end
         #
         # ACTIONS
@@ -208,5 +246,17 @@ module KernelWork
             return $?.to_i()
         end
 
+        def backport_todo(opts)
+            head=("origin/master")
+            tBranch="HEAD"
+
+            inHead = genBackportList(head, tBranch, opts[:path])
+            inHouse = genBackportList(tBranch, head, opts[:path])
+
+            filterInHouse(inHead, inHouse)
+
+            runGitInteractive("show --no-patch --format=oneline #{inHead.map(){|x| x[:sha]}.join(" ")}")
+            return 0
+        end
    end
 end
