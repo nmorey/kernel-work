@@ -191,7 +191,7 @@ module KernelWork
                                               false, ["y", "n", "?"])
                     case rep
                     when "n"
-                        return 0
+                        break
                     when "?"
                         runGitInteractive("show #{sha}")
                     when "y"
@@ -199,6 +199,9 @@ module KernelWork
                         log(:ERROR, "Invalid answer '#{rep}'")
                     end
                 end
+
+                next if rep != "y"
+
                 runGitInteractive("cherry-pick #{sha}")
                 if $?.to_i != 0 then
                     runGitInteractive("diff")
