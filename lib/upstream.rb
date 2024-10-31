@@ -197,7 +197,7 @@ module KernelWork
                     runGitInteractive("diff")
                     log( :INFO, "Entering subshell to fix conflicts. Exit when done")
                     runSystem("bash")
-                    rep = KernelWork::confirm(opts, "continue with scp?")
+                    rep = KernelWork::confirm(opts, "continue with scp?", true)
                     if rep == "n"
                         runGitInteractive("cherry-pick --abort")
                         return 1
