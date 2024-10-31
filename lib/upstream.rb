@@ -39,12 +39,21 @@ module KernelWork
             opts[:arch] = "x86_64"
             opts[:j] = DEFAULT_J_OPT
             opts[:backport_apply] = false
+
+            # Option commonds to multiple commands
+            case action
+            when :scp, :backport_todo
+                optsParser.on("-r", "--ref <ref>", String, "Bug reference.") {
+                    |val| opts[:ref] = val }
+                optsParser.on("-y", "--yes", "Reply yes by default to whether patch should be applied.") {
+                    |val| opts[:yn_default] = :yes }
+            end
+
+            # Command specific opts
             case action
             when :scp
                 optsParser.on("-c", "--sha1 <SHA1>", String, "Commit to backport.") {
                     |val| opts[:sha1] << val}
-                optsParser.on("-r", "--ref <ref>", String, "Bug reference.") {
-                    |val| opts[:ref] = val}
             when :build_oldconfig, :build_all, :build_infiniband, :kabi_check
                 optsParser.on("-a", "--arch <arch>", String, "Arch to build for. Default=x86_64. Supported=" +
                                                              SUPPORTED_ARCHS.map(){|x, y| x}.join(", ")) {
@@ -63,8 +72,6 @@ module KernelWork
                 optsParser.on("-A", "--apply",
                               "Apply all patches using the scp command.") {
                     |val| opts[:backport_apply] = true}
-                optsParser.on("-r", "--ref <ref>", String, "Bug reference.") {
-                    |val| opts[:ref] = val}
             else
             end
         end
@@ -181,7 +188,7 @@ module KernelWork
                 desc=runGit("log -n1 --abbrev=12 --pretty='%h (\"%s\")' #{sha}")
                 while rep != "y"
                     rep = KernelWork::confirm(opts, "pick commit '#{desc}' up",
-                                              true, ["y", "n", "?"])
+                                              false, ["y", "n", "?"])
                     case rep
                     when "n"
                         return 0
