@@ -164,51 +164,52 @@ module KernelWork
             return $?.to_i()
         end
         def scp(opts)
-            if opts[:sha1].length != 1 then
-                log(:ERROR, "No or multiple SHA1 provided")
+            if opts[:sha1].length == 0 then
+                log(:ERROR, "No SHA1 provided")
                 return 1
             end
 
-            sha = opts[:sha1][0]
-            rep="t"
-            desc=runGit("log -n1 --abbrev=12 --pretty='%h (\"%s\")' #{sha}")
-            while rep != "y"
-                rep = KernelWork::confirm(opts, "pick commit '#{desc}' up",
-                                          true, ["y", "n", "?"])
-                case rep
-                when "n"
-                    return 0
-                when "?"
-                    runGitInteractive("show #{sha}")
-                when "y"
-                else
-                    log(:ERROR, "Invalid answer '#{rep}'")
+            opts[:sha1].each(){ |sha|
+                rep="t"
+                desc=runGit("log -n1 --abbrev=12 --pretty='%h (\"%s\")' #{sha}")
+                while rep != "y"
+                    rep = KernelWork::confirm(opts, "pick commit '#{desc}' up",
+                                              true, ["y", "n", "?"])
+                    case rep
+                    when "n"
+                        return 0
+                    when "?"
+                        runGitInteractive("show #{sha}")
+                    when "y"
+                    else
+                        log(:ERROR, "Invalid answer '#{rep}'")
+                    end
                 end
-            end
-            runGitInteractive("cherry-pick #{sha}")
-            if $?.to_i != 0 then
-                runGitInteractive("diff")
-                log( :INFO, "Entering subshell to fix conflicts. Exit when done")
-                runSystem("bash")
-                rep = KernelWork::confirm(opts, "continue with scp?")
-                if rep == "n"
-                    runGitInteractive("cherry-pick --abort")
+                runGitInteractive("cherry-pick #{sha}")
+                if $?.to_i != 0 then
+                    runGitInteractive("diff")
+                    log( :INFO, "Entering subshell to fix conflicts. Exit when done")
+                    runSystem("bash")
+                    rep = KernelWork::confirm(opts, "continue with scp?")
+                    if rep == "n"
+                        runGitInteractive("cherry-pick --abort")
+                        return 1
+                    end
+                end
+
+                if @suse.extract_patch(opts) != 0 then
+                    log(:ERROR, "Failed to extract patch in KERNEL_SOURCE_DIR, reverting in LINUX_GIT")
+                    runGitInteractive("reset --hard HEAD~1")
                     return 1
                 end
-            end
+                run("rm -f 0001*.patch")
+                runGit("format-patch -n1 HEAD")
 
-            if @suse.extract_patch(opts) != 0 then
-                log(:ERROR, "Failed to extract patch in KERNEL_SOURCE_DIR, reverting in LINUX_GIT")
-                runGitInteractive("reset --hard HEAD~1")
-                return 1
-            end
-            run("rm -f 0001*.patch")
-            runGit("format-patch -n1 HEAD")
-
-            while @suse.checkpatch(opts) != 0 do
-                ret = @suse.meld_lastpatch(opts)
-                return ret if ret != 0
-            end
+                while @suse.checkpatch(opts) != 0 do
+                    ret = @suse.meld_lastpatch(opts)
+                    return ret if ret != 0
+                end
+            }
             return 0
         end
 
