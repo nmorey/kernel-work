@@ -270,6 +270,11 @@ module KernelWork
 
             filterInHouse(inHead, inHouse)
 
+            if inHead.length == 0 then
+                puts "No patch left to backport ! Congrats !"
+                return 0
+            end
+
             runGitInteractive("show --no-patch --format=oneline #{inHead.map(){|x| x[:sha]}.join(" ")}")
 
             if opts[:backport_apply] == true then
