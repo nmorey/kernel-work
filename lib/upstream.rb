@@ -38,6 +38,7 @@ module KernelWork
             opts[:sha1] = []
             opts[:arch] = "x86_64"
             opts[:j] = DEFAULT_J_OPT
+            opts[:backport_apply] = false
             case action
             when :scp
                 optsParser.on("-c", "--sha1 <SHA1>", String, "Commit to backport.") {
@@ -59,6 +60,11 @@ module KernelWork
                 optsParser.on("-p", "--path <path>", String,
                               "Path to subtree to monitor for non-backported patches.") {
                     |val| opts[:path] = val}
+                optsParser.on("-A", "--apply",
+                              "Apply all patches using the scp command.") {
+                    |val| opts[:backport_apply] = true}
+                optsParser.on("-r", "--ref <ref>", String, "Bug reference.") {
+                    |val| opts[:ref] = val}
             else
             end
         end
@@ -168,8 +174,9 @@ module KernelWork
                 log(:ERROR, "No SHA1 provided")
                 return 1
             end
-
-            opts[:sha1].each(){ |sha|
+            shas = opts[:sha1]
+            shas.each(){ |sha|
+                opts[:sha1] = [ sha ]
                 rep="t"
                 desc=runGit("log -n1 --abbrev=12 --pretty='%h (\"%s\")' #{sha}")
                 while rep != "y"
@@ -257,6 +264,11 @@ module KernelWork
             filterInHouse(inHead, inHouse)
 
             runGitInteractive("show --no-patch --format=oneline #{inHead.map(){|x| x[:sha]}.join(" ")}")
+
+            if opts[:backport_apply] == true then
+                opts[:sha1] = inHead.map(){|x| x[:sha]}.reverse
+                return scp(opts)
+            end
             return 0
         end
    end
