@@ -14,6 +14,20 @@ _kernel_work_genoptlist(){
 		${_KERNEL_WORK_CMD_SORT} -u
 }
 
+_kernel_work_backport_todo(){
+   local OPT_LIST=$(_kernel_work_genoptlist kernel backport_todo)
+    _get_comp_words_by_ref cur
+
+    case "$prev" in
+		-p|--path)
+                    compopt -o filenames +o nospace
+		    COMPREPLY=( $( compgen -f  -- "$cur"))
+		    ;;
+		*)
+		    __gitcomp_nl "$OPT_LIST"
+		    ;;
+	esac;
+}
 _kernel_work(){
 	local direct_call=${1:-1}
 	local cmd_word=$(expr $direct_call + 1)
