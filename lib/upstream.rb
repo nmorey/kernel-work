@@ -206,7 +206,7 @@ module KernelWork
                 if $?.to_i != 0 then
                     runGitInteractive("diff")
                     log( :INFO, "Entering subshell to fix conflicts. Exit when done")
-                    runSystem("bash")
+                    runSystem("PS1_WARNING='SCP FIX' bash")
                     rep = KernelWork::confirm(opts, "continue with scp?", true)
                     if rep == "n"
                         runGitInteractive("cherry-pick --abort")
