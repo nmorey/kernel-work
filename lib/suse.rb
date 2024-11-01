@@ -181,6 +181,9 @@ module KernelWork
             }
             return h
         end
+        def patchname_to_path(pname)
+            return ENV["KERNEL_SOURCE_DIR"] + "/" + @patch_path + "/" + pname
+        end
         #
         # ACTIONS
         #
@@ -217,10 +220,32 @@ module KernelWork
             full_pname=@upstream.runGit("format-patch -n1 #{sha}")
             pname=full_pname.gsub(/^0001-/,"")
             pname = opts[:filename] if opts[:filename] != nil
-            fpath=ENV["KERNEL_SOURCE_DIR"] + "/" + @patch_path + "/" + pname
-            if File.exist?(fpath) then
+
+            fpath=patchname_to_path(pname)
+            while File.exist?(fpath) do
                 log(:ERROR, "File '#{pname}' already exists in KERNEL_SOURCE_DIR")
-                return 1
+                return 1 if opts[:filename] != nil
+
+                # If user has not specified a name, try to prompt him for one
+                rep= KernelWork::confirm(opts, "set a custom filename", true, ["y", "n"])
+                if rep == "n" then
+                    log(:ERROR, "Aborting")
+                    return 1
+                end
+
+                rep="t"
+                nName=nil
+                while rep != "y"
+                    puts "Enter a filename (auto name was: #{pname} ):"
+                    nName=STDIN.gets.chomp()
+                    rep = KernelWork::confirm(opts, "keep the filename '#{nName}'", true, ["y", "n", "A" ])
+                    if rep == "A" then
+                        log(:ERROR, "Aborting")
+                        return 1
+                    end
+                end
+                pname = nName
+                fpath=patchname_to_path(pname)
             end
             i = File.open(ENV["LINUX_GIT"] + "/" + full_pname,"r")
             o = File.open(fpath , "w+")
