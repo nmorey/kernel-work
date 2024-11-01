@@ -194,9 +194,6 @@ module KernelWork
                         break
                     when "?"
                         runGitInteractive("show #{sha}")
-                    when "y"
-                    else
-                        log(:ERROR, "Invalid answer '#{rep}'")
                     end
                 end
 
