@@ -39,6 +39,7 @@ module KernelWork
             opts[:arch] = "x86_64"
             opts[:j] = DEFAULT_J_OPT
             opts[:backport_apply] = false
+            opts[:old_kernel] = false
 
             # Option commonds to multiple commands
             case action
@@ -47,13 +48,6 @@ module KernelWork
                     |val| opts[:ref] = val }
                 optsParser.on("-y", "--yes", "Reply yes by default to whether patch should be applied.") {
                     |val| opts[:yn_default] = :yes }
-            end
-
-            # Command specific opts
-            case action
-            when :scp
-                optsParser.on("-c", "--sha1 <SHA1>", String, "Commit to backport.") {
-                    |val| opts[:sha1] << val}
             when :build_oldconfig, :build_all, :build_infiniband, :kabi_check
                 optsParser.on("-a", "--arch <arch>", String, "Arch to build for. Default=x86_64. Supported=" +
                                                              SUPPORTED_ARCHS.map(){|x, y| x}.join(", ")) {
@@ -64,6 +58,17 @@ module KernelWork
                 optsParser.on("-j<num>", Integer, "Number of // builds. Default '#{DEFAULT_J_OPT}'") {
                     |val|
                     opts[:j] = val
+                }
+            end
+
+            # Command specific opts
+            case action
+            when :scp
+                optsParser.on("-c", "--sha1 <SHA1>", String, "Commit to backport.") {
+                    |val| opts[:sha1] << val}
+            when :build_infiniband
+                optsParser.on("-o", "--old-kernel", "Use M= option to build for old kernels") {
+                    |val| opts[:old_kernel] = true
                 }
             when :backport_todo
                 optsParser.on("-p", "--path <path>", String,
@@ -240,7 +245,11 @@ module KernelWork
             return runBuild(opts)
         end
         def build_infiniband(opts)
-            return runBuild(opts, "SUBDIRS=drivers/infiniband/ drivers/infiniband/")
+            buildTarget="SUBDIRS=drivers/infiniband/ drivers/infiniband/"
+            if opts[:old_kernel] == true then
+                buildTarget="M=drivers/infiniband/"
+            end
+            return runBuild(opts, "#{buildTarget}")
         end
 
         def diffpaths(opts)
