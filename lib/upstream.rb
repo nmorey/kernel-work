@@ -18,6 +18,7 @@ module KernelWork
             :build_oldconfig,
             :build_all,
             :build_infiniband,
+            :build_subset,
             :diffpaths,
             :kabi_check,
             :backport_todo,
@@ -29,6 +30,7 @@ module KernelWork
             :build_oldconfig => "Copy config from KERNEL_SOURCE to LINUX_GIT",
             :build_all => "Build all",
             :build_infiniband => "Build infiniband subdirs",
+            :build_subset => "Build specified subdirs",
             :diffpaths => "List changed paths (dir) since reference branch",
             :kabi_check => "Check kABI compatibility",
             :backport_todo => "List all patches in origin/master that are not applied to the specified tree",
@@ -40,6 +42,7 @@ module KernelWork
             opts[:j] = DEFAULT_J_OPT
             opts[:backport_apply] = false
             opts[:old_kernel] = false
+            opts[:build_subset] = nil
 
             # Option commonds to multiple commands
             case action
@@ -48,7 +51,7 @@ module KernelWork
                     |val| opts[:ref] = val }
                 optsParser.on("-y", "--yes", "Reply yes by default to whether patch should be applied.") {
                     |val| opts[:yn_default] = :yes }
-            when :build_oldconfig, :build_all, :build_infiniband, :kabi_check
+            when :build_oldconfig, :build_all, :build_infiniband, :build_subset, :kabi_check
                 optsParser.on("-a", "--arch <arch>", String, "Arch to build for. Default=x86_64. Supported=" +
                                                              SUPPORTED_ARCHS.map(){|x, y| x}.join(", ")) {
                     |val|
@@ -59,6 +62,9 @@ module KernelWork
                     |val|
                     opts[:j] = val
                 }
+                optsParser.on("-o", "--old-kernel", "Use M= option to build for old kernels") {
+                    |val| opts[:old_kernel] = true
+                }
             end
 
             # Command specific opts
@@ -66,10 +72,10 @@ module KernelWork
             when :scp
                 optsParser.on("-c", "--sha1 <SHA1>", String, "Commit to backport.") {
                     |val| opts[:sha1] << val}
-            when :build_infiniband
-                optsParser.on("-o", "--old-kernel", "Use M= option to build for old kernels") {
-                    |val| opts[:old_kernel] = true
-                }
+            when :build_subset
+                optsParser.on("-p", "--path <path>", String,
+                              "Path to subtree to build.") {
+                    |val| opts[:build_subset] = val}
             when :backport_todo
                 optsParser.on("-p", "--path <path>", String,
                               "Path to subtree to monitor for non-backported patches.") {
@@ -84,6 +90,8 @@ module KernelWork
             case opts[:action]
             when :backport_todo
                 raise("Path to sub-tree is needed") if opts[:path].to_s() == ""
+            when :build_subset
+                raise("Path to build is needed") if opts[:build_subset].to_s() == ""
             end
         end
         def self.execAction(opts, action)
@@ -244,12 +252,16 @@ module KernelWork
         def build_all(opts)
             return runBuild(opts)
         end
-        def build_infiniband(opts)
-            buildTarget="SUBDIRS=drivers/infiniband/ drivers/infiniband/"
+        def build_subset(opts)
+            buildTarget="SUBDIRS=#{opts[:build_subset]} #{opts[:build_subset]}"
             if opts[:old_kernel] == true then
-                buildTarget="M=drivers/infiniband/"
+                buildTarget="M=#{opts[:build_subset]}"
             end
             return runBuild(opts, "#{buildTarget}")
+        end
+        def build_infiniband(opts)
+            opts[:build_subset] = "drivers/infiniband/"
+            return build_subset(opts)
         end
 
         def diffpaths(opts)

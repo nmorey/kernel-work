@@ -28,6 +28,22 @@ _kernel_work_backport_todo(){
 		    ;;
 	esac;
 }
+
+_kernel_work_build_subset(){
+   local OPT_LIST=$(_kernel_work_genoptlist kernel build_subset)
+    _get_comp_words_by_ref cur
+
+    case "$prev" in
+		-p|--path)
+                    compopt -o filenames +o nospace
+		    COMPREPLY=( $( compgen -f  -- "$cur"))
+		    ;;
+		*)
+		    __gitcomp_nl "$OPT_LIST"
+		    ;;
+	esac;
+}
+
 _kernel_work(){
 	local direct_call=${1:-1}
 	local cmd_word=$(expr $direct_call + 1)
