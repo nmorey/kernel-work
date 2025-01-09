@@ -253,14 +253,22 @@ module KernelWork
             return runBuild(opts)
         end
         def build_subset(opts)
-            buildTarget="SUBDIRS=#{opts[:build_subset]} #{opts[:build_subset]}"
+            sub=opts[:build_subset]
+            buildTarget=""
+
             if opts[:old_kernel] == true then
-                buildTarget="M=#{opts[:build_subset]}"
+                # M= does not like trailing /
+                sub=sub.gsub(/\/*$/, '')
+                buildTarget="M=#{sub}"
+            else
+                # Newer build system do require one and only one though
+                sub=sub.gsub(/\/+$/, '') + '/'
+                buildTarget="SUBDIRS=#{sub} #{sub}"
             end
             return runBuild(opts, "#{buildTarget}")
         end
         def build_infiniband(opts)
-            opts[:build_subset] = "drivers/infiniband/"
+            opts[:build_subset] = "drivers/infiniband"
             return build_subset(opts)
         end
 
