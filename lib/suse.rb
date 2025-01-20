@@ -75,6 +75,8 @@ module KernelWork
 
         def self.set_opts(action, optsParser, opts)
             opts[:sha1] = []
+            opts[:full_check] = false
+
             case action
             when :extract_patch
                 optsParser.on("-c", "--sha1 <SHA1>", String, "Commit to backport.") {
@@ -85,6 +87,9 @@ module KernelWork
                     |val| opts[:ignore_tag] = true}
                 optsParser.on("-f", "--filename <file.patch>", "Custom patch filename.") {
                     |val| opts[:filename] = val}
+            when :checkpatch
+                optsParser.on("-F", "--full", "Slower but thorougher checkpatch.") {
+                    |val| opts[:full_check] = true}
             else
             end
         end
@@ -333,7 +338,9 @@ module KernelWork
             return 0
         end
         def checkpatch(opts)
-            runSystem("./scripts/sequence-patch.sh --rapid")
+            rOpt = " --rapid "
+            rOpt = "" if opts[:full_check] == true
+            runSystem("./scripts/sequence-patch.sh #{rOpt}")
             return $?.to_i()
         end
         def fix_mainline(opts)
