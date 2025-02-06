@@ -79,8 +79,12 @@ module KernelWork
         def self.set_opts(action, optsParser, opts)
             opts[:sha1] = []
             opts[:full_check] = false
+            opts[:autofix] = false
 
             case action
+            when :source_rebase
+                 optsParser.on("-A", "--autofix", "Try to autofix series.conf.") {
+                    |val| opts[:autofix] = true}
             when :extract_patch
                 optsParser.on("-c", "--sha1 <SHA1>", String, "Commit to backport.") {
                     |val| opts[:sha1] << val}
@@ -133,15 +137,15 @@ module KernelWork
         def runSystem(cmd)
             return system("cd #{@path} && #{cmd}")
         end
-        def runGit(cmd)
+        def runGit(cmd, opts={})
             log(:DEBUG, "Called from #{caller[1]}")
             log(:DEBUG, "Running git command '#{cmd}'")
-            return `cd #{@path} && git #{cmd}`.chomp()
+            return `cd #{@path} && #{opts[:env]} git #{cmd}`.chomp()
         end
-        def runGitInteractive(cmd)
+        def runGitInteractive(cmd, opts={})
             log(:DEBUG, "Called from #{caller[1]}")
             log(:DEBUG, "Running interactive git command '#{cmd}'")
-            return system("cd #{@path} && git #{cmd}")
+            return system("cd #{@path} && #{opts[:env]} git #{cmd}")
         end
 
         def get_last_patch()
@@ -200,6 +204,15 @@ module KernelWork
         #
         def source_rebase(opts)
             runGitInteractive("rebase -i #{@@SUSE_REMOTE}/#{@branch}")
+            ret = $?.exitstatus
+            while opts[:autofix] == true && ret != 0
+                log(:WARNING, "Trying to autofix series.conf")
+                ret = fix_series(opts)
+                break if ret != 0
+                log(:WARNING, "Get on with rebasing")
+                runGitInteractive("rebase --continue", { :env => "GIT_EDITOR=true"})
+                ret = $?.exitstatus
+            end
             return $?.exitstatus
         end
 
