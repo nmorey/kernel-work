@@ -96,7 +96,7 @@ module KernelWork
         end
         def self.execAction(opts, action)
             up   = Upstream.new()
-            up.send(action, opts)
+            return up.send(action, opts)
         end
 
         def initialize(suse = nil)
@@ -136,7 +136,7 @@ module KernelWork
             archName, arch, bDir=optsToBDir(opts)
             runSystem("nice -n 19 make #{arch[:CC].to_s()} -j#{opts[:j]} O=#{bDir} "+
                       " #{arch[:ARCH].to_s()} #{arch[:CROSS_COMPILE].to_s()} " + flags)
-            return $?.to_i()
+            return $?.exitstatus
         end
         def get_mainline(sha)
             return runGit("describe --contains --match 'v*' #{sha}").gsub(/~.*/, '')
@@ -180,14 +180,14 @@ module KernelWork
         def apply_pending(opts)
             runGit("am --abort")
             runGitInteractive("reset --hard #{@@UPSTREAM_REMOTE}/#{@branch}")
-            return $?.to_i() if $?.to_i != 0
+            return $?.exitstatus if $?.exitstatus != 0
             patches = @suse.gen_ordered_patchlist()
             if patches.length == 0 then
                 log(:INFO, "No patches to apply")
                 return 0
             end
             runGit("am #{patches.join(" ")}")
-            return $?.to_i()
+            return $?.exitstatus
         end
         def scp(opts)
             if opts[:sha1].length == 0 then
@@ -213,7 +213,7 @@ module KernelWork
                 next if rep != "y"
 
                 runGitInteractive("cherry-pick #{sha}")
-                if $?.to_i != 0 then
+                if $?.exitstatus != 0 then
                     runGitInteractive("diff")
                     log( :INFO, "Entering subshell to fix conflicts. Exit when done")
                     runSystem("PS1_WARNING='SCP FIX' bash")
@@ -247,7 +247,7 @@ module KernelWork
                       "mkdir #{bDir} && " +
                       "cp #{ENV["KERNEL_SOURCE_DIR"]}/config/#{archName}/default #{bDir}/.config && "+
                       "make olddefconfig #{arch[:ARCH].to_s()} O=#{bDir}")
-            return $?.to_i()
+            return $?.exitstatus
         end
         def build_all(opts)
             return runBuild(opts)
@@ -287,7 +287,7 @@ module KernelWork
             runSystem("#{kDir}/rpm/kabi.pl --rules #{kDir}/kabi/severities " +
                       " #{kDir}/kabi/#{archName}/symvers-default "+
                       " #{bDir}/Module.symvers")
-            return $?.to_i()
+            return $?.exitstatus
         end
 
         def backport_todo(opts)

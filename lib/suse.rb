@@ -98,7 +98,7 @@ module KernelWork
         end
         def self.execAction(opts, action)
             up   = Suse.new()
-            up.send(action, opts)
+            return up.send(action, opts)
         end
 
         def initialize(upstream = nil)
@@ -200,20 +200,20 @@ module KernelWork
         #
         def source_rebase(opts)
             runGitInteractive("rebase -i #{@@SUSE_REMOTE}/#{@branch}")
-            return $?.to_i()
+            return $?.exitstatus
         end
 
         def meld_lastpatch(opts)
             file = get_last_patch()
             runSystem("meld \"#{file}\" \"#{ENV["LINUX_GIT"]}\"/0001-*.patch && "+
                    "git add \"#{file}\" && git amend --no-verify")
-            return $?.to_i()
+            return $?.exitstatus
         end
 
 
         def extract_single_patch(opts, sha)
             f_sha1 = @upstream.runGit("rev-parse #{sha}")
-            if $?.to_i != 0 then
+            if $?.exitstatus != 0 then
                 log(:ERROR, "Failed to find commit #{sha}")
                 return 1
             end
@@ -295,9 +295,9 @@ module KernelWork
 
             log(:INFO, "Inserting patch")
             runSystem("./scripts/git_sort/series_insert.py #{@patch_path}/#{pname}")
-            return $?.to_i() if $?.to_i() != 0
+            return $?.exitstatus if $?.exitstatus != 0
             runGitInteractive("add series.conf #{@patch_path}/#{pname}")
-            return $?.to_i() if $?.to_i() != 0
+            return $?.exitstatus if $?.exitstatus != 0
             subject=@upstream.runGit("show --format='format:%s' --no-patch #{sha}") +
                     " (#{opts[:ref]})"
             cname=run("mktemp")
@@ -306,7 +306,7 @@ module KernelWork
             f.close()
             log(:INFO, "Commiting '#{subject}'")
             runGitInteractive("commit -F #{cname}")
-            return $?.to_i() if $?.to_i() != 0
+            return $?.exitstatus if $?.exitstatus != 0
             run("rm -f #{cname}")
             return 0
         end
@@ -335,7 +335,7 @@ module KernelWork
             runGit("checkout -f HEAD -- series.conf")
             patch = get_current_patch()
             runSystem("./scripts/git_sort/series_insert.py \"#{patch}\"")
-            return $?.to_i() if $?.to_i() != 0
+            return $?.exitstatus if $?.exitstatus != 0
             runGit("add series.conf")
             runGitInteractive("status")
             return 0
@@ -344,7 +344,7 @@ module KernelWork
             rOpt = " --rapid "
             rOpt = "" if opts[:full_check] == true
             runSystem("./scripts/sequence-patch.sh #{rOpt}")
-            return $?.to_i()
+            return $?.exitstatus
         end
         def fix_mainline(opts)
             patch = get_last_patch()
@@ -358,7 +358,7 @@ module KernelWork
         def check_fixes(opts)
             log(:INFO, "Checking potential missing git-fixes between #{@@SUSE_REMOTE}/#{@branch} and HEAD")
             runSystem("./scripts/git-fixes  $(git rev-parse \"#{@@SUSE_REMOTE}/#{@branch}\")")
-            return $?.to_i()
+            return $?.exitstatus
         end
         def list_pending(opts)
             runGitInteractive("log --no-decorate  --format=oneline \"^#{@@SUSE_REMOTE}/#{@branch}\" HEAD")
