@@ -85,6 +85,8 @@ module KernelWork
             when :source_rebase
                  optsParser.on("-A", "--autofix", "Try to autofix series.conf.") {
                     |val| opts[:autofix] = true}
+                 optsParser.on("-I", "--no-interactive", "Rebase 'dumbly' not interactively.") {
+                    |val| opts[:no_interactive] = true}
             when :extract_patch
                 optsParser.on("-c", "--sha1 <SHA1>", String, "Commit to backport.") {
                     |val| opts[:sha1] << val}
@@ -203,7 +205,11 @@ module KernelWork
         # ACTIONS
         #
         def source_rebase(opts)
-            runGitInteractive("rebase -i #{@@SUSE_REMOTE}/#{@branch}")
+            intOpts="-i"
+            if opts[:no_interactive] == true
+                intOpts = ""
+            end
+            runGitInteractive("rebase #{intOpts} #{@@SUSE_REMOTE}/#{@branch}")
             ret = $?.exitstatus
             while opts[:autofix] == true && ret != 0
                 log(:WARNING, "Trying to autofix series.conf")
