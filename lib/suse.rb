@@ -63,6 +63,7 @@ module KernelWork
             :fix_mainline,
             :check_fixes,
             :list_unmerged,
+            :list_unpushed,
         ]
         ACTION_HELP = {
             :"*** KERNEL_SOURCE_DIR commands *** *" => "",
@@ -74,6 +75,7 @@ module KernelWork
             :fix_mainline => "Fix Git-mainline in the last KERNEL_SOURCE_DIR patch",
             :check_fixes => "Use KERNEL_SOURCE_DIR script to detect missing git-fixes pulled by commited patches",
             :list_unmerged => "List KERNEL_SOURCE_DIR commits not yet merged",
+            :list_unpushed => "List KERNEL_SOURCE_DIR commits not yet push",
         }
 
         def self.set_opts(action, optsParser, opts)
@@ -382,6 +384,10 @@ module KernelWork
         end
         def list_unmerged(opts)
             runGitInteractive("log --no-decorate  --format=oneline \"^#{@@SUSE_REMOTE}/#{@branch}\" HEAD")
+            return 0
+        end
+        def list_unpushed(opts)
+            runGitInteractive("log --no-decorate  --format=oneline \"^#{@@SUSE_REMOTE}/#{@local_branch}\" HEAD")
             return 0
         end
    end
