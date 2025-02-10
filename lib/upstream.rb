@@ -102,7 +102,8 @@ module KernelWork
         def initialize(suse = nil)
             @path=ENV["LINUX_GIT"].chomp()
             begin
-                @branch = runGit("branch").split("\n").each().grep(/^\*/)[0].split('/')[2..-2].join('/')
+                @local_branch = runGit("branch --show current").chomp()
+                @branch = @local_branch.split('/')[2..-2].join('/')
             rescue
                 raise "Failed to detect branch name"
             end
