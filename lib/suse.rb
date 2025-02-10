@@ -387,7 +387,8 @@ module KernelWork
             return 0
         end
         def list_unpushed(opts)
-            runGitInteractive("log --no-decorate  --format=oneline \"^#{@@SUSE_REMOTE}/#{@local_branch}\" HEAD")
+            runGitInteractive("log --no-decorate  --format=oneline \"^#{@@SUSE_REMOTE}/#{@local_branch}\" "+
+                              " \"^#{@@SUSE_REMOTE}/#{@branch}\" HEAD")
             return 0
         end
    end
