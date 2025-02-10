@@ -62,7 +62,7 @@ module KernelWork
             :checkpatch,
             :fix_mainline,
             :check_fixes,
-            :list_pending,
+            :list_unmerged,
         ]
         ACTION_HELP = {
             :"*** KERNEL_SOURCE_DIR commands *** *" => "",
@@ -73,7 +73,7 @@ module KernelWork
             :checkpatch => "Fast checkpatch pass on all pending patches",
             :fix_mainline => "Fix Git-mainline in the last KERNEL_SOURCE_DIR patch",
             :check_fixes => "Use KERNEL_SOURCE_DIR script to detect missing git-fixes pulled by commited patches",
-            :list_pending => "List KERNEL_SOURCE_DIR commits not yet merged",
+            :list_unmerged => "List KERNEL_SOURCE_DIR commits not yet merged",
         }
 
         def self.set_opts(action, optsParser, opts)
@@ -380,7 +380,7 @@ module KernelWork
             runSystem("./scripts/git-fixes  $(git rev-parse \"#{@@SUSE_REMOTE}/#{@branch}\")")
             return $?.exitstatus
         end
-        def list_pending(opts)
+        def list_unmerged(opts)
             runGitInteractive("log --no-decorate  --format=oneline \"^#{@@SUSE_REMOTE}/#{@branch}\" HEAD")
             return 0
         end
