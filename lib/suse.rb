@@ -201,12 +201,16 @@ module KernelWork
             }
             return h
         end
-        def patchname_to_path(pname)
-            return ENV["KERNEL_SOURCE_DIR"] + "/" + @patch_path + "/" + pname
+        def patchname_to_local_path(pname)
+            return @patch_path + "/" + pname
+        end
+        def patchname_to_absolute_path(pname)
+            return ENV["KERNEL_SOURCE_DIR"] + "/" + patchname_to_local_path(pname)
         end
         #
         # ACTIONS
         #
+        public
         def source_rebase(opts)
             intOpts="-i"
             if opts[:no_interactive] == true
@@ -232,105 +236,23 @@ module KernelWork
             return $?.exitstatus
         end
 
-
         def extract_single_patch(opts, sha)
-            f_sha1 = @upstream.runGit("rev-parse #{sha}")
-            if $?.exitstatus != 0 then
-                log(:ERROR, "Failed to find commit #{sha}")
-                return 1
-            end
 
-            orig_tag, git_repo = get_mainline(sha)
-            if orig_tag == "" then
-                if opts[:ignore_tag] != true then
-                    log(:ERROR, "Commit is not contained in any tag nor maintainer repo")
-                    return 1
-                else
-                    orig_tag="Never, in-house patch"
-                    f_sha1=nil
-                end
-            end
-            full_pname=@upstream.runGit("format-patch -n1 #{sha}")
-            pname=full_pname.gsub(/^0001-/,"")
-            pname = opts[:filename] if opts[:filename] != nil
+            patchInfos = _check_patch_info(opts, sha)
+            return 1 if patchInfos == nil
 
-            fpath=patchname_to_path(pname)
-            while File.exist?(fpath) do
-                log(:ERROR, "File '#{pname}' already exists in KERNEL_SOURCE_DIR")
-                return 1 if opts[:filename] != nil
+            # Generate the patch in the linux tree and get its name at the same time
+            patchInfos[:lin_ppath] = @upstream.runGit("format-patch -n1 #{sha}")
 
-                # If user has not specified a name, try to prompt him for one
-                rep= KernelWork::confirm(opts, "set a custom filename", true, ["y", "n"])
-                if rep == "n" then
-                    log(:ERROR, "Aborting")
-                    return 1
-                end
+            # Generate the patch name in KERN tree and check its availability
+            ret = _gen_patch_name(opts, patchInfos)
+            return ret if ret != 0
 
-                rep="t"
-                nName=nil
-                while rep != "y"
-                    puts "Enter a filename (auto name was: #{pname} ):"
-                    nName=STDIN.gets.chomp()
-                    rep = KernelWork::confirm(opts, "keep the filename '#{nName}'", true, ["y", "n", "A" ])
-                    if rep == "A" then
-                        log(:ERROR, "Aborting")
-                        return 1
-                    end
-                end
-                pname = nName
-                fpath=patchname_to_path(pname)
-            end
-            i = File.open(ENV["LINUX_GIT"] + "/" + full_pname,"r")
-            o = File.open(fpath , "w+")
+            _copy_and_fill_patch(opts, patchInfos)
 
-            p_split=0
-            in_subj=false
-            i.each(){|l|
-                case l
-                when /^Subject: \[PATCH/
-                    in_subj=true
-                    o.puts l
-                when /^\n$/
-                    if in_subj == true
-                        o.puts "Git-commit: #{f_sha1}" if f_sha1 != nil
-                        o.puts "Patch-mainline: #{orig_tag}" if orig_tag != nil
-                        o.puts "References: #{opts[:ref]}" if opts[:ref] != nil
-                        o.puts "Git-repo: #{git_repo}" if git_repo != nil
-                        in_subj=false
-                    end
-                    o.puts l
-                when /^---\n$/
-                    if p_split == 0 then
-                        name=runGit("config --get user.name")
-                        email=runGit("config --get user.email")
-                        o.puts "Acked-by: #{name} <#{email}>"
-                        p_split = 1
-                    end
-                    o.puts l
-                else
-                    o.puts l
-                end
-            }
-            o.close()
-            run("rm -f \"#{full_pname}\"")
-            runGitInteractive("add #{@patch_path}/#{pname}")
+            runGitInteractive("add #{patchInfos[:ker_local_path]}")
 
-            log(:INFO, "Inserting patch")
-            runSystem("./scripts/git_sort/series_insert.py #{@patch_path}/#{pname}")
-            return $?.exitstatus if $?.exitstatus != 0
-            runGitInteractive("add series.conf #{@patch_path}/#{pname}")
-            return $?.exitstatus if $?.exitstatus != 0
-            subject=@upstream.runGit("show --format='format:%s' --no-patch #{sha}") +
-                    " (#{opts[:ref]})"
-            cname=run("mktemp")
-            f = File.open(cname, "w+")
-            f.puts subject
-            f.close()
-            log(:INFO, "Commiting '#{subject}'")
-            runGitInteractive("commit -F #{cname}")
-            return $?.exitstatus if $?.exitstatus != 0
-            run("rm -f #{cname}")
-            return 0
+            return _insert_and_commit_patch(opts, patchInfos)
         end
 
         def extract_patch(opts)
@@ -391,5 +313,136 @@ module KernelWork
                               " \"^#{@@SUSE_REMOTE}/#{@branch}\" HEAD")
             return 0
         end
+
+
+
+        ###########################################
+        #### PRIVATE methods                   ####
+        ###########################################
+        private
+        def _check_patch_info(opts, sha)
+            f_sha1 = @upstream.runGit("rev-parse #{sha}")
+            if $?.exitstatus != 0 then
+                log(:ERROR, "Failed to find commit #{sha}")
+                return nil
+            end
+
+            orig_tag, git_repo = get_mainline(sha)
+            if orig_tag == "" then
+                if opts[:ignore_tag] != true then
+                    log(:ERROR, "Commit is not contained in any tag nor maintainer repo")
+                    return nil
+                else
+                    orig_tag="Never, in-house patch"
+                    f_sha1=nil
+                end
+            end
+
+            return {
+                :sha => sha,
+                :f_sha => f_sha1,
+                :orig_tag => orig_tag,
+                :git_repo => git_repo,
+                :ref => opts[:ref]
+            }
+        end
+
+        def _gen_patch_name(opts, patchInfos)
+            pname= patchInfos[:lin_ppath].gsub(/^0001-/,"")
+            # Default name might be overriden from CLI
+            pname = opts[:filename] if opts[:filename] != nil
+
+            fpath=patchname_to_absolute_path(pname)
+            while File.exist?(fpath) do
+                log(:ERROR, "File '#{pname}' already exists in KERNEL_SOURCE_DIR")
+                return 1 if opts[:filename] != nil
+
+                # If user has not specified a name, try to prompt him for one
+                rep= KernelWork::confirm(opts, "set a custom filename", true, ["y", "n"])
+                if rep == "n" then
+                    log(:ERROR, "Aborting")
+                    return 1
+                end
+
+                rep="t"
+                nName=nil
+                while rep != "y"
+                    puts "Enter a filename (auto name was: #{pname} ):"
+                    nName=STDIN.gets.chomp()
+                    rep = KernelWork::confirm(opts, "keep the filename '#{nName}'", true, ["y", "n", "A" ])
+                    if rep == "A" then
+                        log(:ERROR, "Aborting")
+                        return 1
+                    end
+                end
+                pname = nName
+                fpath=patchname_to_absolute_path(pname)
+            end
+            patchInfos[:ker_pname] = pname
+            patchInfos[:ker_local_path] = patchname_to_local_path(pname)
+            patchInfos[:ker_full_path] = patchname_to_absolute_path(pname)
+            return 0
+        end
+
+        def _copy_and_fill_patch(opts, patchInfos)
+            i = File.open(ENV["LINUX_GIT"] + "/" + patchInfos[:lin_ppath],"r")
+            o = File.open(patchInfos[:ker_full_path] , "w+")
+
+            p_split=0
+            in_subj=false
+            i.each(){|l|
+                case l
+                when /^Subject: \[PATCH/
+                    in_subj=true
+                    o.puts l
+                when /^\n$/
+                    if in_subj == true
+                        o.puts "Git-commit: #{patchInfos[:f_sha]}" if patchInfos[:f_sha] != nil
+                        o.puts "Patch-mainline: #{patchInfos[:orig_tag]}" if patchInfos[:orig_tag] != nil
+                        o.puts "References: #{patchInfos[:ref]}" if patchInfos[:ref] != nil
+                        o.puts "Git-repo: #{patchInfos[:git_repo]}" if patchInfos[:git_repo] != nil
+                        in_subj=false
+                    end
+                    o.puts l
+                when /^---\n$/
+                    if p_split == 0 then
+                        name=runGit("config --get user.name")
+                        email=runGit("config --get user.email")
+                        o.puts "Acked-by: #{name} <#{email}>"
+                        p_split = 1
+                    end
+                    o.puts l
+                else
+                    o.puts l
+                end
+            }
+            i.close()
+            o.close()
+            File.delete(i)
+            return 0
+        end
+
+        def _insert_and_commit_patch(opts, patchInfos)
+            lpath = patchInfos[:ker_local_path]
+            log(:INFO, "Inserting patch")
+            runSystem("./scripts/git_sort/series_insert.py #{lpath}")
+            return $?.exitstatus if $?.exitstatus != 0
+
+            runGitInteractive("add series.conf #{lpath}")
+            return $?.exitstatus if $?.exitstatus != 0
+
+            subject=@upstream.runGit("show --format='format:%s' --no-patch #{patchInfos[:sha]}") +
+                    " (#{patchInfos[:ref]})"
+            cname=run("mktemp")
+            f = File.open(cname, "w+")
+            f.puts subject
+            f.close()
+            log(:INFO, "Commiting '#{subject}'")
+            runGitInteractive("commit -F #{cname}")
+            return $?.exitstatus if $?.exitstatus != 0
+            run("rm -f #{cname}")
+            return 0
+        end
+
    end
 end
