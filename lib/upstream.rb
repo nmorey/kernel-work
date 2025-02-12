@@ -72,6 +72,8 @@ module KernelWork
             when :scp
                 optsParser.on("-c", "--sha1 <SHA1>", String, "Commit to backport.") {
                     |val| opts[:sha1] << val}
+                optsParser.on("-C", "--cve", "Auto extract reference from VULNS."){
+                    |val| opts[:cve] = true }
             when :build_subset
                 optsParser.on("-p", "--path <path>", String,
                               "Path to subtree to build.") {

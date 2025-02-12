@@ -94,6 +94,8 @@ module KernelWork
                     |val| opts[:sha1] << val}
                 optsParser.on("-r", "--ref <ref>", String, "Bug reference.") {
                     |val| opts[:ref] = val}
+                optsParser.on("-C", "--cve", "Auto extract reference from VULNS."){
+                    |val| opts[:cve] = true }
                 optsParser.on("-i", "--ignore-tag", "Ignore missing tag or maintainer branch.") {
                     |val| opts[:ignore_tag] = true}
                 optsParser.on("-f", "--filename <file.patch>", "Custom patch filename.") {
@@ -252,17 +254,25 @@ module KernelWork
 
             runGitInteractive("add #{patchInfos[:ker_local_path]}")
 
+            refs = opts[:ref]
+            if opts[:cve] == true then
+                ret = _patch_fill_in_CVE(opts, patchInfos)
+                return ret if ret != 0
+           end
+
             return _insert_and_commit_patch(opts, patchInfos)
         end
 
         def extract_patch(opts)
-            if opts[:ref] == nil then
-                opts[:ref] = @branch_infos[:ref]
-            end
+            if opts[:cve] != true then
+                if opts[:ref] == nil then
+                    opts[:ref] = @branch_infos[:ref]
+                end
 
-            if opts[:ref] == nil then
-                log(:ERROR, "No bug/CVE ref provided nor default set")
-                return 1
+                if opts[:ref] == nil then
+                    log(:ERROR, "No bug/CVE ref provided nor default set")
+                    return 1
+                end
             end
             if opts[:sha1].length == 0 then
                 log(:ERROR, "No SHA1 provided")
@@ -444,5 +454,15 @@ module KernelWork
             return 0
         end
 
+        def _patch_fill_in_CVE(opts, patchInfos)
+            lpath = patchInfos[:ker_local_path]
+            log(:INFO, "Auto referencing CVE id and BSC")
+            runSystem("echo '#{lpath}' | suse-add-cves  -v $VULNS_GIT  -f")
+            newRefs=run("git diff -U0 -- #{lpath}").split("\n").
+                        grep(/^\+References/)[0].gsub(/^\+References: /, "")
+            patchInfos[:ref] = newRefs
+            runGitInteractive("add #{lpath}")
+            return 0
+        end
    end
 end
