@@ -476,7 +476,6 @@ module KernelWork
                     # We have not set any ref as we were expecting CVE ones.
                     # Get the default ref and we need to update the patch file with it
                     ret = _fill_patchInfo_ref(patchInfos)
-                    p patchInfos
                     return ret if ret != 0
 
                     run("sed -i -e 's/^References: $/References: #{patchInfos[:ref]}/' #{lpath}")
