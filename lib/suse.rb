@@ -189,10 +189,40 @@ module KernelWork
             return orig_tag, git_repo
         end
         def gen_ordered_patchlist()
-            return runGit("diff \"#{@@SUSE_REMOTE}/#{@branch}\"..HEAD -- series.conf").
-                       split("\n").each().grep(/^\+[^+]/).grep_v(/^\+\s*#/).compact().map(){|l|
-                @path + "/" + l.split(/[ \t]/)[1]
+            up_ref = "#{@@SUSE_REMOTE}/#{@branch}"
+            patchOrder = []
+            toDoList = []
+            kernGitCommit = {}
+            f = File.open("#{@path}/series.conf", "r")
+            f.each(){|l|
+                next if l !~ /^[ \t]+(patches.*)/
+                patchOrder << $1
             }
+
+            newPatches = runGit("diff \"#{up_ref}\"..HEAD -- series.conf").
+                          split("\n").each().grep(/^\+[^+]/).grep_v(/^\+\s*#/).compact().map(){|l|
+                 p = l.split(/[ \t]/)[1]
+                 toDoList[patchOrder.index(p)] = "#{@path}/#{p}"
+                 p
+            }
+
+            allPatches = runGit("diff \"#{up_ref}\"..HEAD --name-only").
+                             split("\n").grep(/patches/).compact()
+
+            refreshedPatches = allPatches - newPatches
+            # Queue refreshed patches to be reapplied at the right moment
+            refreshedPatches.each(){|p|
+                 toDoList[patchOrder.index(p)] = "#{@path}/#{p}"
+            }
+            toDoList.compact!()
+            # Start the list by reverting the refreshed patches
+            # But we actually need the linux tree commit id here...
+            refreshedPatches.each(){|p|
+                kernSha = runGit("log -n1 --diff-filter=A --format='%H' -- #{p}").chomp()
+                linSha = @upstream.runGit("log -n1 --format='%H'  --grep 'suse-commit: #{kernSha}'").chomp()
+                toDoList.insert(0, "-#{linSha}")
+            }
+            return toDoList
         end
 
         def gen_commit_id_list()
