@@ -265,14 +265,9 @@ module KernelWork
 
         def extract_patch(opts)
             if opts[:cve] != true then
-                if opts[:ref] == nil then
-                    opts[:ref] = @branch_infos[:ref]
-                end
-
-                if opts[:ref] == nil then
-                    log(:ERROR, "No bug/CVE ref provided nor default set")
-                    return 1
-                end
+                # In case of CVE, we do not want to set a default :ref as it should not appear
+                # next to actual bsc/CVE refs
+                _fill_patchInfo_ref(opts)
             end
             if opts[:sha1].length == 0 then
                 log(:ERROR, "No SHA1 provided")
@@ -409,7 +404,7 @@ module KernelWork
                     if in_subj == true
                         o.puts "Git-commit: #{patchInfos[:f_sha]}" if patchInfos[:f_sha] != nil
                         o.puts "Patch-mainline: #{patchInfos[:orig_tag]}" if patchInfos[:orig_tag] != nil
-                        o.puts "References: #{patchInfos[:ref]}" if patchInfos[:ref] != nil
+                        o.puts "References: #{patchInfos[:ref]}"
                         o.puts "Git-repo: #{patchInfos[:git_repo]}" if patchInfos[:git_repo] != nil
                         in_subj=false
                     end
@@ -454,13 +449,39 @@ module KernelWork
             return 0
         end
 
+        def _fill_patchInfo_ref(h)
+            if h[:ref] == nil then
+                h[:ref] = @branch_infos[:ref]
+            end
+
+            if h[:ref] == nil then
+                log(:ERROR, "No bug/CVE ref provided nor default set")
+                return 1
+            end
+            return 0
+        end
+
         def _patch_fill_in_CVE(opts, patchInfos)
             lpath = patchInfos[:ker_local_path]
             log(:INFO, "Auto referencing CVE id and BSC")
             runSystem("echo '#{lpath}' | suse-add-cves  -v $VULNS_GIT  -f")
-            newRefs=run("git diff -U0 -- #{lpath}").split("\n").
-                        grep(/^\+References/)[0].gsub(/^\+References: /, "")
-            patchInfos[:ref] = newRefs
+            begin
+                newRefs=run("git diff -U0 -- #{lpath}").split("\n").
+                            grep(/^\+References/)[0].gsub(/^\+References: /, "")
+                patchInfos[:ref] = newRefs
+            rescue => e
+                log(:WARNING, "No CVE reference found")
+
+                if patchInfos[:ref] == nil then
+                    # We have not set any ref as we were expecting CVE ones.
+                    # Get the default ref and we need to update the patch file with it
+                    ret = _fill_patchInfo_ref(patchInfos)
+                    p patchInfos
+                    return ret if ret != 0
+
+                    run("sed -i -e 's/^References: $/References: #{patchInfos[:ref]}/' #{lpath}")
+                end
+            end
             runGitInteractive("add #{lpath}")
             return 0
         end
