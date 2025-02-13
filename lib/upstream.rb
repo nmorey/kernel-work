@@ -185,11 +185,21 @@ module KernelWork
             runGitInteractive("reset --hard #{@@UPSTREAM_REMOTE}/#{@branch}")
             return $?.exitstatus if $?.exitstatus != 0
             patches = @suse.gen_ordered_patchlist()
+
             if patches.length == 0 then
                 log(:INFO, "No patches to apply")
                 return 0
             end
-            runGitInteractive("am #{patches.join(" ")}")
+
+            amList=""
+            patches.each(){|p|
+                if p =~ /^-([a-f0-9]+)$/
+                    runGitInteractive("revert --no-edit #{$1}")
+                else
+                    amList += "#{p} "
+                end
+            }
+            runGitInteractive("am #{amList}")
             return $?.exitstatus
         end
         def scp(opts)
