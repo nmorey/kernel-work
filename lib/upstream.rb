@@ -189,7 +189,7 @@ module KernelWork
                 log(:INFO, "No patches to apply")
                 return 0
             end
-            runGit("am #{patches.join(" ")}")
+            runGitInteractive("am #{patches.join(" ")}")
             return $?.exitstatus
         end
         def scp(opts)
