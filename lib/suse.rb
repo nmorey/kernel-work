@@ -467,7 +467,7 @@ module KernelWork
             runSystem("echo '#{lpath}' | suse-add-cves  -v $VULNS_GIT  -f")
             begin
                 newRefs=run("git diff -U0 -- #{lpath}").split("\n").
-                            grep(/^\+References/)[0].gsub(/^\+References: /, "")
+                            grep(/^\+References/)[0].gsub(/^\+References: +/, "")
                 patchInfos[:ref] = newRefs
             rescue => e
                 log(:WARNING, "No CVE reference found")
