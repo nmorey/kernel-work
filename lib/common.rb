@@ -1,5 +1,72 @@
 $LOAD_PATH.push(BACKPORT_LIB_DIR)
 
+module KernelWork
+    class Common
+        ACTION_LIST = [ :list_actions ]
+        ACTION_HELP = {}
+        def self.execAction(opts, action)
+            puts KernelWork::getActionAttr("ACTION_LIST").join("\n")
+            return 0
+        end
+
+
+        private
+        def _log(lvl, str, out=STDOUT)
+            puts("# " + lvl.to_s() + ": " + str)
+        end
+
+        protected
+        def log(lvl, str)
+            case lvl
+            when :DEBUG
+                _log("DEBUG".magenta(), str) if ENV["DEBUG"].to_s() != ""
+            when :DEBUG_CI
+                _log("DEBUG_CI".magenta(), str) if ENV["DEBUG_CI"].to_s() != ""
+            when :VERBOSE
+                _log("INFO".blue(), str) if @@verbose_log == true
+            when :INFO
+                _log("INFO".green(), str)
+            when :WARNING
+                _log("WARNING".brown(), str)
+            when :ERROR
+                _log("ERROR".red(), str, STDERR)
+            else
+                _log(lvl, str)
+            end
+        end
+
+        def set_branches()
+            begin
+                @local_branch = runGit("branch --show current").chomp()
+                @branch = @local_branch.split('/')[2..-2].join('/')
+            rescue
+                raise "Failed to detect branch name"
+            end
+        end
+
+        public
+        def run(cmd)
+            return `cd #{@path} && #{cmd}`.chomp()
+        end
+
+        def runSystem(cmd)
+            return system("cd #{@path} && #{cmd}")
+        end
+
+        def runGit(cmd, opts={})
+            log(:DEBUG, "Called from #{caller[1]}")
+            log(:DEBUG, "Running git command '#{cmd}'")
+            return `cd #{@path} && #{opts[:env]} git #{cmd}`.chomp()
+        end
+
+        def runGitInteractive(cmd, opts={})
+            log(:DEBUG, "Called from #{caller[1]}")
+            log(:DEBUG, "Running interactive git command '#{cmd}'")
+            return system("cd #{@path} && #{opts[:env]} git #{cmd}")
+        end
+    end
+end
+
 # require here
 require 'upstream'
 require 'suse'
@@ -40,17 +107,7 @@ class String
 end
 
 module KernelWork
-    class Common
-        ACTION_LIST = [ :list_actions ]
-        ACTION_HELP = {}
-        def self.execAction(opts, action)
-            puts KernelWork::getActionAttr("ACTION_LIST").join("\n")
-            return 0
-        end
-    end
-
-    ACTION_CLASS = [ Common, Suse, Upstream ]
-#    ACTION_CLASS = [ Upstream, Suse ]
+   ACTION_CLASS = [ Common, Suse, Upstream ]
     @@load_class = []
     @@verbose_log = false
 
@@ -125,31 +182,6 @@ module KernelWork
         return "n"
     end
     module_function :showLog
-
-    def _log(lvl, str, out=STDOUT)
-        puts("# " + lvl.to_s() + ": " + str)
-    end
-    module_function :_log
-
-    def log(lvl, str)
-        case lvl
-        when :DEBUG
-            _log("DEBUG".magenta(), str) if ENV["DEBUG"].to_s() != ""
-        when :DEBUG_CI
-            _log("DEBUG_CI".magenta(), str) if ENV["DEBUG_CI"].to_s() != ""
-        when :VERBOSE
-            _log("INFO".blue(), str) if @@verbose_log == true
-        when :INFO
-            _log("INFO".green(), str)
-        when :WARNING
-            _log("WARNING".brown(), str)
-        when :ERROR
-            _log("ERROR".red(), str, STDERR)
-        else
-            _log(lvl, str)
-        end
-    end
-    module_function :log
 
     def setVerbose(val)
         @@verbose_log = val

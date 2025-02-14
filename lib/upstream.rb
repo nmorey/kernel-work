@@ -1,5 +1,5 @@
 module KernelWork
-    class Upstream
+    class Upstream < Common
         @@UPSTREAM_REMOTE="SUSE"
         DEFAULT_J_OPT="$(nproc --all --ignore=4)"
         SUPPORTED_ARCHS = {
@@ -103,12 +103,7 @@ module KernelWork
 
         def initialize(suse = nil)
             @path=ENV["LINUX_GIT"].chomp()
-            begin
-                @local_branch = runGit("branch --show current").chomp()
-                @branch = @local_branch.split('/')[2..-2].join('/')
-            rescue
-                raise "Failed to detect branch name"
-            end
+            set_branches()
 
             @suse = suse
             @suse = Suse.new(self) if @suse == nil
@@ -116,25 +111,6 @@ module KernelWork
         end
         attr_reader :branch
 
-        def log(lvl, str)
-            KernelWork::log(lvl, str)
-        end
-        def run(cmd)
-            return `cd #{@path} && #{cmd}`
-        end
-        def runSystem(cmd)
-            return system("cd #{@path} && #{cmd}")
-        end
-        def runGit(cmd)
-            log(:DEBUG, "Called from #{caller[1]}")
-            log(:DEBUG, "Running git command '#{cmd}'")
-            return `cd #{@path} && git #{cmd}`.chomp()
-        end
-        def runGitInteractive(cmd)
-            log(:DEBUG, "Called from #{caller[1]}")
-            log(:DEBUG, "Running interactive git command '#{cmd}'")
-            return system("cd #{@path} && git #{cmd}")
-        end
         def runBuild(opts, flags="")
             archName, arch, bDir=optsToBDir(opts)
             runSystem("nice -n 19 make #{arch[:CC].to_s()} -j#{opts[:j]} O=#{bDir} "+

@@ -1,5 +1,5 @@
 module KernelWork
-    class Suse
+    class Suse < Common
         @@SUSE_REMOTE="origin"
         @@MAINT_BRANCHES=[
             { :name => "SLE12-SP3-TD",
@@ -113,18 +113,14 @@ module KernelWork
 
         def initialize(upstream = nil)
             @path=ENV["KERNEL_SOURCE_DIR"].chomp()
-            begin
-                @local_branch = runGit("branch --show current").chomp()
-                @branch = @local_branch.split('/')[2..-2].join('/')
-            rescue
-                raise "Failed to detect branch name"
-            end
-            @patch_path = "patches.suse"
+            set_branches()
 
             @upstream = upstream
             @upstream = Upstream.new(self) if @upstream == nil
             raise("Branch mismatch") if @branch != @upstream.branch
 
+
+            @patch_path = "patches.suse"
             idx = @@BR_LIST.index(@branch)
             if idx == nil then
                 log(:WARNING, "Branch '#{@branch}' not in supported list")
@@ -134,26 +130,6 @@ module KernelWork
             end
         end
         attr_reader :branch
- 
-        def log(lvl, str)
-            KernelWork::log(lvl, str)
-        end
-        def run(cmd)
-            return `cd #{@path} && #{cmd}`.chomp()
-        end
-        def runSystem(cmd)
-            return system("cd #{@path} && #{cmd}")
-        end
-        def runGit(cmd, opts={})
-            log(:DEBUG, "Called from #{caller[1]}")
-            log(:DEBUG, "Running git command '#{cmd}'")
-            return `cd #{@path} && #{opts[:env]} git #{cmd}`.chomp()
-        end
-        def runGitInteractive(cmd, opts={})
-            log(:DEBUG, "Called from #{caller[1]}")
-            log(:DEBUG, "Running interactive git command '#{cmd}'")
-            return system("cd #{@path} && #{opts[:env]} git #{cmd}")
-        end
 
         def get_last_patch()
             runGit("show HEAD --stat --stat-width=1000 --no-decorate").
