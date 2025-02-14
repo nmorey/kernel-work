@@ -75,10 +75,14 @@ module KernelWork
 
         public
         def run(cmd)
+            log(:DEBUG, "Called from #{caller[1]}")
+            log(:DEBUG, "Running command '#{cmd}'")
             return `cd #{@path} && #{cmd}`.chomp()
         end
 
         def runSystem(cmd)
+            log(:DEBUG, "Called from #{caller[1]}")
+            log(:DEBUG, "Running interactive command '#{cmd}'")
             return system("cd #{@path} && #{cmd}")
         end
 
