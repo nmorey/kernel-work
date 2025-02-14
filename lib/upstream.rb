@@ -189,7 +189,7 @@ module KernelWork
                 rep="t"
                 desc=runGit("log -n1 --abbrev=12 --pretty='%h (\"%s\")' #{sha}")
                 while rep != "y"
-                    rep = KernelWork::confirm(opts, "pick commit '#{desc}' up",
+                    rep = confirm(opts, "pick commit '#{desc}' up",
                                               false, ["y", "n", "?"])
                     case rep
                     when "n"
@@ -206,7 +206,7 @@ module KernelWork
                     runGitInteractive("diff")
                     log( :INFO, "Entering subshell to fix conflicts. Exit when done")
                     runSystem("PS1_WARNING='SCP FIX' bash")
-                    rep = KernelWork::confirm(opts, "continue with scp?", true)
+                    rep = confirm(opts, "continue with scp?", true)
                     if rep == "n"
                         runGitInteractive("cherry-pick --abort")
                         return 1

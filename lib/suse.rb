@@ -369,7 +369,7 @@ module KernelWork
                 return 1 if opts[:filename] != nil
 
                 # If user has not specified a name, try to prompt him for one
-                rep= KernelWork::confirm(opts, "set a custom filename", true, ["y", "n"])
+                rep= confirm(opts, "set a custom filename", true, ["y", "n"])
                 if rep == "n" then
                     log(:ERROR, "Aborting")
                     return 1
@@ -380,7 +380,7 @@ module KernelWork
                 while rep != "y"
                     puts "Enter a filename (auto name was: #{pname} ):"
                     nName=STDIN.gets.chomp()
-                    rep = KernelWork::confirm(opts, "keep the filename '#{nName}'", true, ["y", "n", "A" ])
+                    rep = confirm(opts, "keep the filename '#{nName}'", true, ["y", "n", "A" ])
                     if rep == "A" then
                         log(:ERROR, "Aborting")
                         return 1

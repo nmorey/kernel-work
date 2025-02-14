@@ -54,6 +54,25 @@ module KernelWork
             end
         end
 
+        def confirm(opts, msg, ignore_default=false, allowed_reps=[ "y", "n" ])
+            rep = 't'
+            while allowed_reps.index(rep) == nil && rep != '' do
+                puts "Do you wish to #{msg} ? (#{allowed_reps.join("/")}): "
+                case (ignore_default == true ? nil : opts[:yn_default])
+                when :no
+                    puts "Auto-replying no due to --no option"
+                    rep = 'n'
+                when :yes
+                    puts "Auto-replying yes due to --yes option"
+                    rep = 'y'
+                else
+                    rep = STDIN.gets.chomp()
+                end
+            end
+            return rep
+        end
+
+
         public
         def run(cmd)
             return `cd #{@path} && #{cmd}`.chomp()
@@ -157,25 +176,6 @@ module KernelWork
         }
     end
     module_function :execAction
-
-    def confirm(opts, msg, ignore_default=false, allowed_reps=[ "y", "n" ])
-        rep = 't'
-        while allowed_reps.index(rep) == nil && rep != '' do
-            puts "Do you wish to #{msg} ? (#{allowed_reps.join("/")}): "
-            case (ignore_default == true ? nil : opts[:yn_default])
-            when :no
-                puts "Auto-replying no due to --no option"
-                rep = 'n'
-            when :yes
-                puts "Auto-replying yes due to --yes option"
-                rep = 'y'
-            else
-                rep = STDIN.gets.chomp()
-            end
-        end
-        return rep
-    end
-    module_function :confirm
 
     def setVerbose(val)
         @@verbose_log = val
