@@ -40,7 +40,17 @@ module KernelWork
                 @local_branch = runGit("branch --show current").chomp()
                 @branch = @local_branch.split('/')[2..-2].join('/')
             rescue
-                raise "Failed to detect branch name"
+                begin
+                    # Check if we are in the middle of a rebase
+                    gitDir = runGit("rev-parse --git-dir HEAD").split("\n")[0]
+                    raise "No luck" if ! File.directory?("#{gitDir}/rebase-merge")
+                    @local_branch = run("head -n1 #{gitDir}/rebase-merge/head-name").chomp().
+                                        split('/')[2..-1].join('/')
+
+                    @branch = @local_branch.split('/')[2..-2].join('/')
+                rescue
+                    raise "Failed to detect branch name"
+                end
             end
         end
 
