@@ -177,22 +177,6 @@ module KernelWork
     end
     module_function :confirm
 
-    def checkLog(opts, br1, br2, action_msg)
-        puts "Diff between #{br1} and #{br2}"
-        puts `git log --format=oneline #{br1} ^#{br2}`
-        return "n" if action_msg.to_s() == ""
-        rep = confirm(opts, "#{action_msg} this branch")
-        return rep
-    end
-    module_function :checkLog
-
-    def showLog(opts, br1, br2)
-        log(:INFO, "Diff between #{br1} and #{br2}")
-        puts `git log --format=oneline #{br1} ^#{br2}`
-        return "n"
-    end
-    module_function :showLog
-
     def setVerbose(val)
         @@verbose_log = val
     end
