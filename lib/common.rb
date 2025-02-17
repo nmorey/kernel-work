@@ -18,7 +18,7 @@ module KernelWork
             when :DEBUG_CI
                 _log("DEBUG_CI".magenta(), str) if ENV["DEBUG_CI"].to_s() != ""
             when :VERBOSE
-                _log("INFO".blue(), str) if @@verbose_log == true
+                _log("INFO".blue(), str) if KernelWork::verbose_log == true
             when :INFO
                 _log("INFO".green(), str)
             when :WARNING
@@ -199,10 +199,12 @@ module KernelWork
     end
     module_function :execAction
 
-    def setVerbose(val)
+    def self.verbose_log=(val)
         @@verbose_log = val
     end
-    module_function :setVerbose
+    def self.verbose_log()
+        @@verbose_log
+    end
 end
 $LOAD_PATH.pop()
 

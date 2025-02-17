@@ -44,7 +44,7 @@ optsParser.separator ""
 optsParser.separator "Options:"
 optsParser.on("-h", "--help", "Display usage.") { |val| puts optsParser.to_s; exit 0 }
 optsParser.on("--verbose", "Displays more informations.") {
-    |val| KernelWork::setVerbose(true)}
+    |val| KernelWork::verbose_log=true}
 KernelWork::setOpts(action, optsParser, opts)
 
 rest = optsParser.order!(ARGV);
