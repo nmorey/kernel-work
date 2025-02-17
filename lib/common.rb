@@ -5,7 +5,7 @@ module KernelWork
         ACTION_LIST = [ :list_actions ]
         ACTION_HELP = {}
         def self.execAction(opts, action)
-            puts KernelWork::getActionAttr("ACTION_LIST").join("\n")
+            puts KernelWork::getActionAttr("ACTION_LIST").map(){|x| KernelWork::actionToString(x)}.join("\n")
             return 0
         end
 
