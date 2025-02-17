@@ -96,10 +96,6 @@ module KernelWork
                 raise("Path to build is needed") if opts[:build_subset].to_s() == ""
             end
         end
-        def self.execAction(opts, action)
-            up   = Upstream.new()
-            return up.send(action, opts)
-        end
 
         def initialize(suse = nil)
             @path=ENV["LINUX_GIT"].chomp()
