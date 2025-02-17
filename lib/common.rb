@@ -5,11 +5,6 @@ module KernelWork
         ACTION_LIST = [ :list_actions ]
         ACTION_HELP = {}
 
-        def self.execAction(opts, action)
-            up   = Common.new()
-            return up.send(action, opts)
-        end
-
         private
         def _log(lvl, str, out=STDOUT)
             puts("# " + lvl.to_s() + ": " + str)
