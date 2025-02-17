@@ -138,7 +138,7 @@ module KernelWork
                 { :sha => sha, :name => name, :patch_id => patch_id}
             }
         end
-        def filterInHouse(head, house)
+        def filterInHouse(opts, head, house)
             houseList = house.inject({}){|h, x|
                 h[x[:patch_id]] = true
                 h
@@ -149,7 +149,7 @@ module KernelWork
             # so look for the originalcommit id in the .patches files in the SUSE tree.
             # We could do only this, but it's much much slower, so filter as much as we can first
 
-            houseList = @suse.gen_commit_id_list()
+            houseList = @suse.gen_commit_id_list(opts)
             head.delete_if(){|x| houseList[x[:sha]] == true }
 
         end
@@ -286,7 +286,7 @@ module KernelWork
             inHead = genBackportList(head, tBranch, opts[:path])
             inHouse = genBackportList(tBranch, head, opts[:path])
 
-            filterInHouse(inHead, inHouse)
+            filterInHouse(opts, inHead, inHouse)
 
             if inHead.length == 0 then
                 puts "No patch left to backport ! Congrats !"

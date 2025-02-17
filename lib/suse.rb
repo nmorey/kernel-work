@@ -131,13 +131,13 @@ module KernelWork
         end
         attr_reader :branch
 
-        def get_last_patch()
+        def get_last_patch(opts)
             runGit("show HEAD --stat --stat-width=1000 --no-decorate").
-                split("\n").each().grep(/#{@patch_path}/)[0].lstrip().split(/[ \t]/)[0]
+                split("\n").each().grep(/#{get_patch_dir(opts)}/)[0].lstrip().split(/[ \t]/)[0]
         end
-        def get_current_patch()
+        def get_current_patch(opts)
             runGit("diff --cached --stat --stat-width=1000").
-                split("\n").each().grep(/#{@patch_path}/)[0].lstrip().split(/[ \t]/)[0]
+                split("\n").each().grep(/#{get_patch_dir(opts)}/)[0].lstrip().split(/[ \t]/)[0]
         end
         def get_patch_commit_id(patchfile = nil)
             return runGit("grep Git-commit #{patchfile}").split(/[ \t]/)[-1]
@@ -201,19 +201,24 @@ module KernelWork
             return toDoList
         end
 
-        def gen_commit_id_list()
+        def gen_commit_id_list(opts)
             h={}
-            run("git grep Git-commit: patches.suse | awk '{ print $NF}'").
+            run("git grep Git-commit: #{get_patch_dir(opts)} | awk '{ print $NF}'").
                 chomp().split("\n").map(){|x|
                 h[x] = true
             }
             return h
         end
-        def patchname_to_local_path(pname)
-            return @patch_path + "/" + pname
+
+        def get_patch_dir(opts)
+            return @patch_path
         end
-        def patchname_to_absolute_path(pname)
-            return ENV["KERNEL_SOURCE_DIR"] + "/" + patchname_to_local_path(pname)
+
+        def patchname_to_local_path(opts, pname)
+            return get_patch_dir(opts) + "/" + pname
+        end
+        def patchname_to_absolute_path(opts, pname)
+            return ENV["KERNEL_SOURCE_DIR"] + "/" + patchname_to_local_path(opts, pname)
         end
         #
         # ACTIONS
@@ -238,7 +243,7 @@ module KernelWork
         end
 
         def meld_lastpatch(opts)
-            file = get_last_patch()
+            file = get_last_patch(opts)
             runSystem("meld \"#{file}\" \"#{ENV["LINUX_GIT"]}\"/0001-*.patch && "+
                    "git add \"#{file}\" && git amend --no-verify")
             return $?.exitstatus
@@ -288,7 +293,7 @@ module KernelWork
         end
         def fix_series(opts)
             runGit("checkout -f HEAD -- series.conf")
-            patch = get_current_patch()
+            patch = get_current_patch(opts)
             runSystem("./scripts/git_sort/series_insert.py \"#{patch}\"")
             return $?.exitstatus if $?.exitstatus != 0
             runGit("add series.conf")
@@ -302,7 +307,7 @@ module KernelWork
             return $?.exitstatus
         end
         def fix_mainline(opts)
-            patch = get_last_patch()
+            patch = get_last_patch(opts)
             sha = get_patch_commit_id(patch)
             tag = @upstream.get_mainline(sha)
             runSystem("sed -i -e 's/Patch-mainline:.*/Patch-mainline: #{tag}/' \"#{patch}\"")
@@ -363,7 +368,7 @@ module KernelWork
             # Default name might be overriden from CLI
             pname = opts[:filename] if opts[:filename] != nil
 
-            fpath=patchname_to_absolute_path(pname)
+            fpath=patchname_to_absolute_path(opts, pname)
             while File.exist?(fpath) do
                 log(:ERROR, "File '#{pname}' already exists in KERNEL_SOURCE_DIR")
                 return 1 if opts[:filename] != nil
@@ -387,11 +392,11 @@ module KernelWork
                     end
                 end
                 pname = nName
-                fpath=patchname_to_absolute_path(pname)
+                fpath=patchname_to_absolute_path(opts, pname)
             end
             patchInfos[:ker_pname] = pname
-            patchInfos[:ker_local_path] = patchname_to_local_path(pname)
-            patchInfos[:ker_full_path] = patchname_to_absolute_path(pname)
+            patchInfos[:ker_local_path] = patchname_to_local_path(opts, pname)
+            patchInfos[:ker_full_path] = patchname_to_absolute_path(opts, pname)
             return 0
         end
 
