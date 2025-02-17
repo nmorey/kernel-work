@@ -100,6 +100,9 @@ module KernelWork
                     |val| opts[:ignore_tag] = true}
                 optsParser.on("-f", "--filename <file.patch>", "Custom patch filename.") {
                     |val| opts[:filename] = val}
+                optsParser.on("-P", "--patch-path <patch/dir/>", "Custom patch dir. Default is patches.suse unless overriden by branch settings") {
+                    |val| opts[:patch_path] = val}
+
             when :checkpatch
                 optsParser.on("-F", "--full", "Slower but thorougher checkpatch.") {
                     |val| opts[:full_check] = true}
@@ -211,6 +214,7 @@ module KernelWork
         end
 
         def get_patch_dir(opts)
+            return opts[:patch_path] if opts[:patch_path] != nil
             return @patch_path
         end
 
