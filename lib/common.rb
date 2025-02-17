@@ -4,11 +4,11 @@ module KernelWork
     class Common
         ACTION_LIST = [ :list_actions ]
         ACTION_HELP = {}
-        def self.execAction(opts, action)
-            puts KernelWork::getActionAttr("ACTION_LIST").map(){|x| KernelWork::actionToString(x)}.join("\n")
-            return 0
-        end
 
+        def self.execAction(opts, action)
+            up   = Common.new()
+            return up.send(action, opts)
+        end
 
         private
         def _log(lvl, str, out=STDOUT)
@@ -72,7 +72,6 @@ module KernelWork
             return rep
         end
 
-
         public
         def run(cmd)
             log(:DEBUG, "Called from #{caller[1]}")
@@ -96,6 +95,11 @@ module KernelWork
             log(:DEBUG, "Called from #{caller[1]}")
             log(:DEBUG, "Running interactive git command '#{cmd}'")
             return system("cd #{@path} && #{opts[:env]} git #{cmd}")
+        end
+
+        def list_actions(opts)
+            puts KernelWork::getActionAttr("ACTION_LIST").map(){|x| KernelWork::actionToString(x)}.join("\n")
+            return 0
         end
     end
 end
