@@ -164,29 +164,35 @@ module KernelWork
     end
     module_function :getActionAttr
 
+
+    def _runOnClass(action, sym, &block)
+        ACTION_CLASS.each(){|x|
+            next if x::ACTION_LIST.index(action) == nil
+            if sym == nil || x.singleton_methods().index(sym) != nil then
+                return yield(x)
+            end
+            return 0
+        }
+        return -1
+    end
+    module_function :_runOnClass
+
     def setOpts(action, optsParser, opts)
-         ACTION_CLASS.each(){|x|
-             next if x::ACTION_LIST.index(action) == nil
-             if x.singleton_methods().index(:set_opts) != nil then
-                 x.set_opts(action, optsParser, opts)
-             end
-             break
+        KernelWork::_runOnClass(action, :set_opts) {|kClass|
+            kClass.set_opts(action, optsParser, opts)
         }
     end
     module_function :setOpts
 
     def checkOpts(opts)
-        ACTION_CLASS.each(){|x|
-            next if x::ACTION_LIST.index(opts[:action]) == nil
-            next if x.singleton_methods().index(:check_opts) == nil
-            x.check_opts(opts)
+         KernelWork::_runOnClass(opts[:action], :check_opts) {|kClass|
+             kClass.check_opts(opts)
         }
     end
     module_function :checkOpts
 
     def execAction(opts, action)
-        ACTION_CLASS.each(){|kClass|
-            next if kClass::ACTION_LIST.index(action) == nil
+        KernelWork::_runOnClass(action, nil) {|kClass|
             obj = kClass.new()
             return obj.send(action, opts)
         }
