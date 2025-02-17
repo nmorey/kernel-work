@@ -444,6 +444,15 @@ module KernelWork
 
         def _insert_and_commit_patch(opts, patchInfos)
             lpath = patchInfos[:ker_local_path]
+            cname=run("mktemp")
+
+            log(:INFO, "Generating sommit message in #{cname}")
+            subject=@upstream.runGit("show --format='format:%s' --no-patch #{patchInfos[:sha]}") +
+                    " (#{patchInfos[:ref]})"
+            f = File.open(cname, "w+")
+            f.puts subject
+            f.close()
+
             log(:INFO, "Inserting patch")
             runSystem("./scripts/git_sort/series_insert.py #{lpath}")
             return $?.exitstatus if $?.exitstatus != 0
@@ -451,12 +460,6 @@ module KernelWork
             runGitInteractive("add series.conf #{lpath}")
             return $?.exitstatus if $?.exitstatus != 0
 
-            subject=@upstream.runGit("show --format='format:%s' --no-patch #{patchInfos[:sha]}") +
-                    " (#{patchInfos[:ref]})"
-            cname=run("mktemp")
-            f = File.open(cname, "w+")
-            f.puts subject
-            f.close()
             log(:INFO, "Commiting '#{subject}'")
             runGitInteractive("commit -F #{cname}")
             return $?.exitstatus if $?.exitstatus != 0
