@@ -23,7 +23,7 @@ ACTION_HELPS.each(){|k, x|
 }
 ACTION_HELPS.each(){|k, x|
     indent = lColS - k.length()
-    actionParser.separator "\t * " + k.to_s() + (" " * indent )+ x
+    actionParser.separator "\t * " + KernelWork::actionToString(k) + (" " * indent )+ x
 }
 
 rest = actionParser.order!(ARGV);
@@ -34,9 +34,7 @@ if rest.length <= 0 then
 end
 
 action_s = ARGV[0]
-action = action_s.to_sym()
-raise("Invalid action '#{action_s}'") if KernelWork::getActionAttr("ACTION_LIST").index(action) == nil
-opts[:action] = action
+action = opts[:action] = KernelWork::stringToAction(action_s)
 ARGV.shift()
 
 optsParser = OptionParser.new(nil, 60)
