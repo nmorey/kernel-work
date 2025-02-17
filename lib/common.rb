@@ -144,6 +144,18 @@ module KernelWork
     @@load_class = []
     @@verbose_log = false
 
+    def stringToAction(str)
+        action = str.to_sym()
+        raise("Invalid action '#{str}'") if KernelWork::getActionAttr("ACTION_LIST").index(action) == nil
+        return action
+    end
+    module_function :stringToAction
+
+    def actionToString(sym)
+        return sym.to_s()
+    end
+    module_function :actionToString
+
     def getActionAttr(attr)
         if Common.const_get(attr).class == Hash
             return ACTION_CLASS.inject({}){|h, x| h.merge(x.const_get(attr))}
