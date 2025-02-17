@@ -109,10 +109,6 @@ module KernelWork
             else
             end
         end
-        def self.execAction(opts, action)
-            up   = Suse.new()
-            return up.send(action, opts)
-        end
 
         def initialize(upstream = nil)
             @path=ENV["KERNEL_SOURCE_DIR"].chomp()
