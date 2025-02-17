@@ -190,9 +190,10 @@ module KernelWork
     module_function :checkOpts
 
     def execAction(opts, action)
-        ACTION_CLASS.each(){|x|
-            next if x::ACTION_LIST.index(action) == nil
-            return x.execAction(opts, action)
+        ACTION_CLASS.each(){|kClass|
+            next if kClass::ACTION_LIST.index(action) == nil
+            obj = kClass.new()
+            return obj.send(action, opts)
         }
     end
     module_function :execAction
