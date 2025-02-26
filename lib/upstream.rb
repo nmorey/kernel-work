@@ -1,6 +1,9 @@
 module KernelWork
     class Upstream < Common
         @@UPSTREAM_REMOTE="SUSE"
+        @@GIT_FIXES_URL="https://w3.suse.de/~tiwai/git-fixes/branches"
+        @@GIT_FIXES_SUBTREE="infiniband"
+
         DEFAULT_J_OPT="$(nproc --all --ignore=4)"
         SUPPORTED_ARCHS = {
             "x86_64" => {
@@ -22,6 +25,7 @@ module KernelWork
             :diffpaths,
             :kabi_check,
             :backport_todo,
+            :git_fixes,
         ]
         ACTION_HELP = {
             :"*** LINUX_GIT commands *** *" => "",
@@ -34,6 +38,7 @@ module KernelWork
             :diffpaths => "List changed paths (dir) since reference branch",
             :kabi_check => "Check kABI compatibility",
             :backport_todo => "List all patches in origin/master that are not applied to the specified tree",
+            :git_fixes => "Fetch git-fixes list from #{@@GIT_FIXES_URL}/../#{@@GIT_FIXES_SUBTREE} and try to scp them.",
         }
 
         def self.set_opts(action, optsParser, opts)
@@ -43,10 +48,11 @@ module KernelWork
             opts[:backport_apply] = false
             opts[:old_kernel] = false
             opts[:build_subset] = nil
+            opts[:git_fixes_subtree] = @@GIT_FIXES_SUBTREE
 
             # Option commonds to multiple commands
             case action
-            when :scp, :backport_todo
+            when :scp, :backport_todo, :git_fixes
                 optsParser.on("-r", "--ref <ref>", String, "Bug reference.") {
                     |val| opts[:ref] = val }
                 optsParser.on("-y", "--yes", "Reply yes by default to whether patch should be applied.") {
@@ -85,6 +91,11 @@ module KernelWork
                 optsParser.on("-A", "--apply",
                               "Apply all patches using the scp command.") {
                     |val| opts[:backport_apply] = true}
+            when :git_fixes
+                optsParser.on("-s", "--subtree <subtree>", String,
+                              "Which subtree to check git-fixes from.") {
+                    |val| opts[:git_fixes_subtree] = val}
+
             else
             end
         end
@@ -260,10 +271,28 @@ module KernelWork
             return 0
         end
 
+        def git_fixes(opts)
+            opts[:sha1] = _fetch_git_fixes(opts)
+            log(:INFO, "List of patches to apply")
+            opts[:sha1].each(){|sha|
+                log(:INFO, "\t"+
+                           runGit("log -n1 --abbrev=12 --pretty='%h (\"%s\")' #{sha}"))
+            }
+            scp(opts)
+            return 0
+        end
+
         ###########################################
         #### PRIVATE methods                   ####
         ###########################################
         private
+        def _fetch_git_fixes(opts)
+             return run("curl -s #{@@GIT_FIXES_URL}/#{@branch}/#{opts[:git_fixes_subtree]}.html").
+                split("\n").each().grep(/href="https:\/\/git.kernel.org\/pub/).map(){|line|
+                 line.gsub(/^.*">([0-9a-f]+)<\/a><\/td>$/, '\1')
+             }
+        end
+
         def _cherry_pick_one(opts, sha)
             runGitInteractive("cherry-pick #{sha}")
             if $?.exitstatus != 0 then
