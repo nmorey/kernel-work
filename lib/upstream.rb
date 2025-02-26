@@ -179,48 +179,10 @@ module KernelWork
                 log(:ERROR, "No SHA1 provided")
                 return 1
             end
-            shas = opts[:sha1]
-            shas.each(){ |sha|
-                opts[:sha1] = [ sha ]
-                rep="t"
-                desc=runGit("log -n1 --abbrev=12 --pretty='%h (\"%s\")' #{sha}")
-                while rep != "y"
-                    rep = confirm(opts, "pick commit '#{desc}' up",
-                                              false, ["y", "n", "?"])
-                    case rep
-                    when "n"
-                        break
-                    when "?"
-                        runGitInteractive("show #{sha}")
-                    end
-                end
-
-                next if rep != "y"
-
-                runGitInteractive("cherry-pick #{sha}")
-                if $?.exitstatus != 0 then
-                    runGitInteractive("diff")
-                    log( :INFO, "Entering subshell to fix conflicts. Exit when done")
-                    runSystem("PS1_WARNING='SCP FIX' bash")
-                    rep = confirm(opts, "continue with scp?", true)
-                    if rep == "n"
-                        runGitInteractive("cherry-pick --abort")
-                        return 1
-                    end
-                end
-
-                if @suse.extract_patch(opts) != 0 then
-                    log(:ERROR, "Failed to extract patch in KERNEL_SOURCE_DIR, reverting in LINUX_GIT")
-                    runGitInteractive("reset --hard HEAD~1")
-                    return 1
-                end
-                run("rm -f 0001*.patch")
-                runGit("format-patch -n1 HEAD")
-
-                while @suse.checkpatch(opts) != 0 do
-                    ret = @suse.meld_lastpatch(opts)
-                    return ret if ret != 0
-                end
+            @suse.fill_patchInfo_ref(opts)
+            opts[:sha1].each(){ |sha|
+                ret = _scp_one(opts, sha)
+                return ret if ret != 0
             }
             return 0
         end
@@ -297,5 +259,68 @@ module KernelWork
             end
             return 0
         end
-   end
+
+        ###########################################
+        #### PRIVATE methods                   ####
+        ###########################################
+        private
+        def _cherry_pick_one(opts, sha)
+            runGitInteractive("cherry-pick #{sha}")
+            if $?.exitstatus != 0 then
+                runGitInteractive("diff")
+                log( :INFO, "Entering subshell to fix conflicts. Exit when done")
+                runSystem("PS1_WARNING='SCP FIX' bash")
+                rep = confirm(opts, "continue with scp?", true)
+                if rep == "n"
+                    runGitInteractive("cherry-pick --abort")
+                    return 1
+                end
+            end
+            return 0
+        end
+
+        def _tune_last_patch(opts)
+            run("rm -f 0001*.patch")
+            runGit("format-patch -n1 HEAD")
+
+            while @suse.checkpatch(opts) != 0 do
+                ret = @suse.meld_lastpatch(opts)
+                return ret if ret != 0
+            end
+            return 0
+        end
+
+        def _scp_one(opts, sha)
+            rep="t"
+            desc=runGit("log -n1 --abbrev=12 --pretty='%h (\"%s\")' #{sha}")
+
+            if @suse.is_applied?(sha)
+                log(:INFO, "Patch already applied in KERNEL_SOURCE_DIR: #{desc}")
+                return 0
+            end
+            while rep != "y"
+                rep = confirm(opts, "pick commit '#{desc}' up",
+                              false, ["y", "n", "?"])
+                case rep
+                when "n"
+                    break
+                when "?"
+                    runGitInteractive("show #{sha}")
+                end
+            end
+
+            return 0 if rep != "y"
+
+            ret = _cherry_pick_one(opts, sha)
+            return ret if ret != 0
+
+            if @suse.extract_single_patch(opts, sha) != 0 then
+                log(:ERROR, "Failed to extract patch in KERNEL_SOURCE_DIR, reverting in LINUX_GIT")
+                runGitInteractive("reset --hard HEAD~1")
+                return 1
+            end
+
+            return _tune_last_patch(opts)
+        end
+    end
 end
