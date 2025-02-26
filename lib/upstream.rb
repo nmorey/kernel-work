@@ -1,7 +1,8 @@
+require 'csv'
 module KernelWork
     class Upstream < Common
         @@UPSTREAM_REMOTE="SUSE"
-        @@GIT_FIXES_URL="https://w3.suse.de/~tiwai/git-fixes/branches"
+        @@GIT_FIXES_URL="http://w3.suse.de/~jroedel/fixes-csv/"
         @@GIT_FIXES_SUBTREE="infiniband"
 
         DEFAULT_J_OPT="$(nproc --all --ignore=4)"
@@ -287,10 +288,20 @@ module KernelWork
         ###########################################
         private
         def _fetch_git_fixes(opts)
-             return run("curl -s #{@@GIT_FIXES_URL}/#{@branch}/#{opts[:git_fixes_subtree]}.html").
-                split("\n").each().grep(/href="https:\/\/git.kernel.org\/pub/).map(){|line|
-                 line.gsub(/^.*">([0-9a-f]+)<\/a><\/td>$/, '\1')
-             }
+            str = run("curl -s #{@@GIT_FIXES_URL}/#{opts[:git_fixes_subtree]}-#{@branch}.csv")
+            return 1 if $?.exitstatus != 0
+
+            return CSV.parse(str).map(){|row|
+                case row[0]
+                when /Id/
+                    # Title line
+                    next
+                when /^[0-9a-f]+$/
+                    row[0]
+                else
+                    raise("Unexpected line #{row} in CSV")
+                end
+            }.compact()
         end
 
         def _cherry_pick_one(opts, sha)
