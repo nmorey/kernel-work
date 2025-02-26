@@ -329,8 +329,10 @@ module KernelWork
                               " \"^#{@@SUSE_REMOTE}/#{@branch}\" HEAD")
             return 0
         end
-
-
+        def is_applied?(sha)
+            runGit("grep -q #{sha}")
+            return $?.exitstatus == 0
+        end
 
         ###########################################
         #### PRIVATE methods                   ####
