@@ -273,12 +273,16 @@ module KernelWork
         end
 
         def git_fixes(opts)
-            opts[:sha1] = _fetch_git_fixes(opts)
+            shas = _fetch_git_fixes(opts)
             log(:INFO, "List of patches to apply")
-            opts[:sha1].each(){|sha|
-                log(:INFO, "\t"+
+            opts[:sha1] = shas.map(){|sha|
+                applied = @suse.is_applied?(sha)
+                status = applied ? "APPLIED".green() : "PENDING".brown()
+                log(:INFO, "  #{status}\t"+
                            runGit("log -n1 --abbrev=12 --pretty='%h (\"%s\")' #{sha}"))
-            }
+                applied ? nil : sha
+            }.compact()
+
             scp(opts)
             return 0
         end
