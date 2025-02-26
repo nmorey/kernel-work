@@ -220,6 +220,19 @@ module KernelWork
         def patchname_to_absolute_path(opts, pname)
             return ENV["KERNEL_SOURCE_DIR"] + "/" + patchname_to_local_path(opts, pname)
         end
+
+        def fill_patchInfo_ref(h)
+            if h[:ref] == nil then
+                h[:ref] = @branch_infos[:ref]
+            end
+
+            if h[:ref] == nil then
+                log(:ERROR, "No bug/CVE ref provided nor default set")
+                return 1
+            end
+            return 0
+        end
+
         #
         # ACTIONS
         #
@@ -462,18 +475,6 @@ module KernelWork
             runGitInteractive("commit -F #{cname}")
             return $?.exitstatus if $?.exitstatus != 0
             run("rm -f #{cname}")
-            return 0
-        end
-
-        def _fill_patchInfo_ref(h)
-            if h[:ref] == nil then
-                h[:ref] = @branch_infos[:ref]
-            end
-
-            if h[:ref] == nil then
-                log(:ERROR, "No bug/CVE ref provided nor default set")
-                return 1
-            end
             return 0
         end
 
