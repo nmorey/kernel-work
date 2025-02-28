@@ -274,6 +274,10 @@ module KernelWork
 
         def git_fixes(opts)
             shas = _fetch_git_fixes(opts)
+            if shas.length == 0 then
+                log(:INFO, "Great job. Nothing to do here")
+                exit 0
+            end
             log(:INFO, "List of patches to apply")
             opts[:sha1] = shas.map(){|sha|
                 applied = @suse.is_applied?(sha)
