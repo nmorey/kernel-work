@@ -50,6 +50,7 @@ module KernelWork
             opts[:old_kernel] = false
             opts[:build_subset] = nil
             opts[:git_fixes_subtree] = @@GIT_FIXES_SUBTREE
+            opts[:git_fixes_listonly] = false
 
             # Option commonds to multiple commands
             case action
@@ -96,6 +97,9 @@ module KernelWork
                 optsParser.on("-s", "--subtree <subtree>", String,
                               "Which subtree to check git-fixes from.") {
                     |val| opts[:git_fixes_subtree] = val}
+                optsParser.on("-l", "--list-only",
+                              "Only list pending patches.") {
+                    |val| opts[:git_fixes_listonly] = true}
 
             else
             end
@@ -286,6 +290,7 @@ module KernelWork
                            runGit("log -n1 --abbrev=12 --pretty='%h (\"%s\")' #{sha}"))
                 applied ? nil : sha
             }.compact()
+            return 0 if opts[:git_fixes_listonly] == true
 
             scp(opts)
             return 0
