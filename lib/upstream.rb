@@ -73,6 +73,9 @@ module KernelWork
                 optsParser.on("-o", "--old-kernel", "Use M= option to build for old kernels") {
                     |val| opts[:old_kernel] = true
                 }
+                optsParser.on("-c", "--cc <compiler>", String, "Override default compiler") {
+                    |val| opts[:cc] = val
+                }
             end
 
             # Command specific opts
@@ -125,7 +128,9 @@ module KernelWork
 
         def runBuild(opts, flags="")
             archName, arch, bDir=optsToBDir(opts)
-            runSystem("nice -n 19 make #{arch[:CC].to_s()} -j#{opts[:j]} O=#{bDir} "+
+            cc = arch[:CC].to_s()
+            cc = "CC=#{opts[:cc]}" if opts[:cc] != nil
+            runSystem("nice -n 19 make #{cc} -j#{opts[:j]} O=#{bDir} "+
                       " #{arch[:ARCH].to_s()} #{arch[:CROSS_COMPILE].to_s()} " + flags)
             return $?.exitstatus
         end
