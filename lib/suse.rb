@@ -221,7 +221,8 @@ module KernelWork
             return ENV["KERNEL_SOURCE_DIR"] + "/" + patchname_to_local_path(opts, pname)
         end
 
-        def fill_patchInfo_ref(h)
+        def fill_patchInfo_ref(h, override_cve = false)
+            return if h[:cve] == true && override_cve == false 
             if h[:ref] == nil then
                 h[:ref] = @branch_infos[:ref]
             end
@@ -288,11 +289,7 @@ module KernelWork
         end
 
         def extract_patch(opts)
-            if opts[:cve] != true then
-                # In case of CVE, we do not want to set a default :ref as it should not appear
-                # next to actual bsc/CVE refs
-                _fill_patchInfo_ref(opts)
-            end
+            _fill_patchInfo_ref(opts)
             if opts[:sha1].length == 0 then
                 log(:ERROR, "No SHA1 provided")
                 return 1
@@ -492,7 +489,7 @@ module KernelWork
                 if patchInfos[:ref] == nil then
                     # We have not set any ref as we were expecting CVE ones.
                     # Get the default ref and we need to update the patch file with it
-                    ret = _fill_patchInfo_ref(patchInfos)
+                    ret = _fill_patchInfo_ref(patchInfos, true)
                     return ret if ret != 0
 
                     run("sed -i -e 's/^References: $/References: #{patchInfos[:ref]}/' #{lpath}")
