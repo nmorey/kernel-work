@@ -289,7 +289,7 @@ module KernelWork
         end
 
         def extract_patch(opts)
-            _fill_patchInfo_ref(opts)
+            fill_patchInfo_ref(opts)
             if opts[:sha1].length == 0 then
                 log(:ERROR, "No SHA1 provided")
                 return 1
@@ -489,7 +489,7 @@ module KernelWork
                 if patchInfos[:ref] == nil then
                     # We have not set any ref as we were expecting CVE ones.
                     # Get the default ref and we need to update the patch file with it
-                    ret = _fill_patchInfo_ref(patchInfos, true)
+                    ret = fill_patchInfo_ref(patchInfos, true)
                     return ret if ret != 0
 
                     run("sed -i -e 's/^References: $/References: #{patchInfos[:ref]}/' #{lpath}")
