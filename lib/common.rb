@@ -102,6 +102,7 @@ end
 # require here
 require 'upstream'
 require 'suse'
+require 'kenv'
 
 $LOAD_PATH.pop()
 
@@ -139,7 +140,7 @@ class String
 end
 
 module KernelWork
-   ACTION_CLASS = [ Common, Suse, Upstream ]
+   ACTION_CLASS = [ Common, Suse, Upstream, KEnv ]
     @@load_class = []
     @@verbose_log = false
 
