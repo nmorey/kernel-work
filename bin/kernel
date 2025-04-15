@@ -47,8 +47,12 @@ optsParser.on("--verbose", "Displays more informations.") {
     |val| KernelWork::verbose_log=true}
 KernelWork::setOpts(action, optsParser, opts)
 
-rest = optsParser.order!(ARGV);
-raise("Extra Unexpected extra arguments provided: " + rest.map(){|x|"'" + x + "'"}.join(", ")) if rest.length != 0
+if opts[:ignore_opts] != true then
+    rest = optsParser.order!(ARGV);
+    raise("Extra Unexpected extra arguments provided: " + rest.map(){|x|"'" + x + "'"}.join(", ")) if rest.length != 0
+else
+    opts[:extra_args] = ARGV
+end
 
 KernelWork::checkOpts(opts)
 ret =  KernelWork::execAction(opts, opts[:action])
