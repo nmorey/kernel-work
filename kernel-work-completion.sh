@@ -88,9 +88,14 @@ _kernel_work(){
 		local cmd_name=${words[$cmd_word]}
 		completion_func="_kernel_work_${cmd_name}"
 		declare -f $completion_func > /dev/null
-		 if [ $? -eq 0 ]; then
+		if [ $? -ne 0 ]; then
+			 completion_func="_complete_${cmd_name}Env"
+			 declare -f $completion_func > /dev/null
+		fi
+		if [ $? -eq 0 ]; then
 			 $completion_func
-		 else
+		else
+
 			 OPT_LIST=$(_kernel_work_genoptlist kernel $cmd_name)
 			 case "$prev" in
 				 *)
