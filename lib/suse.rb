@@ -179,9 +179,9 @@ module KernelWork
 
             newPatches = runGit("diff \"#{up_ref}\"..HEAD -- series.conf").
                           split("\n").each().grep(/^\+[^+]/).grep_v(/^\+\s*#/).compact().map(){|l|
-                 p = l.split(/[ \t]/)[1]
+                 patch = l.split(/[ \t]/)[1]
                  toDoList[patchOrder.index(p)] = "#{@path}/#{p}"
-                 p
+                 patch
             }
 
             allPatches = runGit("diff \"#{up_ref}\"..HEAD --name-only").
