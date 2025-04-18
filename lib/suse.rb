@@ -167,7 +167,7 @@ module KernelWork
             return orig_tag, git_repo
         end
         def gen_ordered_patchlist()
-            up_ref = "#{@@SUSE_REMOTE}/#{@branch}"
+            up_ref = get_upstream_base()
             patchOrder = []
             toDoList = []
             kernGitCommit = {}
