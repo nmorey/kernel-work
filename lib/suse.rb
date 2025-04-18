@@ -237,6 +237,12 @@ module KernelWork
             return 0
         end
 
+        # Find commit local branch started from upstream
+        # so we can check local changes not in upstream and not break everything
+        # when upstream has moved forward
+        def get_upstream_base()
+            return runGit("merge-base HEAD #{@@SUSE_REMOTE}/#{@branch}")
+        end
         #
         # ACTIONS
         #
