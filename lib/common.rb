@@ -68,28 +68,36 @@ module KernelWork
         end
 
         public
-        def run(cmd)
+        def run(cmd, check_err = true)
             log(:DEBUG, "Called from #{caller[1]}")
             log(:DEBUG, "Running command '#{cmd}'")
-            return `cd #{@path} && #{cmd}`.chomp()
+            ret = `cd #{@path} && #{cmd}`.chomp()
+            raise(RuntimeError.new(ret)) if $?.exitstatus != 0 && check_err == true
+            return ret
         end
 
-        def runSystem(cmd)
+        def runSystem(cmd, check_err = true)
             log(:DEBUG, "Called from #{caller[1]}")
             log(:DEBUG, "Running interactive command '#{cmd}'")
-            return system("cd #{@path} && #{cmd}")
+            ret = system("cd #{@path} && #{cmd}")
+            raise(RuntimeError.new()) if $?.exitstatus != 0 && check_err == true
+            return ret
         end
 
-        def runGit(cmd, opts={})
+        def runGit(cmd, opts={}, check_err = true)
             log(:DEBUG, "Called from #{caller[1]}")
             log(:DEBUG, "Running git command '#{cmd}'")
-            return `cd #{@path} && #{opts[:env]} git #{cmd}`.chomp()
+            ret = `cd #{@path} && #{opts[:env]} git #{cmd}`.chomp()
+            raise(RuntimeError.new(ret)) if $?.exitstatus != 0 && check_err == true
+            return ret
         end
 
-        def runGitInteractive(cmd, opts={})
+        def runGitInteractive(cmd, opts={}, check_err = true)
             log(:DEBUG, "Called from #{caller[1]}")
             log(:DEBUG, "Running interactive git command '#{cmd}'")
-            return system("cd #{@path} && #{opts[:env]} git #{cmd}")
+            ret = system("cd #{@path} && #{opts[:env]} git #{cmd}")
+            raise(RuntimeError.new()) if $?.exitstatus != 0 && check_err == true
+            return ret
         end
 
         def list_actions(opts)

@@ -1,5 +1,19 @@
 require 'csv'
 module KernelWork
+
+    # SCP Abort by user input
+    class SCPAbort < RuntimeError
+    end
+    # SCP of this patch skipped by user
+    class SCPSkip < RuntimeError
+        def initialize(s="")
+            super("Skipping patch #{s}")
+        end
+    end
+    # Failed to retrieve GitFixes
+    class GitFixesFetchError < RuntimeError
+    end
+
     class Upstream < Common
         @@UPSTREAM_REMOTE="SUSE"
         @@GIT_FIXES_URL="http://w3.suse.de/~jroedel/fixes-csv/"
@@ -174,7 +188,8 @@ module KernelWork
         # ACTIONS
         #
         def apply_pending(opts)
-            runGit("am --abort")
+            # Ignore errors here, we're aborting just in case
+            runGit("am --abort", {}, false)
             runGitInteractive("reset --hard #{@@UPSTREAM_REMOTE}/#{@branch}")
             return $?.exitstatus if $?.exitstatus != 0
             patches = @suse.gen_ordered_patchlist()
@@ -202,8 +217,12 @@ module KernelWork
             end
             @suse.fill_patchInfo_ref(opts)
             opts[:sha1].each(){ |sha|
-                ret = _scp_one(opts, sha)
-                return ret if ret != 0
+                begin
+                     _scp_one(opts, sha)
+                rescue SCPAbort
+                    log(:INFO, "Aborted")
+                    return 1
+                end
             }
             return 0
         end
@@ -282,7 +301,13 @@ module KernelWork
         end
 
         def git_fixes(opts)
-            shas = _fetch_git_fixes(opts)
+            shas = []
+            begin
+                shas = _fetch_git_fixes(opts)
+            rescue GitFixesFetchError
+                log(:ERROR, "Failed to retrieve git-fixes list")
+                return 1
+            end
             if shas.length == 0 then
                 log(:INFO, "Great job. Nothing to do here")
                 exit 0
@@ -307,7 +332,7 @@ module KernelWork
         private
         def _fetch_git_fixes(opts)
             str = run("curl -s #{@@GIT_FIXES_URL}/#{opts[:git_fixes_subtree]}-#{@branch}.csv")
-            return 1 if $?.exitstatus != 0
+            raise(GitFixesFetchError) if $?.exitstatus != 0
 
             return CSV.parse(str).map(){|row|
                 case row[0]
@@ -323,27 +348,39 @@ module KernelWork
         end
 
         def _cherry_pick_one(opts, sha)
-            runGitInteractive("cherry-pick #{sha}")
-            if $?.exitstatus != 0 then
+            begin
+                runGitInteractive("cherry-pick #{sha}")
+            rescue
                 runGitInteractive("diff")
                 log( :INFO, "Entering subshell to fix conflicts. Exit when done")
                 runSystem("PS1_WARNING='SCP FIX' bash")
-                rep = confirm(opts, "continue with scp?", true)
-                if rep == "n"
+                rep = confirm(opts, "continue with scp [y(es), n(o), s(kip)]?", true, ["y", "n", "s"])
+                case rep
+                when "n"
                     runGitInteractive("cherry-pick --abort")
-                    return 1
+                    raise(SCPAbort)
+                when "s"
+                    runGitInteractive("cherry-pick --abort")
+                    e = SCPSkip.new("#{sha}")
+                    log(:INFO, e.to_s())
+                    raise(e)
                 end
             end
-            return 0
+            return
         end
 
         def _tune_last_patch(opts)
             run("rm -f 0001*.patch")
             runGit("format-patch -n1 HEAD")
 
-            while @suse.checkpatch(opts) != 0 do
-                ret = @suse.meld_lastpatch(opts)
-                return ret if ret != 0
+            ret = 1
+            while ret == 1  do
+                begin
+                    @suse.do_checkpatch(opts)
+                    ret = 0
+                rescue CheckPatchError
+                    @suse.do_meld_lastpatch(opts)
+                end
             end
             return 0
         end
@@ -369,8 +406,11 @@ module KernelWork
 
             return 0 if rep != "y"
 
-            ret = _cherry_pick_one(opts, sha)
-            return ret if ret != 0
+            begin
+                _cherry_pick_one(opts, sha)
+            rescue SCPSkip
+                return 0
+            end
 
             if @suse.extract_single_patch(opts, sha) != 0 then
                 log(:ERROR, "Failed to extract patch in KERNEL_SOURCE_DIR, reverting in LINUX_GIT")

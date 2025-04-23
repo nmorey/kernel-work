@@ -1,4 +1,14 @@
 module KernelWork
+    class NoRefError < RuntimeError
+        def initialize()
+            super("No bug/CVE ref provided nor default set")
+        end
+    end
+    class CheckPatchError < RuntimeError
+        def initialize()
+            super("Patchlist does not apply")
+        end
+    end
     class Suse < Common
         @@SUSE_REMOTE="origin"
         @@MAINT_BRANCHES=[
@@ -231,8 +241,9 @@ module KernelWork
             end
 
             if h[:ref] == nil then
-                log(:ERROR, "No bug/CVE ref provided nor default set")
-                return 1
+                e = NoRefError.new()
+                log(:ERROR, e.to_s())
+                raise e
             end
             return 0
         end
@@ -243,6 +254,24 @@ module KernelWork
         def get_upstream_base()
             return runGit("merge-base HEAD #{@@SUSE_REMOTE}/#{@branch}")
         end
+
+        def do_meld_lastpatch(opts)
+            file = get_last_patch(opts)
+            runSystem("meld \"#{file}\" \"#{ENV["LINUX_GIT"]}\"/0001-*.patch")
+            runSystem("git add \"#{file}\" && git amend --no-verify")
+            return
+        end
+
+        def do_checkpatch(opts)
+            rOpt = " --rapid "
+            rOpt = "" if opts[:full_check] == true
+            begin
+                runSystem("./scripts/sequence-patch.sh #{rOpt}")
+            rescue
+                raise CheckPatchError
+            end
+            return 0
+        end
         #
         # ACTIONS
         #
@@ -252,24 +281,34 @@ module KernelWork
             if opts[:no_interactive] == true
                 intOpts = ""
             end
-            runGitInteractive("rebase #{intOpts} #{@@SUSE_REMOTE}/#{@branch}")
-            ret = $?.exitstatus
-            while opts[:autofix] == true && ret != 0
-                log(:WARNING, "Trying to autofix series.conf")
-                ret = fix_series(opts)
-                break if ret != 0
-                log(:WARNING, "Get on with rebasing")
-                runGitInteractive("rebase --continue", { :env => "GIT_EDITOR=true"})
-                ret = $?.exitstatus
+            begin
+                runGitInteractive("rebase #{intOpts} #{@@SUSE_REMOTE}/#{@branch}")
+            rescue
+                ret = 1
+                while opts[:autofix] == true && ret != 0
+                    log(:WARNING, "Trying to autofix series.conf")
+                    ret = fix_series(opts)
+                    break if ret != 0
+                    log(:WARNING, "Get on with rebasing")
+
+                    begin
+                        runGitInteractive("rebase --continue", { :env => "GIT_EDITOR=true"})
+                        ret = 0
+                    rescue
+                        ret = 1
+                    end
+                end
+                return ret
             end
-            return $?.exitstatus
         end
 
         def meld_lastpatch(opts)
-            file = get_last_patch(opts)
-            runSystem("meld \"#{file}\" \"#{ENV["LINUX_GIT"]}\"/0001-*.patch && "+
-                   "git add \"#{file}\" && git amend --no-verify")
-            return $?.exitstatus
+            begin
+                do_meld_lastpatch(opts)
+            rescue
+                return 1
+            end
+            return 0
         end
 
         def extract_single_patch(opts, sha)
@@ -320,10 +359,12 @@ module KernelWork
             return 0
         end
         def checkpatch(opts)
-            rOpt = " --rapid "
-            rOpt = "" if opts[:full_check] == true
-            runSystem("./scripts/sequence-patch.sh #{rOpt}")
-            return $?.exitstatus
+            begin
+                do_checkpatch(opts)
+            rescue e
+                log(:ERROR, e.to_s())
+            end
+            return 1
         end
         def fix_mainline(opts)
             patch = get_last_patch(opts)
@@ -349,7 +390,7 @@ module KernelWork
             return 0
         end
         def is_applied?(sha)
-            runGit("grep -q #{sha}")
+            runGit("grep -q #{sha}", {}, false)
             return $?.exitstatus == 0
         end
 
