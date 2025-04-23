@@ -180,7 +180,7 @@ module KernelWork
             newPatches = runGit("diff \"#{up_ref}\"..HEAD -- series.conf").
                           split("\n").each().grep(/^\+[^+]/).grep_v(/^\+\s*#/).compact().map(){|l|
                  patch = l.split(/[ \t]/)[1]
-                 toDoList[patchOrder.index(patch)] = "#{@path}/#{p}"
+                 toDoList[patchOrder.index(patch)] = "#{@path}/#{patch}"
                  patch
             }
 
