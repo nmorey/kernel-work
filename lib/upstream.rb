@@ -61,6 +61,7 @@ module KernelWork
             opts[:arch] = "x86_64"
             opts[:j] = DEFAULT_J_OPT
             opts[:backport_apply] = false
+            opts[:skip_broken] = false
             opts[:old_kernel] = false
             opts[:build_subset] = nil
             opts[:git_fixes_subtree] = @@GIT_FIXES_SUBTREE
@@ -73,6 +74,8 @@ module KernelWork
                     |val| opts[:ref] = val }
                 optsParser.on("-y", "--yes", "Reply yes by default to whether patch should be applied.") {
                     |val| opts[:yn_default] = :yes }
+                optsParser.on("-S", "--skip-broken", "Automatically skip patches that do not apply.") {
+                    |val| opts[:skip_broken] = true }
             when :build_oldconfig, :build_all, :build_infiniband, :build_subset, :kabi_check
                 optsParser.on("-a", "--arch <arch>", String, "Arch to build for. Default=x86_64. Supported=" +
                                                              SUPPORTED_ARCHS.map(){|x, y| x}.join(", ")) {
@@ -351,6 +354,12 @@ module KernelWork
             begin
                 runGitInteractive("cherry-pick #{sha}")
             rescue
+                if opts[:skip_broken] == true then
+                    e = SCPSkip.new("#{sha}")
+                    log(:WARNING, e.to_s())
+                    runGitInteractive("cherry-pick --abort")
+                    raise(e)
+                end
                 runGitInteractive("diff")
                 log( :INFO, "Entering subshell to fix conflicts. Exit when done")
                 runSystem("PS1_WARNING='SCP FIX' bash")
