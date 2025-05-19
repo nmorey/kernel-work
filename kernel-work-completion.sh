@@ -18,6 +18,7 @@ _kernel_work_backport_todo(){
     local OPT_LIST=$(_kernel_work_genoptlist kernel backport_todo)
     _get_comp_words_by_ref cur
 
+    cd $LINUX_GIT/
     case "$prev" in
 	-p|--path)
             compopt -o filenames +o nospace
@@ -33,6 +34,7 @@ _kernel_work_build_subset(){
     local OPT_LIST=$(_kernel_work_genoptlist kernel build_subset)
     _get_comp_words_by_ref cur
 
+    cd $LINUX_GIT/
     case "$prev" in
 	-p|--path)
             compopt -o filenames +o nospace
