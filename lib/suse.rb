@@ -156,8 +156,10 @@ module KernelWork
         end
         def get_mainline(sha)
             git_repo = nil
-            orig_tag = @upstream.get_mainline(sha)
-            if orig_tag == "" then
+            orig_tag = nil
+            begin
+                orig_tag = @upstream.get_mainline(sha)
+            rescue NoSuchMainline
                 log(:INFO, "Commit not in any tag. Trying to find a maintainer branch")
 
                 remote_branches=@upstream.runGit("branch -a --contains #{sha}").split("\n").
@@ -170,7 +172,7 @@ module KernelWork
                     log(:INFO, "Found it in #{@@Q_BRANCHES[idx]}")
                     orig_tag = "Queued in subsystem maintainer repository"
                     remote=@@Q_BRANCHES[idx].gsub(/\/.*/,'')
-                    git_repo=runGit("config remote.#{remote}.url")
+                    git_repo=@upstream.runGit("config remote.#{remote}.url")
                     break
                 }
             end

@@ -13,6 +13,9 @@ module KernelWork
     # Failed to retrieve GitFixes
     class GitFixesFetchError < RuntimeError
     end
+    # Failed to find a mainline tag containing a sha
+    class NoSuchMainline < RuntimeError
+    end
 
     class Upstream < Common
         @@UPSTREAM_REMOTE="SUSE"
@@ -152,7 +155,11 @@ module KernelWork
             return $?.exitstatus
         end
         def get_mainline(sha)
-            return runGit("describe --contains --match 'v*' #{sha}").gsub(/~.*/, '')
+            begin
+                return runGit("describe --contains --match 'v*' #{sha}").gsub(/~.*/, '')
+            rescue
+                raise NoSuchMainline.new()
+            end
         end
         def optsToBDir(opts)
             archName=opts[:arch]
