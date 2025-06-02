@@ -369,7 +369,7 @@ module KernelWork
                 end
                 runGitInteractive("diff")
                 log( :INFO, "Entering subshell to fix conflicts. Exit when done")
-                runSystem("PS1_WARNING='SCP FIX' bash")
+                runSystem("PS1_WARNING='SCP FIX' bash", false)
                 rep = confirm(opts, "continue with scp [y(es), n(o), s(kip)]?", true, ["y", "n", "s"])
                 case rep
                 when "n"
