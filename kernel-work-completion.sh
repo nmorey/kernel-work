@@ -1,6 +1,6 @@
 export _KERNEL_WORK_CMD_AWK=$(([ -f /bin/awk ] && echo "/bin/awk") || echo "/usr/bin/awk")
 export _KERNEL_WORK_CMD_SORT=$(([ -f /bin/sort ] && echo "/bin/sort") || echo "/usr/bin/sort")
-export _KERNEL_WORK_CMD_EGREP=$(([ -f /bin/egrep ] && echo "/bin/egrep") || echo "/usr/bin/egrep")
+export _KERNEL_WORK_CMD_EGREP=$(([ -f /bin/grep ] && echo "/bin/grep -E") || echo "/usr/bin/grep -E")
 export _KERNEL_WORK_CMD_SED=$(([ -f /bin/sed ] && echo "/bin/sed") || echo "/usr/bin/sed")
 
 _kernel_work_genoptlist(){
