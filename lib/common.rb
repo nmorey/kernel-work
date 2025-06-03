@@ -1,6 +1,16 @@
 $LOAD_PATH.push(BACKPORT_LIB_DIR)
 
 module KernelWork
+    class UnknownBranch < RuntimeError
+        def initialize(path)
+            super("Failed to detect branch name in #{path}")
+        end
+    end
+    class BranchMismatch < RuntimeError
+        def initialize(upstream_br, suse_br)
+            super("Branch mismatch. Linux tree has '#{upstream_br}'. kernel-source has '#{suse_br}'")
+        end
+    end
     class Common
         ACTION_LIST = [ :list_actions ]
         ACTION_HELP = {}
@@ -44,7 +54,7 @@ module KernelWork
 
                     @branch = @local_branch.split('/')[2..-2].join('/')
                 rescue
-                    raise "Failed to detect branch name"
+                    raise UnknownBranch.new(@path)
                 end
             end
         end

@@ -138,13 +138,32 @@ module KernelWork
 
         def initialize(suse = nil)
             @path=ENV["LINUX_GIT"].chomp()
-            set_branches()
+            begin
+                set_branches()
+            rescue UnknownBranch
+                @branch = nil
+            end
 
             @suse = suse
             @suse = Suse.new(self) if @suse == nil
-            raise("Branch mismatch") if @branch != @suse.branch
+
         end
-        attr_reader :branch
+        def branch()
+            raise UnknownBranch.new(@path) if @branch == nil
+            @suse.branch?(@branch)
+            return @branch
+        end
+
+        def local_branch()
+            raise UnknownBranch.new(@path) if @local_branch == nil
+            return @local_branch
+        end
+        def branch?(br)
+            raise UnknownBranch.new(@path) if @branch == nil
+            raise BranchMismatch.new(@branch, @suse.branch) if @branch != @suse.branch()
+
+            return @branch == br
+        end
 
         def runBuild(opts, flags="")
             archName, arch, bDir=optsToBDir(opts)
@@ -200,7 +219,7 @@ module KernelWork
         def apply_pending(opts)
             # Ignore errors here, we're aborting just in case
             runGit("am --abort", {}, false)
-            runGitInteractive("reset --hard #{@@UPSTREAM_REMOTE}/#{@branch}")
+            runGitInteractive("reset --hard #{@@UPSTREAM_REMOTE}/#{branch()}")
             return $?.exitstatus if $?.exitstatus != 0
             patches = @suse.gen_ordered_patchlist()
 
@@ -221,6 +240,7 @@ module KernelWork
             return $?.exitstatus
         end
         def scp(opts)
+            branch()
             if opts[:sha1].length == 0 then
                 log(:ERROR, "No SHA1 provided")
                 return 1
@@ -270,7 +290,7 @@ module KernelWork
         end
 
         def diffpaths(opts)
-            puts runGit("diff #{@@UPSTREAM_REMOTE}/#{@branch}..HEAD --stat=500").split("\n").map() {|l|
+            puts runGit("diff #{@@UPSTREAM_REMOTE}/#{branch()}..HEAD --stat=500").split("\n").map() {|l|
                 next if l =~ /files changed/
                 p = File.dirname(l.strip.gsub(/[ \t]+.*$/, ''))
             }.uniq!().compact!()
@@ -278,6 +298,7 @@ module KernelWork
         end
 
         def kabi_check(opts)
+            branch()
             archName, arch, bDir=optsToBDir(opts)
             kDir=ENV["KERNEL_SOURCE_DIR"]
 
@@ -289,7 +310,7 @@ module KernelWork
 
         def backport_todo(opts)
             head=("origin/master")
-            tBranch="HEAD"
+            tBranch=local_branch()
 
             inHead = genBackportList(head, tBranch, opts[:path])
             inHouse = genBackportList(tBranch, head, opts[:path])
@@ -311,6 +332,7 @@ module KernelWork
         end
 
         def git_fixes(opts)
+            branch()
             shas = []
             begin
                 shas = _fetch_git_fixes(opts)
@@ -341,7 +363,7 @@ module KernelWork
         ###########################################
         private
         def _fetch_git_fixes(opts)
-            str = run("curl -s #{@@GIT_FIXES_URL}/#{opts[:git_fixes_subtree]}-#{@branch}.csv")
+            str = run("curl -s #{@@GIT_FIXES_URL}/#{opts[:git_fixes_subtree]}-#{branch()}.csv")
             raise(GitFixesFetchError) if $?.exitstatus != 0
 
             return CSV.parse(str).map(){|row|

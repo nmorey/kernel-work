@@ -125,12 +125,14 @@ module KernelWork
 
         def initialize(upstream = nil)
             @path=ENV["KERNEL_SOURCE_DIR"].chomp()
-            set_branches()
+           begin
+               set_branches()
+           rescue UnknownBranch
+               @branch = nil
+           end
 
-            @upstream = upstream
-            @upstream = Upstream.new(self) if @upstream == nil
-            raise("Branch mismatch") if @branch != @upstream.branch
-
+           @upstream = upstream
+           @upstream = Upstream.new(self) if @upstream == nil
 
             @patch_path = "patches.suse"
             idx = @@BR_LIST.index(@branch)
@@ -141,7 +143,20 @@ module KernelWork
                 @patch_path = @branch_infos[:patch_path] if @branch_infos[:patch_path] != nil
             end
         end
-        attr_reader :branch
+        def branch()
+            raise UnknownBranch.new(@path) if @branch == nil
+            return @branch
+        end
+        def branch?(br)
+            raise UnknownBranch.new(@path) if @branch == nil
+            raise BranchMismatch.new(@upstream.branch(), @branch) if @upstream.branch() != @branch
+
+            return @branch == br
+        end
+        def local_branch()
+            raise UnknownBranch.new(@path) if @local_branch == nil
+            return @local_branch
+        end
 
         def get_last_patch(opts)
             runGit("show HEAD --stat --stat-width=1000 --no-decorate").
@@ -254,7 +269,7 @@ module KernelWork
         # so we can check local changes not in upstream and not break everything
         # when upstream has moved forward
         def get_upstream_base()
-            return runGit("merge-base HEAD #{@@SUSE_REMOTE}/#{@branch}")
+            return runGit("merge-base HEAD #{@@SUSE_REMOTE}/#{branch()}")
         end
 
         def do_meld_lastpatch(opts)
@@ -284,7 +299,7 @@ module KernelWork
                 intOpts = ""
             end
             begin
-                runGitInteractive("rebase #{intOpts} #{@@SUSE_REMOTE}/#{@branch}")
+                runGitInteractive("rebase #{intOpts} #{@@SUSE_REMOTE}/#{branch()}")
             rescue
                 ret = 1
                 while opts[:autofix] == true && ret != 0
@@ -314,7 +329,6 @@ module KernelWork
         end
 
         def extract_single_patch(opts, sha)
-
             patchInfos = _check_patch_info(opts, sha)
             return 1 if patchInfos == nil
 
@@ -378,17 +392,17 @@ module KernelWork
             return 0
         end
         def check_fixes(opts)
-            log(:INFO, "Checking potential missing git-fixes between #{@@SUSE_REMOTE}/#{@branch} and HEAD")
-            runSystem("./scripts/git-fixes  $(git rev-parse \"#{@@SUSE_REMOTE}/#{@branch}\")")
+            log(:INFO, "Checking potential missing git-fixes between #{@@SUSE_REMOTE}/#{branch()} and HEAD")
+            runSystem("./scripts/git-fixes  $(git rev-parse \"#{@@SUSE_REMOTE}/#{branch()}\")")
             return $?.exitstatus
         end
         def list_unmerged(opts)
-            runGitInteractive("log --no-decorate  --format=oneline \"^#{@@SUSE_REMOTE}/#{@branch}\" HEAD")
+            runGitInteractive("log --no-decorate  --format=oneline \"^#{@@SUSE_REMOTE}/#{branch()}\" HEAD")
             return 0
         end
         def list_unpushed(opts)
-            runGitInteractive("log --no-decorate  --format=oneline \"^#{@@SUSE_REMOTE}/#{@local_branch}\" "+
-                              " \"^#{@@SUSE_REMOTE}/#{@branch}\" HEAD")
+            runGitInteractive("log --no-decorate  --format=oneline \"^#{@@SUSE_REMOTE}/#{local_branch()}\" "+
+                              " \"^#{@@SUSE_REMOTE}/#{branch()}\" HEAD")
             return 0
         end
         def is_applied?(sha)
