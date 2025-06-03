@@ -194,7 +194,7 @@ module KernelWork
             nPatches = patches.length
             idx = 0
             list = patches.map(){|x|
-                log(:PROGRESS, "Checking patches in #{ahead} ^#{trailing} (#{idx}/#{nPatches})") if idx % 10
+                log(:PROGRESS, "Checking patches in #{ahead} ^#{trailing} (#{idx}/#{nPatches})") if (idx % 10) == 0
                 idx += 1
                 sha = x.gsub(/^([0-9a-f]*) .*$/, '\1')
                 name = x.gsub(/^[0-9a-f]* (.*)$/, '\1')
