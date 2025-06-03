@@ -19,7 +19,9 @@ module KernelWork
         def _log(lvl, str, out=STDOUT)
             puts("# " + lvl.to_s() + ": " + str)
         end
-
+        def _relog(lvl, str, out=STDOUT)
+            print("# " + lvl.to_s() + ": " + str + "\r")
+        end
         protected
         def log(lvl, str)
             case lvl
@@ -31,6 +33,8 @@ module KernelWork
                 _log("INFO".blue(), str) if KernelWork::verbose_log == true
             when :INFO
                 _log("INFO".green(), str)
+            when :PROGRESS
+                _relog("INFO".green(), str)
             when :WARNING
                 _log("WARNING".brown(), str)
             when :ERROR
