@@ -149,7 +149,7 @@ module KernelWork
         end
         def branch?(br)
             raise UnknownBranch.new(@path) if @branch == nil
-            raise BranchMismatch.new(@upstream.branch(), @branch) if @upstream.branch() != @branch
+            raise BranchMismatch.new(br, @branch) if br != @branch
 
             return @branch == br
         end
