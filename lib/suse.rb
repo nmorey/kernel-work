@@ -363,7 +363,7 @@ module KernelWork
         def checkpatch(opts)
             begin
                 do_checkpatch(opts)
-            rescue e
+            rescue => e
                 log(:ERROR, e.to_s())
             end
             return 1
