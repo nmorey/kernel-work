@@ -325,7 +325,7 @@ module KernelWork
             filterInHouse(opts, inHead, inHouse)
 
             if inHead.length == 0 then
-                puts "No patch left to backport ! Congrats !"
+                log(:INFO, "No patch left to backport ! Congrats !")
                 return 0
             end
 
