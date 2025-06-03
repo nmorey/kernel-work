@@ -189,14 +189,21 @@ module KernelWork
         end
 
         def genBackportList(ahead, trailing, path)
-            return runGit("log --no-merges --format=oneline #{ahead} ^#{trailing} -- #{path}").
-                       split("\n").map(){|x|
+            patches = runGit("log --no-merges --format=oneline #{ahead} ^#{trailing} -- #{path}").
+                       split("\n")
+            nPatches = patches.length
+            idx = 0
+            list = patches.map(){|x|
+                log(:PROGRESS, "Checking patches in #{ahead} ^#{trailing} (#{idx}/#{nPatches})") if idx % 10
+                idx += 1
                 sha = x.gsub(/^([0-9a-f]*) .*$/, '\1')
                 name = x.gsub(/^[0-9a-f]* (.*)$/, '\1')
                 patch_id = run("git format-patch -n1 #{sha} --stdout | git patch-id | awk '{ print $1}'").chomp()
 
                 { :sha => sha, :name => name, :patch_id => patch_id}
             }
+            log(:INFO, "Checking patches in #{ahead} ^#{trailing} (#{nPatches}/#{nPatches})")
+            return list
         end
         def filterInHouse(opts, head, house)
             houseList = house.inject({}){|h, x|
