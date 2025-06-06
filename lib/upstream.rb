@@ -164,11 +164,18 @@ module KernelWork
 
             return @branch == br
         end
-
+        def get_kernel_base()
+            return runGit("describe --tags --match='v*' HEAD").gsub(/v([0-9.]+)-.*$/, '\1').to_f()
+        end
         def runBuild(opts, flags="")
             archName, arch, bDir=optsToBDir(opts)
             cc = arch[:CC].to_s()
-            cc = "CC=#{opts[:cc]}" if opts[:cc] != nil
+            if opts[:cc] != nil
+                cc = "CC=#{opts[:cc]}"
+            else
+                # For very old kernel, use an ancient GCC if none is specified
+                cc.gsub!(/gcc/, "gcc-4.8") if get_kernel_base() < 4.0
+            end
             runSystem("nice -n 19 make #{cc} -j#{opts[:j]} O=#{bDir} "+
                       " #{arch[:ARCH].to_s()} #{arch[:CROSS_COMPILE].to_s()} " + flags)
             return $?.exitstatus
@@ -280,14 +287,18 @@ module KernelWork
             sub=opts[:build_subset]
             buildTarget=""
 
+            if opts[:old_kernel] != true then
+                ver=get_kernel_base()
+                opts[:old_kernel] = true if ver < 5.3
+            end
             if opts[:old_kernel] == true then
                 # M= does not like trailing /
                 sub=sub.gsub(/\/*$/, '')
-                buildTarget="M=#{sub}"
+                buildTarget="SUBDIRS=#{sub}"
             else
                 # Newer build system do require one and only one though
                 sub=sub.gsub(/\/+$/, '') + '/'
-                buildTarget="SUBDIRS=#{sub} #{sub}"
+                buildTarget="#{sub}"
             end
             return runBuild(opts, "#{buildTarget}")
         end
