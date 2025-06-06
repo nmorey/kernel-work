@@ -9,6 +9,8 @@ module KernelWork
             super("Patchlist does not apply")
         end
     end
+    class EmptyCommitError < RuntimeError
+    end
     class Suse < Common
         @@SUSE_REMOTE="origin"
         @@MAINT_BRANCHES=[
@@ -304,12 +306,19 @@ module KernelWork
                 ret = 1
                 while opts[:autofix] == true && ret != 0
                     log(:WARNING, "Trying to autofix series.conf")
-                    ret = fix_series(opts)
-                    break if ret != 0
+                    rebaseOpt="--continue"
+                    begin
+                        fix_series(opts)
+                    rescue EmptyCommitError
+                        rebaseOpt="--skip"
+                    rescue
+                        log(:ERROR, "Unable to handle auto fixing")
+                        return 1
+                    end
                     log(:WARNING, "Get on with rebasing")
 
                     begin
-                        runGitInteractive("rebase --continue", { :env => "GIT_EDITOR=true"})
+                        runGitInteractive("rebase #{rebaseOpt}", { :env => "GIT_EDITOR=true"})
                         ret = 0
                     rescue
                         ret = 1
@@ -367,9 +376,14 @@ module KernelWork
         end
         def fix_series(opts)
             runGit("checkout -f HEAD -- series.conf")
-            patch = get_current_patch(opts)
+            patch = nil
+            begin
+                patch = get_current_patch(opts)
+            rescue
+                log(:WARNING, "No current patch found. Skipping this commit")
+                raise EmptyCommitError.new()
+            end
             runSystem("./scripts/git_sort/series_insert.py \"#{patch}\"")
-            return $?.exitstatus if $?.exitstatus != 0
             runGit("add series.conf")
             runGitInteractive("status")
             return 0
