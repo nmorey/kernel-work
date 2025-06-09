@@ -385,9 +385,9 @@ module KernelWork
         ###########################################
         private
         def _fetch_git_fixes(opts)
-
+            str = nil
             begin
-                run("curl -f -s #{@@GIT_FIXES_URL}/#{opts[:git_fixes_subtree]}-#{branch()}.csv")
+                str = run("curl -f -s #{@@GIT_FIXES_URL}/#{opts[:git_fixes_subtree]}-#{branch()}.csv")
             rescue RunError => e
                 if e.err_code != 22
                     raise(GitFixesFetchError) if $?.exitstatus != 0
