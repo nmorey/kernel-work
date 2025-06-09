@@ -228,7 +228,12 @@ module KernelWork
     def execAction(opts, action)
         KernelWork::_runOnClass(action, nil) {|kClass|
             obj = kClass.new()
-            return obj.send(action, opts)
+            begin
+                return obj.send(action, opts)
+            rescue RunError => e
+                puts("# " + "ERROR".red().to_s() + ": Action '#{action}' failed with err '#{e.err_code()}'")
+                return e.err_code()
+            end
         }
     end
     module_function :execAction
