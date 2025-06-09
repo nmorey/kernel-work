@@ -32,7 +32,10 @@ module KernelWork
         def abort_if_err(check_err, sysret, ret = nil)
             raise(RunError.new(sysret.exitstatus, ret)) if sysret.exitstatus != 0 && check_err == true
         end
-
+        def cmd_debug(cmd_type, cmd)
+            log(:DEBUG, "Called from #{caller[1]}")
+            log(:DEBUG, "Running #{cmd_type} command '#{cmd}'")
+        end
         protected
         def log(lvl, str)
             case lvl
@@ -94,32 +97,28 @@ module KernelWork
 
         public
         def run(cmd, check_err = true)
-            log(:DEBUG, "Called from #{caller[1]}")
-            log(:DEBUG, "Running command '#{cmd}'")
+            cmd_debug('', cmd)
             ret = `cd #{@path} && #{cmd}`.chomp()
             abort_if_err(check_err, $?, ret)
             return ret
         end
 
         def runSystem(cmd, check_err = true)
-            log(:DEBUG, "Called from #{caller[1]}")
-            log(:DEBUG, "Running interactive command '#{cmd}'")
+            cmd_debug('interactive', cmd)
             ret = system("cd #{@path} && #{cmd}")
             abort_if_err(check_err, $?)
             return ret
         end
 
         def runGit(cmd, opts={}, check_err = true)
-            log(:DEBUG, "Called from #{caller[1]}")
-            log(:DEBUG, "Running git command '#{cmd}'")
+            cmd_debug('git', cmd)
             ret = `cd #{@path} && #{opts[:env]} git #{cmd}`.chomp()
             abort_if_err(check_err, $?, ret)
             return ret
         end
 
         def runGitInteractive(cmd, opts={}, check_err = true)
-            log(:DEBUG, "Called from #{caller[1]}")
-            log(:DEBUG, "Running interactive git command '#{cmd}'")
+            cmd_debug('git interactive', cmd)
             ret = system("cd #{@path} && #{opts[:env]} git #{cmd}")
             abort_if_err(check_err, $?)
             return ret
