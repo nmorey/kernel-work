@@ -1,6 +1,13 @@
 $LOAD_PATH.push(BACKPORT_LIB_DIR)
 
 module KernelWork
+    class RunError < RuntimeError
+        def initialize(err_code, msg = nil)
+            @err_code = err_code
+            @msg = msg
+        end
+        attr_reader :err_code, :msg
+    end
     class UnknownBranch < RuntimeError
         def initialize(path)
             super("Failed to detect branch name in #{path}")
@@ -86,7 +93,7 @@ module KernelWork
             log(:DEBUG, "Called from #{caller[1]}")
             log(:DEBUG, "Running command '#{cmd}'")
             ret = `cd #{@path} && #{cmd}`.chomp()
-            raise(RuntimeError.new(ret)) if $?.exitstatus != 0 && check_err == true
+            raise(RunError.new($?.exitstatus, ret)) if $?.exitstatus != 0 && check_err == true
             return ret
         end
 
@@ -94,7 +101,7 @@ module KernelWork
             log(:DEBUG, "Called from #{caller[1]}")
             log(:DEBUG, "Running interactive command '#{cmd}'")
             ret = system("cd #{@path} && #{cmd}")
-            raise(RuntimeError.new()) if $?.exitstatus != 0 && check_err == true
+            raise(RunError.new($?.exitstatus)) if $?.exitstatus != 0 && check_err == true
             return ret
         end
 
@@ -102,7 +109,7 @@ module KernelWork
             log(:DEBUG, "Called from #{caller[1]}")
             log(:DEBUG, "Running git command '#{cmd}'")
             ret = `cd #{@path} && #{opts[:env]} git #{cmd}`.chomp()
-            raise(RuntimeError.new(ret)) if $?.exitstatus != 0 && check_err == true
+            raise(RunError.new($?.exitstatus, ret)) if $?.exitstatus != 0 && check_err == true
             return ret
         end
 
@@ -110,7 +117,7 @@ module KernelWork
             log(:DEBUG, "Called from #{caller[1]}")
             log(:DEBUG, "Running interactive git command '#{cmd}'")
             ret = system("cd #{@path} && #{opts[:env]} git #{cmd}")
-            raise(RuntimeError.new()) if $?.exitstatus != 0 && check_err == true
+            raise(RunError.new($?.exitstatus, )) if $?.exitstatus != 0 && check_err == true
             return ret
         end
 
