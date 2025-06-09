@@ -3,6 +3,7 @@ $LOAD_PATH.push(BACKPORT_LIB_DIR)
 module KernelWork
     class RunError < RuntimeError
         def initialize(err_code, msg = nil)
+            super("Command failed with error code '#{err_code}'")
             @err_code = err_code
             @msg = msg
         end
