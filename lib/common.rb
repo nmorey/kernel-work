@@ -29,6 +29,10 @@ module KernelWork
         def _relog(lvl, str, out=STDOUT)
             print("# " + lvl.to_s() + ": " + str + "\r")
         end
+        def abort_if_err(check_err, sysret, ret = nil)
+            raise(RunError.new(sysret.exitstatus, ret)) if sysret.exitstatus != 0 && check_err == true
+        end
+
         protected
         def log(lvl, str)
             case lvl
@@ -93,7 +97,7 @@ module KernelWork
             log(:DEBUG, "Called from #{caller[1]}")
             log(:DEBUG, "Running command '#{cmd}'")
             ret = `cd #{@path} && #{cmd}`.chomp()
-            raise(RunError.new($?.exitstatus, ret)) if $?.exitstatus != 0 && check_err == true
+            abort_if_err(check_err, $?, ret)
             return ret
         end
 
@@ -101,7 +105,7 @@ module KernelWork
             log(:DEBUG, "Called from #{caller[1]}")
             log(:DEBUG, "Running interactive command '#{cmd}'")
             ret = system("cd #{@path} && #{cmd}")
-            raise(RunError.new($?.exitstatus)) if $?.exitstatus != 0 && check_err == true
+            abort_if_err(check_err, $?)
             return ret
         end
 
@@ -109,7 +113,7 @@ module KernelWork
             log(:DEBUG, "Called from #{caller[1]}")
             log(:DEBUG, "Running git command '#{cmd}'")
             ret = `cd #{@path} && #{opts[:env]} git #{cmd}`.chomp()
-            raise(RunError.new($?.exitstatus, ret)) if $?.exitstatus != 0 && check_err == true
+            abort_if_err(check_err, $?, ret)
             return ret
         end
 
@@ -117,7 +121,7 @@ module KernelWork
             log(:DEBUG, "Called from #{caller[1]}")
             log(:DEBUG, "Running interactive git command '#{cmd}'")
             ret = system("cd #{@path} && #{opts[:env]} git #{cmd}")
-            raise(RunError.new($?.exitstatus, )) if $?.exitstatus != 0 && check_err == true
+            abort_if_err(check_err, $?)
             return ret
         end
 
