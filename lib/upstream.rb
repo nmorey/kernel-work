@@ -360,7 +360,7 @@ module KernelWork
             end
             if shas.length == 0 then
                 log(:INFO, "Great job. Nothing to do here")
-                exit 0
+                return 0
             end
             log(:INFO, "List of patches to apply")
             opts[:sha1] = shas.map(){|sha|
@@ -370,6 +370,10 @@ module KernelWork
                            runGit("log -n1 --abbrev=12 --pretty='%h (\"%s\")' #{sha}"))
                 applied ? nil : sha
             }.compact()
+            if opts[:sha1].length == 0 then
+                log(:INFO, "Great job. Nothing to do here")
+                return 0
+            end
             return 0 if opts[:git_fixes_listonly] == true
 
             scp(opts)
