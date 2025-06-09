@@ -408,7 +408,7 @@ module KernelWork
         def check_fixes(opts)
             log(:INFO, "Checking potential missing git-fixes between #{@@SUSE_REMOTE}/#{branch()} and HEAD")
             runSystem("./scripts/git-fixes  $(git rev-parse \"#{@@SUSE_REMOTE}/#{branch()}\")")
-            return $?.exitstatus
+            return 0
         end
         def list_unmerged(opts)
             runGitInteractive("log --no-decorate  --format=oneline \"^#{@@SUSE_REMOTE}/#{branch()}\" HEAD")
@@ -420,8 +420,8 @@ module KernelWork
             return 0
         end
         def is_applied?(sha)
-            runGit("grep -q #{sha}", {}, false)
-            return $?.exitstatus == 0
+            runGit("grep -q #{sha}", {})
+            return 0
         end
 
         ###########################################
@@ -429,8 +429,10 @@ module KernelWork
         ###########################################
         private
         def _check_patch_info(opts, sha)
-            f_sha1 = @upstream.runGit("rev-parse #{sha}")
-            if $?.exitstatus != 0 then
+            f_sha1 = nil
+            begin
+                f_sha1 = @upstream.runGit("rev-parse #{sha}")
+            rescue RunError
                 log(:ERROR, "Failed to find commit #{sha}")
                 return nil
             end
@@ -543,14 +545,10 @@ module KernelWork
 
             log(:INFO, "Inserting patch")
             runSystem("./scripts/git_sort/series_insert.py #{lpath}")
-            return $?.exitstatus if $?.exitstatus != 0
-
             runGitInteractive("add series.conf #{lpath}")
-            return $?.exitstatus if $?.exitstatus != 0
 
             log(:INFO, "Commiting '#{subject}'")
             runGitInteractive("commit -F #{cname}")
-            return $?.exitstatus if $?.exitstatus != 0
             run("rm -f #{cname}")
             return 0
         end

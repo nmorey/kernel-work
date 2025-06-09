@@ -185,7 +185,7 @@ module KernelWork
             end
             runSystem("nice -n 19 make #{cc} -j#{opts[:j]} O=#{bDir} "+
                       " #{arch[:ARCH].to_s()} #{arch[:CROSS_COMPILE].to_s()} " + flags)
-            return $?.exitstatus
+            return 0
         end
         def get_mainline(sha)
             begin
@@ -241,7 +241,7 @@ module KernelWork
             # Ignore errors here, we're aborting just in case
             runGit("am --abort", {}, false)
             runGitInteractive("reset --hard #{@@UPSTREAM_REMOTE}/#{branch()}")
-            return $?.exitstatus if $?.exitstatus != 0
+
             patches = @suse.gen_ordered_patchlist()
 
             if patches.length == 0 then
@@ -258,7 +258,7 @@ module KernelWork
                 end
             }
             runGitInteractive("am #{amList}")
-            return $?.exitstatus
+            return 0
         end
         def scp(opts)
             branch()
@@ -280,12 +280,11 @@ module KernelWork
 
         def build_oldconfig(opts)
             archName, arch, bDir=optsToBDir(opts)
-
             runSystem("rm -Rf #{bDir} && " +
                       "mkdir #{bDir} && " +
                       "cp #{ENV["KERNEL_SOURCE_DIR"]}/config/#{archName}/default #{bDir}/.config && "+
                       "make olddefconfig #{arch[:ARCH].to_s()} O=#{bDir}")
-            return $?.exitstatus
+            return 0
         end
         def build_all(opts)
             return runBuild(opts)
@@ -330,7 +329,7 @@ module KernelWork
             runSystem("#{kDir}/rpm/kabi.pl --rules #{kDir}/kabi/severities " +
                       " #{kDir}/kabi/#{archName}/symvers-default "+
                       " #{bDir}/Module.symvers")
-            return $?.exitstatus
+            return 0
         end
 
         def backport_todo(opts)
@@ -396,8 +395,8 @@ module KernelWork
             begin
                 str = run("curl -f -s #{@@GIT_FIXES_URL}/#{opts[:git_fixes_subtree]}-#{branch()}.csv")
             rescue RunError => e
-                if e.err_code != 22
-                    raise(GitFixesFetchError) if $?.exitstatus != 0
+                if e.err_code() != 22
+                    raise(GitFixesFetchError)
                 else
                     log(:WARNING, "curl HTTP failure. Assuming 404 so nothing more to do here")
                     return []
