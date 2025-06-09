@@ -16,6 +16,9 @@ module KernelWork
     # Failed to find a mainline tag containing a sha
     class NoSuchMainline < RuntimeError
     end
+    # Failed to find which kernel version we are based on
+    class BaseKernelError < RuntimeError
+    end
 
     class Upstream < Common
         @@UPSTREAM_REMOTE="SUSE"
@@ -165,7 +168,11 @@ module KernelWork
             return @branch == br
         end
         def get_kernel_base()
-            return runGit("describe --tags --match='v*' HEAD").gsub(/v([0-9.]+)-.*$/, '\1').to_f()
+            begin
+                return runGit("describe --tags --match='v*' HEAD").gsub(/v([0-9.]+)-.*$/, '\1').to_f()
+            rescue
+                raise BaseKernelError.new()
+            end
         end
         def runBuild(opts, flags="")
             archName, arch, bDir=optsToBDir(opts)
