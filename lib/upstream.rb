@@ -385,8 +385,17 @@ module KernelWork
         ###########################################
         private
         def _fetch_git_fixes(opts)
-            str = run("curl -s #{@@GIT_FIXES_URL}/#{opts[:git_fixes_subtree]}-#{branch()}.csv")
-            raise(GitFixesFetchError) if $?.exitstatus != 0
+
+            begin
+                run("curl -f -s #{@@GIT_FIXES_URL}/#{opts[:git_fixes_subtree]}-#{branch()}.csv")
+            rescue RunError => e
+                if e.err_code != 22
+                    raise(GitFixesFetchError) if $?.exitstatus != 0
+                else
+                    log(:WARNING, "curl HTTP failure. Assuming 404 so nothing more to do here")
+                    return []
+                end
+            end
 
             return CSV.parse(str).map(){|row|
                 case row[0]
