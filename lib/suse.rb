@@ -291,6 +291,16 @@ module KernelWork
             end
             return 0
         end
+
+        def is_applied?(sha)
+            begin
+                runGit("grep -q #{sha}", {})
+                return true
+            rescue
+                return false
+            end
+        end
+
         #
         # ACTIONS
         #
@@ -418,14 +428,6 @@ module KernelWork
             runGitInteractive("log --no-decorate  --format=oneline \"^#{@@SUSE_REMOTE}/#{local_branch()}\" "+
                               " \"^#{@@SUSE_REMOTE}/#{branch()}\" HEAD")
             return 0
-        end
-        def is_applied?(sha)
-            begin
-                runGit("grep -q #{sha}", {})
-                return true
-            rescue
-                return false
-            end
         end
 
         ###########################################
