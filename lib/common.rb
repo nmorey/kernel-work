@@ -232,6 +232,9 @@ module KernelWork
                 return obj.send(action, opts)
             rescue RunError => e
                 puts("# " + "ERROR".red().to_s() + ": Action '#{action}' failed with err '#{e.err_code()}'")
+                e.backtrace.each(){|l|
+                    puts("# " + "ERROR".red().to_s() + ": \t" + l)
+                }
                 return e.err_code()
             end
         }
