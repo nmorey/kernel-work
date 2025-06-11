@@ -99,6 +99,7 @@ module KernelWork
             opts[:sha1] = []
             opts[:full_check] = false
             opts[:autofix] = false
+            opts[:force_push] = false
 
             case action
             when :source_rebase
@@ -119,7 +120,9 @@ module KernelWork
                     |val| opts[:filename] = val}
                 optsParser.on("-P", "--patch-path <patch/dir/>", "Custom patch dir. Default is patches.suse unless overriden by branch settings") {
                     |val| opts[:patch_path] = val}
-
+            when :push
+                optsParser.on("-f", "--force", "Force push.") {
+                    |val| opts[:force_push] = true}
             when :checkpatch
                 optsParser.on("-F", "--full", "Slower but thorougher checkpatch.") {
                     |val| opts[:full_check] = true}
@@ -432,9 +435,11 @@ module KernelWork
             return 0
         end
         def push(opts)
+            pOpts=""
             log(:INFO, "Pending patches")
             list_unpushed(opts)
-            runGitInteractive("push")
+            pOpts+= "--force " if opts[:force_push] == true
+            runGitInteractive("push #{pOpts}")
             return 0
         end
         ###########################################
