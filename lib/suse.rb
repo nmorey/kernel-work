@@ -79,6 +79,7 @@ module KernelWork
             :check_fixes,
             :list_unmerged,
             :list_unpushed,
+            :push,
         ]
         ACTION_HELP = {
             :"*** KERNEL_SOURCE_DIR commands *** *" => "",
@@ -91,6 +92,7 @@ module KernelWork
             :check_fixes => "Use KERNEL_SOURCE_DIR script to detect missing git-fixes pulled by commited patches",
             :list_unmerged => "List KERNEL_SOURCE_DIR commits not yet merged",
             :list_unpushed => "List KERNEL_SOURCE_DIR commits not yet push",
+            :push=> "Push KERNEL_SOURCE_DIR pending patches",
         }
 
         def self.set_opts(action, optsParser, opts)
@@ -429,7 +431,12 @@ module KernelWork
                               " \"^#{@@SUSE_REMOTE}/#{branch()}\" HEAD")
             return 0
         end
-
+        def push(opts)
+            log(:INFO, "Pending patches")
+            list_unpushed(opts)
+            runGitInteractive("push")
+            return 0
+        end
         ###########################################
         #### PRIVATE methods                   ####
         ###########################################
