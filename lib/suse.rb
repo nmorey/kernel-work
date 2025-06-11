@@ -420,8 +420,12 @@ module KernelWork
             return 0
         end
         def is_applied?(sha)
-            runGit("grep -q #{sha}", {})
-            return 0
+            begin
+                runGit("grep -q #{sha}", {})
+                return true
+            rescue
+                return false
+            end
         end
 
         ###########################################
