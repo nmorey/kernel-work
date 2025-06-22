@@ -462,7 +462,12 @@ module KernelWork
 
         def _scp_one(opts, sha)
             rep="t"
-            desc=runGit("log -n1 --abbrev=12 --pretty='%h (\"%s\")' #{sha}")
+            begin
+                desc=runGit("log -n1 --abbrev=12 --pretty='%h (\"%s\")' #{sha}")
+            rescue=> e
+                log(:ERROR, "'#{sha}' does not seems to be a valid  SHA in this repo")
+                raise e
+            end
 
             if @suse.is_applied?(sha)
                 log(:INFO, "Patch already applied in KERNEL_SOURCE_DIR: #{desc}")
