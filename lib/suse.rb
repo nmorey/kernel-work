@@ -398,8 +398,7 @@ module KernelWork
                 log(:WARNING, "No current patch found. Skipping this commit")
                 raise EmptyCommitError.new()
             end
-            runSystem("./scripts/git_sort/series_insert.py \"#{patch}\"")
-            runGit("add series.conf")
+            _series_insert(opts, patch)
             runGitInteractive("status")
             return 0
         end
@@ -562,8 +561,8 @@ module KernelWork
             f.close()
 
             log(:INFO, "Inserting patch")
-            runSystem("./scripts/git_sort/series_insert.py #{lpath}")
-            runGitInteractive("add series.conf #{lpath}")
+            _series_insert(opts, lpath)
+            runGitInteractive("add #{lpath}")
 
             log(:INFO, "Commiting '#{subject}'")
             runGitInteractive("commit -F #{cname}")
@@ -593,6 +592,11 @@ module KernelWork
             end
             runGitInteractive("add #{lpath}")
             return 0
+        end
+
+        def _series_insert(opts, file)
+            runSystem("./scripts/git_sort/series_insert \"#{file}\"")
+            runGit("add series.conf")
         end
    end
 end
