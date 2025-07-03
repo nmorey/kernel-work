@@ -22,7 +22,7 @@ module KernelWork
 
     class Upstream < Common
         @@UPSTREAM_REMOTE="SUSE"
-        @@GIT_FIXES_URL="http://w3.suse.de/~jroedel/fixes-csv/"
+        @@GIT_FIXES_URL="http://fixes.prg2.suse.org/current/"
         @@GIT_FIXES_SUBTREE="infiniband"
 
         DEFAULT_J_OPT="$(nproc --all --ignore=4)"
@@ -393,7 +393,7 @@ module KernelWork
         def _fetch_git_fixes(opts)
             str = nil
             begin
-                str = run("curl -f -s #{@@GIT_FIXES_URL}/#{opts[:git_fixes_subtree]}-#{branch()}.csv")
+                str = run("curl -f -s #{@@GIT_FIXES_URL}/#{opts[:git_fixes_subtree]}")
             rescue RunError => e
                 if e.err_code() != 22
                     raise(GitFixesFetchError)
@@ -403,17 +403,25 @@ module KernelWork
                 end
             end
 
-            return CSV.parse(str).map(){|row|
-                case row[0]
-                when /Id/
-                    # Title line
-                    next
-                when /^[0-9a-f]+$/
-                    row[0]
-                else
-                    raise("Unexpected line #{row} in CSV")
+            pre=true
+            cur_sha=nil
+            fixes = str.lines().map() {|line|
+                sha = nil
+
+                case line.chomp()
+                when /^=+$/
+                    # End of header
+                    pre = false
+                when /^([0-9a-f]+) (.*)$/
+                    cur_sha=$1
+                when /^[\t ]+Considered for ([^ ]+)/
+                    sha = cur_sha if pre == false && $1 == branch()
+                when /^$/
+                    cur_sha=nil
                 end
+                sha
             }.compact()
+            return fixes
         end
 
         def _cherry_pick_one(opts, sha)
