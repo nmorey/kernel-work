@@ -28,7 +28,7 @@ module KernelWork
         DEFAULT_J_OPT="$(nproc --all --ignore=4)"
         SUPPORTED_ARCHS = {
             "x86_64" => {
-                :CC => "CC=\"ccache gcc -std=gnu17\"",
+                :CC => "CC=\"ccache gcc -std=gnu11\"",
             },
             "arm64" => {
                 :CC => "CC=\"ccache aarch64-suse-linux-gcc\"",
