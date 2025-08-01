@@ -408,7 +408,7 @@ module KernelWork
             rescue => e
                 log(:ERROR, e.to_s())
             end
-            return 1
+            return 0
         end
         def fix_mainline(opts)
             patch = get_last_patch(opts)
