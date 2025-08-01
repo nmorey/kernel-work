@@ -229,7 +229,7 @@ module KernelWork
         KernelWork::_runOnClass(action, nil) {|kClass|
             obj = kClass.new()
             begin
-                return obj.send(action, opts)
+                return obj.public_send(action, opts)
             rescue RunError => e
                 puts("# " + "ERROR".red().to_s() + ": Action '#{action}' failed with err '#{e.err_code()}'")
                 e.backtrace.each(){|l|
