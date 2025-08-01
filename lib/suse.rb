@@ -290,7 +290,7 @@ module KernelWork
             rOpt = " --rapid "
             rOpt = "" if opts[:full_check] == true
             begin
-                runSystem("./scripts/sequence-patch.sh #{rOpt}")
+                runSystem("./scripts/sequence-patch #{rOpt}")
             rescue
                 raise CheckPatchError
             end
