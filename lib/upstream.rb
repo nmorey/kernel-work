@@ -31,8 +31,8 @@ module KernelWork
                 :CC => "CC=\"ccache gcc -std=gnu11\"",
             },
             "arm64" => {
-                :CC => "CC=\"ccache aarch64-suse-linux-gcc\"",
-                :CROSS_COMPILE => "CROSS_COMPILE=aarch64-suse-linux-",
+                :CC => "CC=\"ccache gcc\"",
+                :CROSS_COMPILE => "aarch64-suse-linux-",
                 :ARCH => "ARCH=arm64",
             }
         }
@@ -94,6 +94,9 @@ module KernelWork
                 }
                 optsParser.on("-c", "--cc <compiler>", String, "Override default compiler") {
                     |val| opts[:cc] = val
+                }
+                optsParser.on("--hostcc <compiler>", String, "Override default host compiler") {
+                    |val| opts[:hostcc] = val
                 }
             end
 
@@ -176,14 +179,33 @@ module KernelWork
         def runBuild(opts, flags="")
             archName, arch, bDir=optsToBDir(opts)
             cc = arch[:CC].to_s()
+            hostCC = "HOSTCC=\"ccache gcc\""
+            crossCompile=""
+
+            # For very old kernel, use an ancient GCC if none is specified
+            gccVer="gcc"
+            case get_kernel_base()
+            when 0.0 ... 4.0
+                gccVer="gcc-4.8"
+            when 4.0 .. 4.12
+                gccVer="gcc-7"
+            end
+            cc.gsub!(/gcc/, gccVer)
+            hostCC.gsub!(/gcc/, gccVer)
+
+            if arch[:CROSS_COMPILE] != nil
+                cc.gsub!(/gcc/, arch[:CROSS_COMPILE] + "gcc")
+                crossCompile="CROSS_COMPILE=\"#{arch[:CROSS_COMPILE]}\""
+            end
             if opts[:cc] != nil
                 cc = "CC=#{opts[:cc]}"
-            else
-                # For very old kernel, use an ancient GCC if none is specified
-                cc.gsub!(/gcc/, "gcc-4.8") if get_kernel_base() < 4.0
             end
-            runSystem("nice -n 19 make #{cc} -j#{opts[:j]} O=#{bDir} "+
-                      " #{arch[:ARCH].to_s()} #{arch[:CROSS_COMPILE].to_s()} " + flags)
+            if opts[:hostcc] != nil
+                hostCC = "HOSTCC=#{opts[:hostcc]}"
+            end
+
+            runSystem("nice -n 19 make #{cc} #{hostCC} -j#{opts[:j]} O=#{bDir} "+
+                      " #{arch[:ARCH].to_s()} #{crossCompile} " + flags)
             return 0
         end
         def get_mainline(sha)
