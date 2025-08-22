@@ -30,8 +30,8 @@ _kernel_work_backport_todo(){
     esac;
 }
 
-_kernel_work_build_subset(){
-    local OPT_LIST=$(_kernel_work_genoptlist kernel build_subset)
+_kernel_work_build(){
+    local OPT_LIST=$(_kernel_work_genoptlist kernel build)
     _get_comp_words_by_ref cur
 
     cd $LINUX_GIT/

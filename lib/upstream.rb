@@ -39,10 +39,8 @@ module KernelWork
         ACTION_LIST = [
             :apply_pending,
             :scp,
-            :build_oldconfig,
-            :build_all,
-            :build_infiniband,
-            :build_subset,
+            :oldconfig,
+            :build,
             :diffpaths,
             :kabi_check,
             :backport_todo,
@@ -52,10 +50,8 @@ module KernelWork
             :"*** LINUX_GIT commands *** *" => "",
             :apply_pending => "Reset LINUX_GIT branch and reapply all unmerged patches from kernel-source",
             :scp => "Show commit, cherry-pick to LINUX_GIT then apply to KERNEL_SOURCE if all is OK",
-            :build_oldconfig => "Copy config from KERNEL_SOURCE to LINUX_GIT",
-            :build_all => "Build all",
-            :build_infiniband => "Build infiniband subdirs",
-            :build_subset => "Build specified subdirs",
+            :oldconfig => "Copy config from KERNEL_SOURCE to LINUX_GIT",
+            :build => "Build all the kernel or some subset of it",
             :diffpaths => "List changed paths (dir) since reference branch",
             :kabi_check => "Check kABI compatibility",
             :backport_todo => "List all patches in origin/master that are not applied to the specified tree",
@@ -82,7 +78,7 @@ module KernelWork
                     |val| opts[:yn_default] = :yes }
                 optsParser.on("-S", "--skip-broken", "Automatically skip patches that do not apply.") {
                     |val| opts[:skip_broken] = true }
-            when :build_oldconfig, :build_all, :build_infiniband, :build_subset, :kabi_check
+            when :oldconfig, :build,:kabi_check
                 optsParser.on("-a", "--arch <arch>", String, "Arch to build for. Default=x86_64. Supported=" +
                                                              SUPPORTED_ARCHS.map(){|x, y| x}.join(", ")) {
                     |val|
@@ -108,10 +104,13 @@ module KernelWork
                     |val| opts[:sha1] << val}
                 optsParser.on("-C", "--cve", "Auto extract reference from VULNS."){
                     |val| opts[:cve] = true }
-            when :build_subset
+            when :build
                 optsParser.on("-p", "--path <path>", String,
                               "Path to subtree to build.") {
                     |val| opts[:build_subset] = val}
+                optsParser.on("-I", "--infiniband", String,
+                              "Build infiniband subtree") {
+                    |val| opts[:build_subset] = "drivers/infiniband"}
             when :backport_todo
                 optsParser.on("-p", "--path <path>", String,
                               "Path to subtree to monitor for non-backported patches.") {
@@ -278,7 +277,7 @@ module KernelWork
             return 0
         end
 
-        def build_oldconfig(opts)
+        def oldconfig(opts)
             archName, arch, bDir=optsToBDir(opts)
             runSystem("rm -Rf #{bDir} && " +
                       "mkdir #{bDir} && " +
@@ -286,31 +285,27 @@ module KernelWork
                       "make olddefconfig #{arch[:ARCH].to_s()} O=#{bDir}")
             return 0
         end
-        def build_all(opts)
-            return runBuild(opts)
-        end
-        def build_subset(opts)
-            sub=opts[:build_subset]
+        def build(opts)
             buildTarget=""
+            if opts[:build_subset] != nil then
+                sub=opts[:build_subset]
+                buildTarget=""
 
-            if opts[:old_kernel] != true then
-                ver=get_kernel_base()
-                opts[:old_kernel] = true if ver < 5.3
+                if opts[:old_kernel] != true then
+                    ver=get_kernel_base()
+                    opts[:old_kernel] = true if ver < 5.3
+                end
+                if opts[:old_kernel] == true then
+                    # M= does not like trailing /
+                    sub=sub.gsub(/\/*$/, '')
+                    buildTarget="SUBDIRS=#{sub}"
+                else
+                    # Newer build system do require one and only one though
+                    sub=sub.gsub(/\/+$/, '') + '/'
+                    buildTarget="#{sub}"
+                end
             end
-            if opts[:old_kernel] == true then
-                # M= does not like trailing /
-                sub=sub.gsub(/\/*$/, '')
-                buildTarget="SUBDIRS=#{sub}"
-            else
-                # Newer build system do require one and only one though
-                sub=sub.gsub(/\/+$/, '') + '/'
-                buildTarget="#{sub}"
-            end
-            return runBuild(opts, "#{buildTarget}")
-        end
-        def build_infiniband(opts)
-            opts[:build_subset] = "drivers/infiniband"
-            return build_subset(opts)
+            return runBuild(opts, buildTarget)
         end
 
         def diffpaths(opts)
