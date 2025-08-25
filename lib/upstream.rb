@@ -34,6 +34,11 @@ module KernelWork
                 :CC => "CC=\"ccache gcc\"",
                 :CROSS_COMPILE => "aarch64-suse-linux-",
                 :ARCH => "ARCH=arm64",
+            },
+            "s390x" => {
+                :CC => "CC=\"ccache gcc\"",
+                :CROSS_COMPILE => "s390x-suse-linux-",
+                :ARCH => "ARCH=s390",
             }
         }
         ACTION_LIST = [
