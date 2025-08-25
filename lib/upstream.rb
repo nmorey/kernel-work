@@ -218,6 +218,17 @@ module KernelWork
             return 0
         end
 
+        def runOldConfig(opts, force=true)
+            archName, arch, bDir=optsToBDir(opts)
+
+            if force != true && File.exist?("#{bDir}/.config")
+                runSystem("rm -Rf #{bDir} && " +
+                          "mkdir #{bDir} && " +
+                          "cp #{ENV["KERNEL_SOURCE_DIR"]}/config/#{archName}/default #{bDir}/.config")
+            end
+            runBuild(opts, "olddefconfig")
+        end
+
         def get_mainline(sha)
             begin
                 return runGit("describe --contains --match 'v*' #{sha}").gsub(/~.*/, '')
@@ -312,13 +323,9 @@ module KernelWork
         end
 
         def oldconfig(opts)
-            archName, arch, bDir=optsToBDir(opts)
-            runSystem("rm -Rf #{bDir} && " +
-                      "mkdir #{bDir} && " +
-                      "cp #{ENV["KERNEL_SOURCE_DIR"]}/config/#{archName}/default #{bDir}/.config && "+
-                      "make olddefconfig #{arch[:ARCH].to_s()} O=#{bDir}")
-            return 0
+            return runOldConfig(opts, true)
         end
+
         def build(opts)
             buildTarget=""
             if opts[:build_subset] != nil then
