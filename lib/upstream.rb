@@ -153,6 +153,7 @@ module KernelWork
             @suse = Suse.new(self) if @suse == nil
 
         end
+
         def branch()
             raise UnknownBranch.new(@path) if @branch == nil
             @suse.branch?(@branch)
@@ -163,12 +164,14 @@ module KernelWork
             raise UnknownBranch.new(@path) if @local_branch == nil
             return @local_branch
         end
+
         def branch?(br)
             raise UnknownBranch.new(@path) if @branch == nil
             raise BranchMismatch.new(@branch, br) if @branch != br
 
             return @branch == br
         end
+
         def get_kernel_base()
             begin
                 return runGit("describe --tags --match='v*' HEAD").gsub(/v([0-9.]+)-.*$/, '\1').to_f()
@@ -176,6 +179,7 @@ module KernelWork
                 raise BaseKernelError.new()
             end
         end
+
         def runBuild(opts, flags="")
             archName, arch, bDir=optsToBDir(opts)
             cc = arch[:CC].to_s()
@@ -208,6 +212,7 @@ module KernelWork
                       " #{arch[:ARCH].to_s()} #{crossCompile} " + flags)
             return 0
         end
+
         def get_mainline(sha)
             begin
                 return runGit("describe --contains --match 'v*' #{sha}").gsub(/~.*/, '')
@@ -215,6 +220,7 @@ module KernelWork
                 raise NoSuchMainline.new()
             end
         end
+
         def optsToBDir(opts)
             archName=opts[:arch]
             raise ("Unsupported arch '#{archName}'") if SUPPORTED_ARCHS[archName] == nil
@@ -240,6 +246,7 @@ module KernelWork
             log(:INFO, "Checking patches in #{ahead} ^#{trailing} (#{nPatches}/#{nPatches})")
             return list
         end
+
         def filterInHouse(opts, head, house)
             houseList = house.inject({}){|h, x|
                 h[x[:patch_id]] = true
@@ -253,8 +260,8 @@ module KernelWork
 
             houseList = @suse.gen_commit_id_list(opts)
             head.delete_if(){|x| houseList[x[:sha]] == true }
-
         end
+
         #
         # ACTIONS
         #
