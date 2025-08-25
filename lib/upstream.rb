@@ -180,7 +180,7 @@ module KernelWork
             end
         end
 
-        def runBuild(opts, flags="")
+        def genMakeFlags(opts)
             archName, arch, bDir=optsToBDir(opts)
             cc = arch[:CC].to_s()
             hostCC = "HOSTCC=\"ccache gcc\""
@@ -194,11 +194,11 @@ module KernelWork
             when 4.0 .. 4.12
                 gccVer="gcc-7"
             end
-            cc.gsub!(/gcc/, gccVer)
-            hostCC.gsub!(/gcc/, gccVer)
+            cc = cc.gsub(/gcc/, gccVer)
+            hostCC = hostCC.gsub(/gcc/, gccVer)
 
             if arch[:CROSS_COMPILE] != nil
-                cc.gsub!(/gcc/, arch[:CROSS_COMPILE] + "gcc")
+                cc = cc.gsub(/gcc/, arch[:CROSS_COMPILE] + "gcc")
                 crossCompile="CROSS_COMPILE=\"#{arch[:CROSS_COMPILE]}\""
             end
             if opts[:cc] != nil
@@ -207,9 +207,14 @@ module KernelWork
             if opts[:hostcc] != nil
                 hostCC = "HOSTCC=#{opts[:hostcc]}"
             end
+            return "#{cc} #{hostCC} -j#{opts[:j]} O=#{bDir} "+
+                    " #{arch[:ARCH].to_s()} #{crossCompile} "
+        end
 
-            runSystem("nice -n 19 make #{cc} #{hostCC} -j#{opts[:j]} O=#{bDir} "+
-                      " #{arch[:ARCH].to_s()} #{crossCompile} " + flags)
+        def runBuild(opts, flags="")
+            makeFlags = genMakeFlags(opts)
+
+            runSystem("nice -n 19 make #{makeFlags} " + flags)
             return 0
         end
 
