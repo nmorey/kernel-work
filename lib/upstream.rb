@@ -346,6 +346,9 @@ module KernelWork
                     buildTarget="#{sub}"
                 end
             end
+
+            # Auto run olddefconfig if necessart
+            runOldConfig(opts, false)
             return runBuild(opts, buildTarget)
         end
 
