@@ -553,7 +553,7 @@ module KernelWork
             lpath = patchInfos[:ker_local_path]
             cname=run("mktemp")
 
-            log(:INFO, "Generating sommit message in #{cname}")
+            log(:INFO, "Generating commit message in #{cname}")
             subject=@upstream.runGit("show --format='format:%s' --no-patch #{patchInfos[:sha]}") +
                     " (#{patchInfos[:ref]})"
             f = File.open(cname, "w+")
