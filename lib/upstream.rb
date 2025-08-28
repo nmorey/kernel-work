@@ -73,6 +73,7 @@ module KernelWork
             opts[:build_subset] = nil
             opts[:git_fixes_subtree] = @@GIT_FIXES_SUBTREE
             opts[:git_fixes_listonly] = false
+            opts[:upstream_ref] = "origin/master"
 
             # Option commonds to multiple commands
             case action
@@ -123,6 +124,9 @@ module KernelWork
                 optsParser.on("-p", "--path <path>", String,
                               "Path to subtree to monitor for non-backported patches.") {
                     |val| opts[:path] = val}
+                optsParser.on("-r", "--ref <ref>", String,
+                              "Check patches up to <ref> in upstream kernel. Default is origin/master.") {
+                    |val| opts[:upstream_ref] = val}
                 optsParser.on("-A", "--apply",
                               "Apply all patches using the scp command.") {
                     |val| opts[:backport_apply] = true}
@@ -377,7 +381,7 @@ module KernelWork
         end
 
         def backport_todo(opts)
-            head=("origin/master")
+            head=(opts[:upstream_ref])
             tBranch=local_branch()
 
             inHead = genBackportList(head, tBranch, opts[:path])
