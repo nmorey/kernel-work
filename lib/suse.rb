@@ -429,8 +429,16 @@ module KernelWork
             return 0
         end
         def list_unpushed(opts)
-            runGitInteractive("log --no-decorate  --format=oneline \"^#{@@SUSE_REMOTE}/#{local_branch()}\" "+
-                              " \"^#{@@SUSE_REMOTE}/#{branch()}\" HEAD")
+            remoteRefs=" \"^#{@@SUSE_REMOTE}/#{branch()}\""
+            begin
+                runGit("rev-parse --verify --quiet #{@@SUSE_REMOTE}/#{local_branch()}")
+                remoteRefs += " \"^#{@@SUSE_REMOTE}/#{local_branch()}\""
+            rescue
+                log(:INFO, "Remote user branch does not exists. Checking against main branch only.")
+                # Remote user branch does not exists
+            end
+            runGitInteractive("log --no-decorate  --format=oneline #{remoteRefs} HEAD")
+
             return 0
         end
         def push(opts)
