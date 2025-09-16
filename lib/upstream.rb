@@ -216,7 +216,7 @@ module KernelWork
             if opts[:hostcc] != nil
                 hostCC = "HOSTCC=#{opts[:hostcc]}"
             end
-            return "#{cc} #{hostCC} -j#{opts[:j]} O=#{bDir} "+
+            return "#{cc} #{hostCC} -j#{opts[:j]} V=1 O=#{bDir} "+
                     " #{arch[:ARCH].to_s()} #{crossCompile} "
         end
 
