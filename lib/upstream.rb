@@ -200,7 +200,7 @@ module KernelWork
             case get_kernel_base()
             when 0.0 ... 4.0
                 gccVer="gcc-4.8"
-            when 4.0 .. 4.12
+            when 4.0 .. 5.3
                 gccVer="gcc-7"
             end
             cc = cc.gsub(/gcc/, gccVer)
