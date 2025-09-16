@@ -120,6 +120,9 @@ module KernelWork
                 optsParser.on("-I", "--infiniband", String,
                               "Build infiniband subtree") {
                     |val| opts[:build_subset] = "drivers/infiniband"}
+                optsParser.on("-v", "--verbose", 
+                              "Build with V=1") {
+                    |val| opts[:build_verbose] = true}
             when :backport_todo
                 optsParser.on("-p", "--path <path>", String,
                               "Path to subtree to monitor for non-backported patches.") {
@@ -194,6 +197,7 @@ module KernelWork
             cc = arch[:CC].to_s()
             hostCC = "HOSTCC=\"ccache gcc\""
             crossCompile=""
+            extraOpts=""
 
             # For very old kernel, use an ancient GCC if none is specified
             gccVer="gcc"
@@ -216,7 +220,10 @@ module KernelWork
             if opts[:hostcc] != nil
                 hostCC = "HOSTCC=#{opts[:hostcc]}"
             end
-            return "#{cc} #{hostCC} -j#{opts[:j]} V=1 O=#{bDir} "+
+            if opts[:build_verbose] == true then
+                extraOpts="#{extraOpts} V=1"
+            end
+            return "#{cc} #{hostCC} -j#{opts[:j]} O=#{bDir} #{extraOpts}"+
                     " #{arch[:ARCH].to_s()} #{crossCompile} "
         end
 
