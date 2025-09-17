@@ -167,11 +167,11 @@ module KernelWork
 
         def get_last_patch(opts)
             runGit("show HEAD --stat --stat-width=1000 --no-decorate").
-                split("\n").each().grep(/#{get_patch_dir(opts)}/)[0].lstrip().split(/[ \t]/)[0]
+                split("\n").each().grep(/patches\.[^\/]*/)[0].lstrip().split(/[ \t]/)[0]
         end
         def get_current_patch(opts)
             runGit("diff --cached --stat --stat-width=1000").
-                split("\n").each().grep(/#{get_patch_dir(opts)}/)[0].lstrip().split(/[ \t]/)[0]
+                split("\n").each().grep(/patches\.[^\/]*/)[0].lstrip().split(/[ \t]/)[0]
         end
         def get_patch_commit_id(patchfile = nil)
             return runGit("grep Git-commit #{patchfile}").split(/[ \t]/)[-1]
