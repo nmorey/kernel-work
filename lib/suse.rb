@@ -77,8 +77,7 @@ module KernelWork
             :checkpatch,
             :fix_mainline,
             :check_fixes,
-            :list_unmerged,
-            :list_unpushed,
+            :list_commits,
             :push,
         ]
         ACTION_HELP = {
@@ -90,8 +89,7 @@ module KernelWork
             :checkpatch => "Fast checkpatch pass on all pending patches",
             :fix_mainline => "Fix Git-mainline in the last KERNEL_SOURCE_DIR patch",
             :check_fixes => "Use KERNEL_SOURCE_DIR script to detect missing git-fixes pulled by commited patches",
-            :list_unmerged => "List KERNEL_SOURCE_DIR commits not yet merged",
-            :list_unpushed => "List KERNEL_SOURCE_DIR commits not yet push",
+            :list_commits => "List pending commits (default = unmerged)",
             :push=> "Push KERNEL_SOURCE_DIR pending patches",
         }
 
@@ -100,6 +98,7 @@ module KernelWork
             opts[:full_check] = false
             opts[:autofix] = false
             opts[:force_push] = false
+            opts[:list_commits] = :unmerged
 
             case action
             when :source_rebase
@@ -126,6 +125,11 @@ module KernelWork
             when :checkpatch
                 optsParser.on("-F", "--full", "Slower but thorougher checkpatch.") {
                     |val| opts[:full_check] = true}
+            when :list_commits
+                optsParser.on("--unpushed", "List unpushed commits.") {
+                    |val| opts[:list_commits] = :unpushed}
+                optsParser.on("--unmerged", "List unmerged commits.") {
+                    |val| opts[:list_commits] = :unmerged}
             else
             end
         end
@@ -305,6 +309,23 @@ module KernelWork
                 return false
             end
         end
+        def list_unmerged(opts)
+            runGitInteractive("log --no-decorate  --format=oneline \"^#{@@SUSE_REMOTE}/#{branch()}\" HEAD")
+            return 0
+        end
+        def list_unpushed(opts)
+            remoteRefs=" \"^#{@@SUSE_REMOTE}/#{branch()}\""
+            begin
+                runGit("rev-parse --verify --quiet #{@@SUSE_REMOTE}/#{local_branch()}")
+                remoteRefs += " \"^#{@@SUSE_REMOTE}/#{local_branch()}\""
+            rescue
+                log(:INFO, "Remote user branch does not exists. Checking against main branch only.")
+                # Remote user branch does not exists
+            end
+            runGitInteractive("log --no-decorate  --format=oneline #{remoteRefs} HEAD")
+
+            return 0
+        end
 
         #
         # ACTIONS
@@ -424,22 +445,14 @@ module KernelWork
             runSystem("./scripts/git-fixes  $(git rev-parse \"#{@@SUSE_REMOTE}/#{branch()}\")")
             return 0
         end
-        def list_unmerged(opts)
-            runGitInteractive("log --no-decorate  --format=oneline \"^#{@@SUSE_REMOTE}/#{branch()}\" HEAD")
-            return 0
-        end
-        def list_unpushed(opts)
-            remoteRefs=" \"^#{@@SUSE_REMOTE}/#{branch()}\""
-            begin
-                runGit("rev-parse --verify --quiet #{@@SUSE_REMOTE}/#{local_branch()}")
-                remoteRefs += " \"^#{@@SUSE_REMOTE}/#{local_branch()}\""
-            rescue
-                log(:INFO, "Remote user branch does not exists. Checking against main branch only.")
-                # Remote user branch does not exists
-            end
-            runGitInteractive("log --no-decorate  --format=oneline #{remoteRefs} HEAD")
 
-            return 0
+        def list_commits(opts)
+            case opts[:list_commits]
+            when :unpushed
+                return list_unpushed(opts)
+            when :unmerged
+                return list_unmerged(opts)
+            end
         end
         def push(opts)
             pOpts=""
