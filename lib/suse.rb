@@ -77,7 +77,7 @@ module KernelWork
             :checkpatch,
             :fix_mainline,
             :check_fixes,
-            :list_commits,
+            :list_commits, :lc,
             :push,
         ]
         ACTION_HELP = {
@@ -125,7 +125,7 @@ module KernelWork
             when :checkpatch
                 optsParser.on("-F", "--full", "Slower but thorougher checkpatch.") {
                     |val| opts[:full_check] = true}
-            when :list_commits
+            when :list_commits, :lc
                 optsParser.on("--unpushed", "List unpushed commits.") {
                     |val| opts[:list_commits] = :unpushed}
                 optsParser.on("--unmerged", "List unmerged commits.") {
@@ -454,6 +454,8 @@ module KernelWork
                 return list_unmerged(opts)
             end
         end
+        alias_method :lc, :list_commits
+
         def push(opts)
             pOpts=""
             log(:INFO, "Pending patches")
