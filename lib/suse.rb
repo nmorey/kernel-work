@@ -11,6 +11,11 @@ module KernelWork
     end
     class EmptyCommitError < RuntimeError
     end
+    class BlacklistConflictError < RuntimeError
+        def initialize()
+            super("Cannot auto-resolve blacklist.conf conflicts")
+        end
+    end
     class Suse < Common
         @@SUSE_REMOTE="origin"
         @@MAINT_BRANCHES=[
@@ -180,6 +185,15 @@ module KernelWork
         def get_patch_commit_id(patchfile = nil)
             return runGit("grep Git-commit #{patchfile}").split(/[ \t]/)[-1]
         end
+        def is_blacklist_conflict?(opts)
+            begin
+                return runGit("status --porcelain -- blacklist.conf").lstrip().split(/[ \t]/)[0] == "UU"
+            rescue
+                return false
+            end
+            # Useless but just in case
+            return false
+        end
         def get_mainline(sha)
             git_repo = nil
             orig_tag = nil
@@ -347,7 +361,8 @@ module KernelWork
                         fix_series(opts)
                     rescue EmptyCommitError
                         rebaseOpt="--skip"
-                    rescue
+                    rescue => e
+                        log(:ERROR, e.to_s())
                         log(:ERROR, "Unable to handle auto fixing")
                         return 1
                     end
@@ -413,6 +428,9 @@ module KernelWork
         def fix_series(opts)
             runGit("checkout -f HEAD -- series.conf")
             patch = nil
+            if is_blacklist_conflict?(opts) then
+                raise BlacklistConflictError.new()
+            end
             begin
                 patch = get_current_patch(opts)
             rescue
