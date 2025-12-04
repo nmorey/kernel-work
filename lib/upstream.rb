@@ -20,6 +20,39 @@ module KernelWork
     class BaseKernelError < RuntimeError
     end
 
+    class KV
+        include Comparable
+        def initialize(t, min=nil)
+            if min == nil then
+                if t.is_a?(Float) || t.is_a?(String)
+                    (@major, @minor) = t.to_s().split('.').map(){|x| x.to_i}
+                else
+                    raise("Invalid Kernel version #{t}")
+                end
+            else
+                @major = t.to_i
+                @minor = min.to_i
+            end
+        end
+        attr_reader :major, :minor
+        def to_s()
+            return @major.to_s() + "." + @minor.to_s()
+        end
+        def <=>(other)
+            begin
+                other = KV.new(other) if other.class != KV
+            rescue
+                return nil
+            end
+
+            comp = @major <=> other.major
+            if comp == 0
+                return @minor <=> other.minor
+            else
+                return comp
+            end
+        end
+    end
     class Upstream < Common
         @@UPSTREAM_REMOTE="SUSE"
         @@GIT_FIXES_URL="http://fixes.prg2.suse.org/current/"
@@ -186,7 +219,7 @@ module KernelWork
 
         def get_kernel_base()
             begin
-                return runGit("describe --tags --match='v*' HEAD").gsub(/v([0-9.]+)-.*$/, '\1').to_f()
+                return KV.new(runGit("describe --tags --match='v*' HEAD").gsub(/v([0-9.]+)-.*$/, '\1'))
             rescue
                 raise BaseKernelError.new()
             end
@@ -202,9 +235,9 @@ module KernelWork
             # For very old kernel, use an ancient GCC if none is specified
             gccVer="gcc"
             case get_kernel_base()
-            when 0.0 ... 4.0
+            when KV.new(0,0) ... KV.new(4,0)
                 gccVer="gcc-4.8"
-            when 4.0 .. 5.3
+            when KV.new(4,0) .. KV.new(5,3)
                 gccVer="gcc-7"
             end
             cc = cc.gsub(/gcc/, gccVer)
@@ -350,7 +383,7 @@ module KernelWork
 
                 if opts[:old_kernel] != true then
                     ver=get_kernel_base()
-                    opts[:old_kernel] = true if ver < 5.3
+                    opts[:old_kernel] = true if ver < KV.new(5,3)
                 end
                 if opts[:old_kernel] == true then
                     # M= does not like trailing /
