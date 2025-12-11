@@ -576,7 +576,7 @@ module KernelWork
                 when "n"
                     break
                 when "?"
-                    runGitInteractive("show #{sha}")
+                    runGitInteractive("show #{sha}", {}, false)
                 end
             end
 
