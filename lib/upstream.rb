@@ -102,6 +102,7 @@ module KernelWork
             opts[:j] = DEFAULT_J_OPT
             opts[:backport_apply] = false
             opts[:skip_broken] = false
+            opts[:skip_treewide] = false
             opts[:old_kernel] = false
             opts[:build_subset] = nil
             opts[:git_fixes_subtree] = @@GIT_FIXES_SUBTREE
@@ -117,6 +118,8 @@ module KernelWork
                     |val| opts[:yn_default] = :yes }
                 optsParser.on("-S", "--skip-broken", "Automatically skip patches that do not apply.") {
                     |val| opts[:skip_broken] = true }
+                optsParser.on("-T", "--skip-treewide", "Automatically skip tree wide patches.") {
+                    |val| opts[:skip_treewide] = true }
             when :oldconfig, :build,:kabi_check
                 optsParser.on("-a", "--arch <arch>", String, "Arch to build for. Default=x86_64. Supported=" +
                                                              SUPPORTED_ARCHS.map(){|x, y| x}.join(", ")) {
@@ -318,7 +321,8 @@ module KernelWork
                 h
             }
             # Filter the easy one first
-            head.delete_if(){|x| houseList[x[:patch_id]] == true }
+            head.delete_if(){|x| houseList[x[:patch_id]] == true ||
+                             (opts[:skip_treewide] == true && x[:name] =~ /(tree|kernel)-?wide/) }
             # Some patches may have conflicted and the fix changes the patch-id
             # so look for the originalcommit id in the .patches files in the SUSE tree.
             # We could do only this, but it's much much slower, so filter as much as we can first
