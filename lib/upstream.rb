@@ -221,8 +221,10 @@ module KernelWork
         end
 
         def get_kernel_base()
+            return @kv if @kv != nil
             begin
-                return KV.new(runGit("describe --tags --match='v*' HEAD").gsub(/v([0-9.]+)-.*$/, '\1'))
+                @kv = KV.new(runGit("describe --tags --match='v*' HEAD").gsub(/v([0-9.]+)-.*$/, '\1'))
+                return @kv
             rescue
                 raise BaseKernelError.new()
             end
