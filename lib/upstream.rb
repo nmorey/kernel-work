@@ -298,9 +298,6 @@ module KernelWork
         end
 
         def genBackportList(ahead, trailing, path)
-p ahead
-p trailing
-p path
             patches = runGit("log --no-merges --format=oneline #{ahead} ^#{trailing} -- #{path}").
                        split("\n")
             nPatches = patches.length
