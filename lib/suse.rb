@@ -241,11 +241,14 @@ module KernelWork
 
             allPatches = runGit("diff \"#{up_ref}\"..HEAD --name-only").
                              split("\n").grep(/patches/).compact()
-
             refreshedPatches = allPatches - newPatches
             # Queue refreshed patches to be reapplied at the right moment
             refreshedPatches.each(){|p|
-                 toDoList[patchOrder.index(p)] = "#{@path}/#{p}"
+                # Reverted patch. Will be seen as refreshed without a new one being applied
+                next if patchOrder.index(p) == nil
+
+                # Regular refresh
+                toDoList[patchOrder.index(p)] = "#{@path}/#{p}"
             }
             toDoList.compact!()
             # Start the list by reverting the refreshed patches

@@ -163,7 +163,7 @@ module KernelWork
                 optsParser.on("-p", "--path <path>", String,
                               "Path to subtree to monitor for non-backported patches.") {
                     |val| opts[:path] = val}
-                optsParser.on("-r", "--ref <ref>", String,
+                optsParser.on("-R", "--upstream-ref <ref>", String,
                               "Check patches up to <ref> in upstream kernel. Default is origin/master.") {
                     |val| opts[:upstream_ref] = val}
                 optsParser.on("-A", "--apply",
@@ -298,6 +298,9 @@ module KernelWork
         end
 
         def genBackportList(ahead, trailing, path)
+p ahead
+p trailing
+p path
             patches = runGit("log --no-merges --format=oneline #{ahead} ^#{trailing} -- #{path}").
                        split("\n")
             nPatches = patches.length
@@ -346,15 +349,15 @@ module KernelWork
                 return 0
             end
 
-            amList=""
+            amList=[]
             patches.each(){|p|
                 if p =~ /^-([a-f0-9]+)$/
                     runGitInteractive("revert --no-edit #{$1}")
                 else
-                    amList += "#{p} "
+                    amList << "#{p}"
                 end
             }
-            runGitInteractive("am #{amList}")
+            runGitInteractive("am #{amList.join(" ")}") if amList.length > 0
             return 0
         end
         def scp(opts)
