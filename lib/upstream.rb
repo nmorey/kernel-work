@@ -61,7 +61,7 @@ module KernelWork
         DEFAULT_J_OPT="$(nproc --all --ignore=4)"
         SUPPORTED_ARCHS = {
             "x86_64" => {
-                :CC => "CC=\"ccache gcc -std=gnu11\"",
+                :CC => "CC=\"ccache gcc\"",
             },
             "arm64" => {
                 :CC => "CC=\"ccache gcc\"",
@@ -243,7 +243,9 @@ module KernelWork
             when KV.new(0,0) ... KV.new(4,0)
                 gccVer="gcc-4.8"
             when KV.new(4,0) .. KV.new(5,3)
-                gccVer="gcc-7"
+                gccVer="gcc-7 -std=gnu11"
+            else
+                gccVer="gcc -std=gnu11"
             end
             cc = cc.gsub(/gcc/, gccVer)
             hostCC = hostCC.gsub(/gcc/, gccVer)
@@ -280,7 +282,13 @@ module KernelWork
                           "mkdir #{bDir} && " +
                           "cp #{ENV["KERNEL_SOURCE_DIR"]}/config/#{archName}/default #{bDir}/.config")
             end
-            runBuild(opts, "olddefconfig")
+
+            case get_kernel_base()
+            when KV.new(0,0) ... KV.new(3,7)
+                runBuild(opts, "oldnoconfig")
+            else
+                runBuild(opts, "olddefconfig")
+            end
         end
 
         def get_mainline(sha)
