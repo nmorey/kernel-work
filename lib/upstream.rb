@@ -108,6 +108,8 @@ module KernelWork
             opts[:git_fixes_subtree] = @@GIT_FIXES_SUBTREE
             opts[:git_fixes_listonly] = false
             opts[:upstream_ref] = "origin/master"
+            opts[:backport_include] = []
+            opts[:backport_exclude] = []
 
             # Option commonds to multiple commands
             case action
@@ -169,6 +171,12 @@ module KernelWork
                 optsParser.on("-A", "--apply",
                               "Apply all patches using the scp command.") {
                     |val| opts[:backport_apply] = true}
+                optsParser.on("-i", "--include <sha>", String,
+                              "Force including this SHA in the TODO list.") {
+                    |val| opts[:backport_include] << val}
+                optsParser.on("-x", "--exclude <sha>", String,
+                              "Force excluding this SHA from the TODO list.") {
+                    |val| opts[:backport_exclude] << val}
             when :git_fixes
                 optsParser.on("-s", "--subtree <subtree>", String,
                               "Which subtree to check git-fixes from.") {
@@ -331,12 +339,20 @@ module KernelWork
                 h
             }
             # Filter the easy one first
-            head.delete_if(){|x| houseList[x[:patch_id]] == true ||
-                             (opts[:skip_treewide] == true && x[:name] =~ /(tree|kernel)-?wide/) }
+            head.delete_if(){|x|
+                # DROP: Patch is excluded
+                return true if opts[:backport_exclude].index(x[:sha]) != nil
+                # KEEP: Patch is force included
+                return false if opts[:backport_include].index(x[:sha]) == nil
+                # DROP: We already have this patch in house
+                return true if houseList[x[:patch_id]] == true
+                # DROP: if tree wide and we were asked to drop them
+                (opts[:skip_treewide] == true && x[:name] =~ /(tree|kernel)-?wide/)
+            }
+
             # Some patches may have conflicted and the fix changes the patch-id
             # so look for the originalcommit id in the .patches files in the SUSE tree.
             # We could do only this, but it's much much slower, so filter as much as we can first
-
             houseList = @suse.gen_commit_id_list(opts)
             head.delete_if(){|x| houseList[x[:sha]] == true }
         end
