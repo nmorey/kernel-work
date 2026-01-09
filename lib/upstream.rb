@@ -251,7 +251,7 @@ module KernelWork
             when KV.new(0,0) ... KV.new(4,0)
                 gccVer="gcc-4.8"
             when KV.new(4,0) .. KV.new(5,3)
-                gccVer="gcc-7 -std=gnu11"
+                gccVer="gcc-7"
             else
                 gccVer="gcc -std=gnu11"
             end
