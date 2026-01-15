@@ -1,4 +1,6 @@
 require 'csv'
+require 'yaml'
+require 'fileutils'
 module KernelWork
 
     # SCP Abort by user input
@@ -59,21 +61,49 @@ module KernelWork
         @@GIT_FIXES_SUBTREE="infiniband"
 
         DEFAULT_J_OPT="$(nproc --all --ignore=4)"
-        SUPPORTED_ARCHS = {
-            "x86_64" => {
-                :CC => "CC=\"ccache gcc\"",
-            },
-            "arm64" => {
-                :CC => "CC=\"ccache gcc\"",
-                :CROSS_COMPILE => "aarch64-suse-linux-",
-                :ARCH => "ARCH=arm64",
-            },
-            "s390x" => {
-                :CC => "CC=\"ccache gcc\"",
-                :CROSS_COMPILE => "s390x-suse-linux-",
-                :ARCH => "ARCH=s390",
+        def self.get_arch_config_file
+            config_home = ENV['XDG_CONFIG_HOME']
+            if config_home.nil? || config_home.empty?
+                config_home = File.join(Dir.home, '.config')
+            end
+            File.join(config_home, 'kernel-work', 'archs')
+        end
+
+        def self.load_supported_archs
+            defaults = {
+                "x86_64" => {
+                    :CC => "CC=\"ccache gcc\"",
+                },
+                "arm64" => {
+                    :CC => "CC=\"ccache gcc\"",
+                    :CROSS_COMPILE => "aarch64-suse-linux-",
+                    :ARCH => "ARCH=arm64",
+                },
+                "s390x" => {
+                    :CC => "CC=\"ccache gcc\"",
+                    :CROSS_COMPILE => "s390x-suse-linux-",
+                    :ARCH => "ARCH=s390",
+                }
             }
-        }
+
+            f = get_arch_config_file()
+            if !File.exist?(f)
+                d = File.dirname(f)
+                FileUtils.mkdir_p(d) unless File.directory?(d)
+                File.open(f, 'w') {|file| file.write(defaults.to_yaml)}
+            end
+
+            # YAML.load_file returns string keys by default. 
+            # We want String keys for Arch names, but Symbol keys for inner attributes.
+            data = YAML.load_file(f)
+
+            # Convert inner keys to symbols to match existing code usage
+            data.each { |k, v| 
+                data[k] = v.transform_keys(&:to_sym) 
+            }
+            return data
+        end
+        SUPPORTED_ARCHS = load_supported_archs()
         ACTION_LIST = [
             :apply_pending,
             :scp,
