@@ -61,13 +61,7 @@ module KernelWork
         @@GIT_FIXES_SUBTREE="infiniband"
 
         DEFAULT_J_OPT="$(nproc --all --ignore=4)"
-        def self.get_arch_config_file
-            config_home = ENV['XDG_CONFIG_HOME']
-            if config_home.nil? || config_home.empty?
-                config_home = File.join(Dir.home, '.config')
-            end
-            File.join(config_home, 'kernel-work', 'archs')
-        end
+
 
         def self.load_supported_archs
             defaults = {
@@ -86,7 +80,7 @@ module KernelWork
                 }
             }
 
-            f = get_arch_config_file()
+            f = Common.get_config_file('archs.yml')
             if !File.exist?(f)
                 d = File.dirname(f)
                 FileUtils.mkdir_p(d) unless File.directory?(d)
@@ -268,21 +262,13 @@ module KernelWork
             end
         end
 
-        def self.get_compiler_config_file
-            config_home = ENV['XDG_CONFIG_HOME']
-            if config_home.nil? || config_home.empty?
-                config_home = File.join(Dir.home, '.config')
-            end
-            File.join(config_home, 'kernel-work', 'kernel-compiler')
-        end
-
         def self.load_compiler_config
             defaults = [
                 { :range => "0.0...4.0", :gcc => "gcc-4.8" },
                 { :range => "4.0..5.3",  :gcc => "gcc-7"   },
                 {                        :gcc => "gcc -std=gnu11" }
             ]
-            f = get_compiler_config_file()
+            f = Common.get_config_file('kernel-compiler.yml')
              if !File.exist?(f)
                 d = File.dirname(f)
                 FileUtils.mkdir_p(d) unless File.directory?(d)

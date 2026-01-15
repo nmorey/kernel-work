@@ -21,14 +21,6 @@ module KernelWork
     end
     class Suse < Common
         @@SUSE_REMOTE="origin"
-        def self.get_config_file
-            config_home = ENV['XDG_CONFIG_HOME']
-            if config_home.nil? || config_home.empty?
-                config_home = File.join(Dir.home, '.config')
-            end
-            File.join(config_home, 'kernel-work', 'branches')
-        end
-
         def self.load_branches
              defaults = [
                 { :name => "SAMPLE",
@@ -36,7 +28,7 @@ module KernelWork
                 },
             ]
 
-            f = get_config_file()
+            f = Common.get_config_file('branches.yml')
             if !File.exist?(f)
                 d = File.dirname(f)
                 FileUtils.mkdir_p(d) unless File.directory?(d)

@@ -23,6 +23,14 @@ module KernelWork
         ACTION_LIST = [ :list_actions ]
         ACTION_HELP = {}
 
+        def self.get_config_file(filename)
+            config_home = ENV['XDG_CONFIG_HOME']
+            if config_home.nil? || config_home.empty?
+                config_home = File.join(Dir.home, '.config')
+            end
+            File.join(config_home, 'kernel-work', filename)
+        end
+
         private
         def _log(lvl, str, out=STDOUT)
             puts("# " + lvl.to_s() + ": " + str)
