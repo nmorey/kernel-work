@@ -1,3 +1,6 @@
+require 'yaml'
+require 'fileutils'
+
 module KernelWork
     class NoRefError < RuntimeError
         def initialize()
@@ -18,62 +21,31 @@ module KernelWork
     end
     class Suse < Common
         @@SUSE_REMOTE="origin"
-        @@MAINT_BRANCHES=[
-            { :name => "SLE12-SP3-TD",
-              :ref => nil,
-            },
-            { :name => "SLE12-SP5",
-              :ref => "git-fixes",
-            },
-            { :name => "SLE15-SP1",
-              :ref => "bsc#1111666",
-            },
-            { :name => "SLE15-SP2",
-              :ref => "bsc#1152489",
-            },
-            { :name => "SLE15-SP3",
-              :ref => "git-fixes",
-            },
-            { :name => "SLE15-SP4",
-              :ref => "git-fixes",
-            },
-            { :name => "SLE15-SP5",
-              :ref => "git-fixes",
-            },
-            { :name => "SLE15-SP5-LTSS",
-              :ref => "git-fixes",
-            },
-            { :name => "SLE15-SP6",
-              :ref => "git-fixes",
-            },
-            { :name => "SLE15-SP7",
-              :ref => "git-fixes",
-            },
-            { :name => "SUSE-2025",
-              :ref => "git-fixes",
-            },
-            { :name => "SL-16.0",
-              :ref => "git-fixes",
-            },
-            { :name => "SL-16.1",
-              :ref => "git-fixes",
-            },
-            { :name => "SLE11-SP4-LTSS",
-              :ref => nil,
-            },
-            { :name => "cve/linux-5.14-LTSS",
-              :ref => nil,
-            },
-            { :name => "cve/linux-5.3-LTSS",
-              :ref => nil,
-            },
-            { :name => "cve/linux-4.4-LTSS",
-              :ref => nil,
-            },
-            { :name => "cve/linux-4.12",
-              :ref => nil,
-            },
-        ]
+        def self.get_config_file
+            config_home = ENV['XDG_CONFIG_HOME']
+            if config_home.nil? || config_home.empty?
+                config_home = File.join(Dir.home, '.config')
+            end
+            File.join(config_home, 'kernel-work', 'branches')
+        end
+
+        def self.load_branches
+             defaults = [
+                { :name => "SAMPLE",
+                  :ref => nil,
+                },
+            ]
+
+            f = get_config_file()
+            if !File.exist?(f)
+                d = File.dirname(f)
+                FileUtils.mkdir_p(d) unless File.directory?(d)
+                File.open(f, 'w') {|file| file.write(defaults.to_yaml)}
+            end
+
+            return YAML.load_file(f, symbolize_names: true)
+        end
+        @@MAINT_BRANCHES = load_branches()
         @@BR_LIST=@@MAINT_BRANCHES.map(){|x| x[:name]}
         @@Q_BRANCHES = [ "linux-rdma/for-rc", "linux-rdma/for-next" ]
 
