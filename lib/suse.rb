@@ -51,6 +51,7 @@ module KernelWork
             :check_fixes,
             :list_commits, :lc,
             :push,
+            :register_branch,
         ]
         ACTION_HELP = {
             :"*** KERNEL_SOURCE_DIR commands *** *" => "",
@@ -63,6 +64,7 @@ module KernelWork
             :check_fixes => "Use KERNEL_SOURCE_DIR script to detect missing git-fixes pulled by commited patches",
             :list_commits => "List pending commits (default = unmerged)",
             :push=> "Push KERNEL_SOURCE_DIR pending patches",
+            :register_branch => "Register a branch for maintenance in branches.yml",
         }
 
         def self.set_opts(action, optsParser, opts)
@@ -102,7 +104,21 @@ module KernelWork
                     |val| opts[:list_commits] = :unpushed}
                 optsParser.on("--unmerged", "List unmerged commits.") {
                     |val| opts[:list_commits] = :unmerged}
+            when :register_branch
+                optsParser.on("-b", "--branch <branch>", String, "Branch name.") {
+                    |val| opts[:branch] = val}
+                optsParser.on("-r", "--ref <ref>", String, "Default reference.") {
+                    |val| opts[:ref] = val}
             else
+            end
+        end
+
+        def self.check_opts(opts)
+            case opts[:action]
+            when :register_branch
+                if opts[:branch].nil?
+                    raise("Branch name is required. Use -b <branch>")
+                end
             end
         end
 
@@ -451,6 +467,37 @@ module KernelWork
             list_unpushed(opts)
             pOpts+= "--force " if opts[:force_push] == true
             runGitInteractive("push #{pOpts}")
+            return 0
+        end
+
+        def register_branch(opts)
+            f = Common.get_config_file('branches.yml')
+            if !File.exist?(f)
+                 # Should ensure file exists with defaults if not present, though load_branches does this too.
+                 # But we might be in a context where load_branches hasn't run yet if we just called this action.
+                 # Actually, Suse class variables initialize calls load_branches.
+                 # But let's be safe.
+                 Suse.load_branches
+            end
+
+            branches = Suse.load_branches()
+
+            # Check if branch exists
+            idx = branches.index { |b| b[:name] == opts[:branch] }
+
+            entry = { :name => opts[:branch], :ref => opts[:ref] }
+
+            if idx
+                log(:INFO, "Updating existing branch '#{opts[:branch]}'")
+                branches[idx] = entry
+            else
+                log(:INFO, "Registering new branch '#{opts[:branch]}'")
+                branches << entry
+            end
+
+            File.open(f, 'w') {|file| file.write(branches.to_yaml)}
+            log(:INFO, "Configuration saved to #{f}")
+
             return 0
         end
         ###########################################
