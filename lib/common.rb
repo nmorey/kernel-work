@@ -256,6 +256,6 @@ module KernelWork
         @@verbose_log
     end
 end
-$LOAD_PATH.pop()
+
 
 
