@@ -268,6 +268,42 @@ module KernelWork
             end
         end
 
+        def self.get_compiler_config_file
+            config_home = ENV['XDG_CONFIG_HOME']
+            if config_home.nil? || config_home.empty?
+                config_home = File.join(Dir.home, '.config')
+            end
+            File.join(config_home, 'kernel-work', 'kernel-compiler')
+        end
+
+        def self.load_compiler_config
+            defaults = [
+                { :range => "0.0...4.0", :gcc => "gcc-4.8" },
+                { :range => "4.0..5.3",  :gcc => "gcc-7"   },
+                {                        :gcc => "gcc -std=gnu11" }
+            ]
+            f = get_compiler_config_file()
+             if !File.exist?(f)
+                d = File.dirname(f)
+                FileUtils.mkdir_p(d) unless File.directory?(d)
+                File.open(f, 'w') {|file| file.write(defaults.to_yaml)}
+            end
+
+            rules = YAML.load_file(f, symbolize_names: true)
+            # Parse ranges
+            rules.each do |r|
+                if r[:range]
+                    if r[:range] =~ /^(.*)\.\.\.(.*)$/
+                        r[:range_obj] = Range.new(KV.new($1), KV.new($2), true)
+                    elsif r[:range] =~ /^(.*)\.\.(.*)$/
+                        r[:range_obj] = Range.new(KV.new($1), KV.new($2), false)
+                    end
+                 end
+            end
+            return rules
+        end
+        COMPILER_RULES = load_compiler_config()
+
         def genMakeFlags(opts)
             archName, arch, bDir=optsToBDir(opts)
             cc = arch[:CC].to_s()
@@ -277,14 +313,17 @@ module KernelWork
 
             # For very old kernel, use an ancient GCC if none is specified
             gccVer="gcc"
-            case get_kernel_base()
-            when KV.new(0,0) ... KV.new(4,0)
-                gccVer="gcc-4.8"
-            when KV.new(4,0) .. KV.new(5,3)
-                gccVer="gcc-7"
-            else
-                gccVer="gcc -std=gnu11"
+
+            kv = get_kernel_base()
+            found_rule = COMPILER_RULES.find do |rule|
+                if rule[:range_obj]
+                    rule[:range_obj].cover?(kv)
+                else
+                    true # Default fallback
+                end
             end
+            gccVer = found_rule[:gcc] if found_rule
+
             cc = cc.gsub(/gcc/, gccVer)
             hostCC = hostCC.gsub(/gcc/, gccVer)
 
