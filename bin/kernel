@@ -2,9 +2,8 @@
 
 require 'optparse'
 
-BACKPORT_LIB_DIR = File.dirname(File.realdirpath(__FILE__)) + '/../lib'
-$LOAD_PATH.push(BACKPORT_LIB_DIR)
-require 'common'
+$LOAD_PATH.push(File.dirname(File.realdirpath(__FILE__)) + '/../lib')
+require 'kernel-work'
 $LOAD_PATH.pop()
 
 opts = {

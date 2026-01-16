@@ -2,23 +2,7 @@ require 'yaml'
 require 'fileutils'
 
 module KernelWork
-    class NoRefError < RuntimeError
-        def initialize()
-            super("No bug/CVE ref provided nor default set")
-        end
-    end
-    class CheckPatchError < RuntimeError
-        def initialize()
-            super("Patchlist does not apply")
-        end
-    end
-    class EmptyCommitError < RuntimeError
-    end
-    class BlacklistConflictError < RuntimeError
-        def initialize()
-            super("Cannot auto-resolve blacklist.conf conflicts")
-        end
-    end
+
     class Suse < Common
         @@SUSE_REMOTE="origin"
         def self.load_branches
