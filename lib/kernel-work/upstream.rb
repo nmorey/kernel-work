@@ -344,11 +344,11 @@ module KernelWork
             # Filter the easy one first
             head.delete_if(){|x|
                 # DROP: Patch is excluded
-                return true if opts[:backport_exclude].index(x[:sha]) != nil
+                next true if opts[:backport_exclude].index(x[:sha]) != nil
                 # KEEP: Patch is force included
-                return false if opts[:backport_include].index(x[:sha]) == nil
+                next false if opts[:backport_include].index(x[:sha]) != nil
                 # DROP: We already have this patch in house
-                return true if houseList[x[:patch_id]] == true
+                next true if houseList[x[:patch_id]] == true
                 # DROP: if tree wide and we were asked to drop them
                 (opts[:skip_treewide] == true && x[:name] =~ /(tree|kernel)-?wide/)
             }
