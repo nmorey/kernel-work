@@ -65,4 +65,15 @@ module KernelWork
         end
     end
 
+    class ShaNotCommitError < RuntimeError
+        def initialize()
+            super("SHA provided instead of KernelWork::Commit objecty")
+        end
+    end
+
+    class ShaNotFoundError < RuntimeError
+        def initialize(sha)
+            super("SHA '#{sha}' was not found in the repository")
+        end
+    end
 end

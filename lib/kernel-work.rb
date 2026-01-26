@@ -4,10 +4,12 @@ require 'error'
 require 'string'
 require 'kv'
 
+
 ###
 # Action Classes
 ###
 require 'common'
+require 'commit'
 require 'upstream'
 require 'suse'
 require 'kenv'

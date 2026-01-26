@@ -69,7 +69,7 @@ module KernelWork
         }
 
         def self.set_opts(action, optsParser, opts)
-            opts[:sha1] = []
+            opts[:commits] = []
             opts[:arch] = "x86_64"
             opts[:j] = DEFAULT_J_OPT
             opts[:backport_apply] = false
@@ -120,7 +120,7 @@ module KernelWork
             case action
             when :scp
                 optsParser.on("-c", "--sha1 <SHA1>", String, "Commit to backport.") {
-                    |val| opts[:sha1] << val}
+                    |val| opts[:commits] << KernelWork::Commit.new(val)}
                 optsParser.on("-C", "--cve", "Auto extract reference from VULNS."){
                     |val| opts[:cve] = true }
                 optsParser.on("-f", "--file <FILE>", String, "File containing list of SHA1 to backport.") {
@@ -150,10 +150,10 @@ module KernelWork
                               |val| opts[:file] = val}
                 optsParser.on("-i", "--include <sha>", String,
                               "Force including this SHA in the TODO list.") {
-                    |val| opts[:backport_include] << val}
+                    |val| opts[:backport_include] << KernelWork::Commit.new(val)}
                 optsParser.on("-x", "--exclude <sha>", String,
                               "Force excluding this SHA from the TODO list.") {
-                    |val| opts[:backport_exclude] << val}
+                    |val| opts[:backport_exclude] << KernelWork::Commit.new(val)}
             when :git_fixes
                 optsParser.on("-s", "--subtree <subtree>", String,
                               "Which subtree to check git-fixes from.") {
@@ -307,9 +307,10 @@ module KernelWork
             end
         end
 
-        def get_mainline(sha)
+        def get_mainline(commit)
+            raise ShaNotCommitError.new() if !commit.is_a(KernelWork::Commit)
             begin
-                return runGit("describe --contains --match 'v*' #{sha}").gsub(/~.*/, '')
+                return runGit("describe --contains --match 'v*' #{commit.sha}").gsub(/~.*/, '')
             rescue
                 raise NoSuchMainline.new()
             end
@@ -335,7 +336,7 @@ module KernelWork
                 name = x.gsub(/^[0-9a-f]* (.*)$/, '\1')
                 patch_id = run("git format-patch -n1 #{sha} --stdout | git patch-id | awk '{ print $1}'").chomp()
 
-                { :sha => sha, :name => name, :patch_id => patch_id}
+                Commit.new(sha, name, patch_id)
             }
             log(:INFO, "Checking patches in #{ahead} ^#{trailing} (#{nPatches}/#{nPatches})")
             return list
@@ -343,26 +344,26 @@ module KernelWork
 
         def filterInHouse(opts, head, house)
             houseList = house.inject({}){|h, x|
-                h[x[:patch_id]] = true
+                h[x.patch_id] = true
                 h
             }
             # Filter the easy one first
             head.delete_if(){|x|
                 # DROP: Patch is excluded
-                next true if opts[:backport_exclude].index(x[:sha]) != nil
+                next true if opts[:backport_exclude].index(x.sha) != nil
                 # KEEP: Patch is force included
-                next false if opts[:backport_include].index(x[:sha]) != nil
+                next false if opts[:backport_include].index(x.sha) != nil
                 # DROP: We already have this patch in house
-                next true if houseList[x[:patch_id]] == true
+                next true if houseList[x.patch_id] == true
                 # DROP: if tree wide and we were asked to drop them
-                (opts[:skip_treewide] == true && x[:name] =~ /(tree|kernel)-?wide/)
+                (opts[:skip_treewide] == true && x.subject =~ /(tree|kernel)-?wide/)
             }
 
             # Some patches may have conflicted and the fix changes the patch-id
             # so look for the originalcommit id in the .patches files in the SUSE tree.
             # We could do only this, but it's much much slower, so filter as much as we can first
             houseList = @suse.gen_commit_id_list(opts)
-            head.delete_if(){|x| houseList[x[:sha]] == true }
+            head.delete_if(){|x| houseList[x.sha] == true }
         end
 
         #
@@ -401,24 +402,30 @@ module KernelWork
                     return 1
                 end
                 # Read file, ignoring comments or empty lines, assuming SHA is first word
-                opts[:sha1] = File.readlines(opts[:file]).map { |l| 
-                    l.strip.split(/\s+/).first 
-                }.compact.reject { |s| s.empty? }
+                opts[:commits] = File.readlines(opts[:file]).map { |l|
+                    l = l.strip
+                    next if l.empty?
+                    if l =~ /^([0-9a-f]+)\s+#(.*)$/
+                        Commit.new($1, $2)
+                    else
+                        Commit.new(l.split(/\s+/).first)
+                    end
+                }.compact
             end
 
-            if opts[:sha1].length == 0 then
+            if opts[:commits].length == 0 then
                 log(:ERROR, "No SHA1 provided")
                 return 1
             end
-            @suse.fill_patchInfo_ref(opts)
+            @suse.fill_targetPatch_ref(opts)
 
-            status, unhandled = _scp(opts, opts[:sha1])
+            status, unhandled = _scp(opts, opts[:commits])
 
             # If we used a file and have unhandled patches, write them back
             if opts[:file] && (!unhandled.empty? || status != 0)
                 # Write back remaining SHAs
                 File.open(opts[:file], 'w') do |f|
-                    unhandled.each { |u| f.puts u }
+                    unhandled.each { |u| f.puts u.to_s }
                 end
                 log(:INFO, "Unhandled patches written back to #{opts[:file]}")
             end
@@ -489,23 +496,20 @@ module KernelWork
                 return 0
             end
 
-            # Reverse to have oldest first (application order)
-            to_apply = inHead.map(){|x| x[:sha]}.reverse
-
             if opts[:file]
                 File.open(opts[:file], 'w') do |f|
                     inHead.reverse.each do |x|
                         # Write SHA and Name for better readability
-                        f.puts "#{x[:sha]} #{x[:name]}"
+                        f.puts x.to_s
                     end
                 end
                 log(:INFO, "Patch list written to #{opts[:file]}")
             end
 
-            runGitInteractive("show --no-patch --format=oneline #{inHead.map(){|x| x[:sha]}.join(" ")}")
+            runGitInteractive("show --no-patch --format=oneline #{inHead.map(){|x| x.sha}.join(" ")}")
 
             if opts[:backport_apply] == true then
-                opts[:sha1] = to_apply
+                opts[:commits] = inHead.reverse
                 # opts[:file] is already set if provided, so scp will use it for state management
                 return scp(opts)
             end
@@ -514,26 +518,27 @@ module KernelWork
 
         def git_fixes(opts)
             branch()
-            shas = []
+            commits = []
             begin
-                shas = _fetch_git_fixes(opts)
+                commits = _fetch_git_fixes(opts)
             rescue GitFixesFetchError
                 log(:ERROR, "Failed to retrieve git-fixes list")
                 return 1
             end
-            if shas.length == 0 then
+            if commits.length == 0 then
                 log(:INFO, "Great job. Nothing to do here")
                 return 0
             end
             log(:INFO, "List of patches to apply")
-            opts[:sha1] = shas.map(){|sha|
-                applied = @suse.is_applied?(sha)
+            opts[:commits] = commits.map(){|commit|
+                applied = @suse.is_applied?(commit)
                 status = applied ? "APPLIED".green() : "PENDING".brown()
-                log(:INFO, "  #{status}\t"+
-                           runGit("log -n1 --abbrev=12 --pretty='%h (\"%s\")' #{sha}"))
-                applied ? nil : sha
+                desc = commit.desc()
+
+                log(:INFO, "  #{status}\t"+ desc)
+                applied ? nil : commit
             }.compact()
-            if opts[:sha1].length == 0 then
+            if opts[:commits].length == 0 then
                 log(:INFO, "Great job. Nothing to do here")
                 return 0
             end
@@ -562,8 +567,9 @@ module KernelWork
 
             pre=true
             cur_sha=nil
+            cur_subject=nil
             fixes = str.lines().map() {|line|
-                sha = nil
+                commit = nil
 
                 case line.chomp()
                 when /^=+$/
@@ -571,22 +577,26 @@ module KernelWork
                     pre = false
                 when /^([0-9a-f]+) (.*)$/
                     cur_sha=$1
+                    cur_subject=$2
                 when /^[\t ]+Considered for ([^ ]+)/
-                    sha = cur_sha if pre == false && $1 == branch()
+                    commit = Commit.new(cur_sha, cur_subject) if pre == false && $1 == branch()
                 when /^$/
                     cur_sha=nil
+                    cur_subject=nil
                 end
-                sha
+                commit
             }.compact()
             return fixes
         end
 
-        def _cherry_pick_one(opts, sha)
+        def _cherry_pick_one(opts, commit)
+            raise ShaNotCommitError.new() if !commit.is_a?(KernelWork::Commit)
+
             begin
-                runGitInteractive("cherry-pick #{sha}")
+                runGitInteractive("cherry-pick #{commit.sha}")
             rescue
                 if opts[:skip_broken] == true then
-                    e = SCPSkip.new("#{sha}")
+                    e = SCPSkip.new(commit.to_s())
                     log(:WARNING, e.to_s())
                     runGitInteractive("cherry-pick --abort")
                     raise(e)
@@ -601,7 +611,7 @@ module KernelWork
                     raise(SCPAbort)
                 when "s"
                     runGitInteractive("cherry-pick --abort")
-                    e = SCPSkip.new("#{sha}")
+                    e = SCPSkip.new(commit.to_s())
                     log(:INFO, e.to_s())
                     raise(e)
                 end
@@ -625,16 +635,18 @@ module KernelWork
             return 0
         end
 
-        def _scp_one(opts, sha)
+        def _scp_one(opts, commit)
             rep="t"
+            raise ShaNotCommitError.new() if !commit.is_a?(KernelWork::Commit)
+
             begin
-                desc=runGit("log -n1 --abbrev=12 --pretty='%h (\"%s\")' #{sha}")
-            rescue=> e
-                log(:ERROR, "'#{sha}' does not seems to be a valid  SHA in this repo")
+                desc=commit.desc()
+            rescue ShaNotFoundError => e
+                log(:ERROR, "'#{commit.sha}' does not seems to be a valid  SHA in this repo")
                 raise e
             end
 
-            if @suse.is_applied?(sha)
+            if @suse.is_applied?(commit)
                 log(:INFO, "Patch already applied in KERNEL_SOURCE_DIR: #{desc}")
                 return 0
             end
@@ -645,19 +657,19 @@ module KernelWork
                 when "n"
                     break
                 when "?"
-                    runGitInteractive("show #{sha}", {}, false)
+                    runGitInteractive("show #{commit.sha}", {}, false)
                 end
             end
 
             return 0 if rep != "y"
 
             begin
-                _cherry_pick_one(opts, sha)
+                _cherry_pick_one(opts, commit)
             rescue SCPSkip
                 return 0
             end
 
-            if @suse.extract_single_patch(opts, sha) != 0 then
+            if @suse.extract_single_patch(opts, commit) != 0 then
                 log(:ERROR, "Failed to extract patch in KERNEL_SOURCE_DIR, reverting in LINUX_GIT")
                 runGitInteractive("reset --hard HEAD~1")
                 return 1
@@ -667,11 +679,11 @@ module KernelWork
         end
 
         # Returns [status, unhandled_shas]
-        def _scp(opts, shas)
-            unhandled = shas.dup
-            shas.each(){ |sha|
+        def _scp(opts, commits)
+            unhandled = commits.dup
+            commits.each(){ |commit|
                 begin
-                     _scp_one(opts, sha)
+                     _scp_one(opts, commit)
                      unhandled.shift # Remove success from list
                 rescue SCPAbort
                     log(:INFO, "Aborted")
@@ -679,6 +691,8 @@ module KernelWork
                 rescue Interrupt
                     log(:INFO, "Interrupted")
                     return 1, unhandled
+#                rescue ShaNotFoundError
+#                    return 1, unhandled
                 end
             }
             return 0, []

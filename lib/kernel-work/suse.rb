@@ -23,7 +23,6 @@ module KernelWork
         end
         @@MAINT_BRANCHES = load_branches()
         @@BR_LIST=@@MAINT_BRANCHES.map(){|x| x[:name]}
-        @@Q_BRANCHES = [ "linux-rdma/for-rc", "linux-rdma/for-next" ]
 
         ACTION_LIST = [
             :source_rebase,
@@ -52,7 +51,7 @@ module KernelWork
         }
 
         def self.set_opts(action, optsParser, opts)
-            opts[:sha1] = []
+            opts[:commits] = []
             opts[:full_check] = false
             opts[:autofix] = false
             opts[:force_push] = false
@@ -66,7 +65,7 @@ module KernelWork
                     |val| opts[:no_interactive] = true}
             when :extract_patch
                 optsParser.on("-c", "--sha1 <SHA1>", String, "Commit to backport.") {
-                    |val| opts[:sha1] << val}
+                    |val| opts[:commits] << KernelWork::Commit.new(val)}
                 optsParser.on("-r", "--ref <ref>", String, "Bug reference.") {
                     |val| opts[:ref] = val}
                 optsParser.on("-C", "--cve", "Auto extract reference from VULNS."){
@@ -162,30 +161,7 @@ module KernelWork
             # Useless but just in case
             return false
         end
-        def get_mainline(sha)
-            git_repo = nil
-            orig_tag = nil
-            begin
-                orig_tag = @upstream.get_mainline(sha)
-            rescue NoSuchMainline
-                log(:INFO, "Commit not in any tag. Trying to find a maintainer branch")
 
-                remote_branches=@upstream.runGit("branch -a --contains #{sha}").split("\n").
-                                    each().grep(/remotes\//).map(){|x|
-                    x.lstrip.split(/[ \t]/)[0].gsub(/remotes\//,'')}.
-                                    each(){|r|
-                    idx = @@Q_BRANCHES.index(r)
-                    next if idx ==nil
-
-                    log(:INFO, "Found it in #{@@Q_BRANCHES[idx]}")
-                    orig_tag = "Queued in subsystem maintainer repository"
-                    remote=@@Q_BRANCHES[idx].gsub(/\/.*/,'')
-                    git_repo=@upstream.runGit("config remote.#{remote}.url")
-                    break
-                }
-            end
-            return orig_tag, git_repo
-        end
         def gen_ordered_patchlist()
             up_ref = get_upstream_base()
             patchOrder = []
@@ -247,7 +223,7 @@ module KernelWork
             return ENV["KERNEL_SOURCE_DIR"] + "/" + patchname_to_local_path(opts, pname)
         end
 
-        def fill_patchInfo_ref(h, override_cve = false)
+        def fill_targetPatch_ref(h, override_cve = false)
             return if h[:cve] == true && override_cve == false 
             if h[:ref] == nil then
                 h[:ref] = @branch_infos[:ref]
@@ -287,6 +263,7 @@ module KernelWork
         end
 
         def is_applied?(sha)
+            sha = sha.sha if sha.is_a?(Commit)
             begin
                 runGit("grep -q #{sha}", {})
                 return true
@@ -359,38 +336,35 @@ module KernelWork
             return 0
         end
 
-        def extract_single_patch(opts, sha)
-            patchInfos = _check_patch_info(opts, sha)
-            return 1 if patchInfos == nil
-
-            # Generate the patch in the linux tree and get its name at the same time
-            patchInfos[:lin_ppath] = @upstream.runGit("format-patch -n1 #{sha}")
+        def extract_single_patch(opts, commit)
+            raise ShaNotCommitError.new() if !commit.is_a?(KernelWork::Commit)
+            return 1 if commit.check_patch_info(opts) == false
 
             # Generate the patch name in KERN tree and check its availability
-            ret = _gen_patch_name(opts, patchInfos)
-            return ret if ret != 0
+            targetPatch = _gen_patch_name(opts, commit)
+            return 1 if targetPatch == nil
 
-            _copy_and_fill_patch(opts, patchInfos)
+            _copy_and_fill_patch(opts, commit, targetPatch)
 
-            runGitInteractive("add #{patchInfos[:ker_local_path]}")
+            runGitInteractive("add #{targetPatch[:local_path]}")
 
             refs = opts[:ref]
             if opts[:cve] == true then
-                ret = _patch_fill_in_CVE(opts, patchInfos)
+                ret = _patch_fill_in_CVE(opts, commit, targetPatch)
                 return ret if ret != 0
            end
 
-            return _insert_and_commit_patch(opts, patchInfos)
+            return _insert_and_commit_patch(opts, commit, targetPatch)
         end
 
         def extract_patch(opts)
             fill_patchInfo_ref(opts)
-            if opts[:sha1].length == 0 then
+            if opts[:commits].length == 0 then
                 log(:ERROR, "No SHA1 provided")
                 return 1
             end
 
-            opts[:sha1].each(){|sha|
+            opts[:commits].each(){|sha|
                 ret = extract_single_patch(opts, sha)
                 return ret if ret != 0
             }
@@ -488,50 +462,22 @@ module KernelWork
         #### PRIVATE methods                   ####
         ###########################################
         private
-        def _check_patch_info(opts, sha)
-            f_sha1 = nil
-            begin
-                f_sha1 = @upstream.runGit("rev-parse #{sha}")
-            rescue RunError
-                log(:ERROR, "Failed to find commit #{sha}")
-                return nil
-            end
 
-            orig_tag, git_repo = get_mainline(sha)
-            if orig_tag == "" then
-                if opts[:ignore_tag] != true then
-                    log(:ERROR, "Commit is not contained in any tag nor maintainer repo")
-                    return nil
-                else
-                    orig_tag="Never, in-house patch"
-                    f_sha1=nil
-                end
-            end
-
-            return {
-                :sha => sha,
-                :f_sha => f_sha1,
-                :orig_tag => orig_tag,
-                :git_repo => git_repo,
-                :ref => opts[:ref]
-            }
-        end
-
-        def _gen_patch_name(opts, patchInfos)
-            pname= patchInfos[:lin_ppath].gsub(/^0001-/,"")
+        def _gen_patch_name(opts, commit)
+            pname= commit.patchname().gsub(/^0001-/,"")
             # Default name might be overriden from CLI
             pname = opts[:filename] if opts[:filename] != nil
 
             fpath=patchname_to_absolute_path(opts, pname)
             while File.exist?(fpath) do
                 log(:ERROR, "File '#{pname}' already exists in KERNEL_SOURCE_DIR")
-                return 1 if opts[:filename] != nil
+                return nil if opts[:filename] != nil
 
                 # If user has not specified a name, try to prompt him for one
                 rep= confirm(opts, "set a custom filename", true, ["y", "n"])
                 if rep == "n" then
                     log(:ERROR, "Aborting")
-                    return 1
+                    return nil
                 end
 
                 rep="t"
@@ -542,21 +488,24 @@ module KernelWork
                     rep = confirm(opts, "keep the filename '#{nName}'", true, ["y", "n", "A" ])
                     if rep == "A" then
                         log(:ERROR, "Aborting")
-                        return 1
+                        return nil
                     end
                 end
                 pname = nName
                 fpath=patchname_to_absolute_path(opts, pname)
             end
-            patchInfos[:ker_pname] = pname
-            patchInfos[:ker_local_path] = patchname_to_local_path(opts, pname)
-            patchInfos[:ker_full_path] = patchname_to_absolute_path(opts, pname)
-            return 0
+
+            return {
+                :pname => pname,
+                :local_path => patchname_to_local_path(opts, pname),
+                :full_path => patchname_to_absolute_path(opts, pname),
+                :ref => opts[:ref],
+            }
         end
 
-        def _copy_and_fill_patch(opts, patchInfos)
-            i = File.open(ENV["LINUX_GIT"] + "/" + patchInfos[:lin_ppath],"r")
-            o = File.open(patchInfos[:ker_full_path] , "w+")
+        def _copy_and_fill_patch(opts, commit, targetPatch)
+            i = File.open(ENV["LINUX_GIT"] + "/" + commit.patchname,"r")
+            o = File.open(targetPatch[:full_path] , "w+")
 
             p_split=0
             in_subj=false
@@ -567,10 +516,10 @@ module KernelWork
                     o.puts l
                 when /^\n$/
                     if in_subj == true
-                        o.puts "Git-commit: #{patchInfos[:f_sha]}" if patchInfos[:f_sha] != nil
-                        o.puts "Patch-mainline: #{patchInfos[:orig_tag]}" if patchInfos[:orig_tag] != nil
-                        o.puts "References: #{patchInfos[:ref]}"
-                        o.puts "Git-repo: #{patchInfos[:git_repo]}" if patchInfos[:git_repo] != nil
+                        o.puts "Git-commit: #{commit.f_sha()}" if commit.f_sha() != ""
+                        o.puts "Patch-mainline: #{commit.orig_tag()}" if commit.orig_tag() != nil
+                        o.puts "References: #{targetPatch[:ref]}"
+                        o.puts "Git-repo: #{commit.git_repo()}" if commit.git_repo() != nil
                         in_subj=false
                     end
                     o.puts l
@@ -592,13 +541,12 @@ module KernelWork
             return 0
         end
 
-        def _insert_and_commit_patch(opts, patchInfos)
-            lpath = patchInfos[:ker_local_path]
+        def _insert_and_commit_patch(opts, commit, targetPatch)
+            lpath = targetPatch[:local_path]
             cname=run("mktemp")
 
             log(:INFO, "Generating commit message in #{cname}")
-            subject=@upstream.runGit("show --format='format:%s' --no-patch #{patchInfos[:sha]}") +
-                    " (#{patchInfos[:ref]})"
+            subject="#{commit.subject()} (#{targetPatch[:ref]})"
             f = File.open(cname, "w+")
             f.puts subject
             f.close()
@@ -613,24 +561,24 @@ module KernelWork
             return 0
         end
 
-        def _patch_fill_in_CVE(opts, patchInfos)
-            lpath = patchInfos[:ker_local_path]
+        def _patch_fill_in_CVE(opts, commit, patchInfos)
+            lpath = targetPatch[:local_path]
             log(:INFO, "Auto referencing CVE id and BSC")
             runSystem("echo '#{lpath}' | suse-add-cves  -v $VULNS_GIT  -f")
             begin
                 newRefs=run("git diff -U0 -- #{lpath}").split("\n").
                             grep(/^\+References/)[0].gsub(/^\+References: +/, "")
-                patchInfos[:ref] = newRefs
+                targetPatch[:ref] = newRefs
             rescue => e
                 log(:WARNING, "No CVE reference found")
 
-                if patchInfos[:ref] == nil then
+                if targetPatch[:ref] == nil then
                     # We have not set any ref as we were expecting CVE ones.
                     # Get the default ref and we need to update the patch file with it
-                    ret = fill_patchInfo_ref(patchInfos, true)
+                    ret = fill_targetPatch_ref(targetPatch, true)
                     return ret if ret != 0
 
-                    run("sed -i -e 's/^References: $/References: #{patchInfos[:ref]}/' #{lpath}")
+                    run("sed -i -e 's/^References: $/References: #{targetPatch[:ref]}/' #{lpath}")
                 end
             end
             runGitInteractive("add #{lpath}")
