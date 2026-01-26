@@ -288,11 +288,11 @@ module KernelWork
         def runOldConfig(opts, force=true)
             archName, arch, bDir=optsToBDir(opts)
 
-            if force == true || !File.exist?("#{bDir}/.config")
-                runSystem("rm -Rf #{bDir} && " +
-                          "mkdir #{bDir} && " +
-                          "cp #{ENV["KERNEL_SOURCE_DIR"]}/config/#{archName}/default #{bDir}/.config")
-            end
+            return if force != true && File.exist?("#{bDir}/.config")
+
+            runSystem("rm -Rf #{bDir} && " +
+                      "mkdir #{bDir} && " +
+                      "cp #{ENV["KERNEL_SOURCE_DIR"]}/config/#{archName}/default #{bDir}/.config")
 
             case get_kernel_base()
             when KV.new(0,0) ... KV.new(3,7)
