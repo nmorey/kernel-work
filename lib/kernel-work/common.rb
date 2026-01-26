@@ -1,15 +1,17 @@
-$LOAD_PATH.push(BACKPORT_LIB_DIR)
-
-require 'error'
-require 'string'
-require 'kv'
-
+# Main module for Kernel Work tools and utilities
 module KernelWork
 
+    # Common utility class providing logging, configuration, and shell execution methods
     class Common
+        # List of available actions for this class
         ACTION_LIST = [ :list_actions ]
+        # Help text for actions
         ACTION_HELP = {}
 
+        # Retrieve the path to a configuration file
+        #
+        # @param filename [String] The name of the config file
+        # @return [String] Full path to the config file
         def self.get_config_file(filename)
             config_home = ENV['XDG_CONFIG_HOME']
             if config_home.nil? || config_home.empty?
@@ -19,20 +21,43 @@ module KernelWork
         end
 
         private
+        # Internal log method
+        # @param lvl [String] Log level string (colored)
+        # @param str [String] Message
+        # @param out [IO] Output stream (default STDOUT)
         def _log(lvl, str, out=STDOUT)
             puts("# " + lvl.to_s() + ": " + str)
         end
+
+        # Internal relog method (update current line)
+        # @param lvl [String] Log level string (colored)
+        # @param str [String] Message
+        # @param out [IO] Output stream (default STDOUT)
         def _relog(lvl, str, out=STDOUT)
             print("# " + lvl.to_s() + ": " + str + "\r")
         end
+
+        # Raise error if system command failed
+        # @param check_err [Boolean] Whether to check for errors
+        # @param sysret [Process::Status] System return status
+        # @param ret [String, nil] Optional return message
+        # @raise [RunError] If command failed
         def abort_if_err(check_err, sysret, ret = nil)
             raise(RunError.new(sysret.exitstatus, ret)) if sysret.exitstatus != 0 && check_err == true
         end
+
+        # Debug command execution
+        # @param cmd_type [String] Type of command (e.g., 'git')
+        # @param cmd [String] The command string
         def cmd_debug(cmd_type, cmd)
             log(:DEBUG, "Called from #{caller[1]}")
             log(:DEBUG, "Running #{cmd_type} command '#{cmd}'")
         end
         protected
+        # Log a message with a specific level
+        #
+        # @param lvl [Symbol] Log level (:DEBUG, :INFO, :WARNING, :ERROR, etc.)
+        # @param str [String] Message to log
         def log(lvl, str)
             case lvl
             when :DEBUG
@@ -54,6 +79,9 @@ module KernelWork
             end
         end
 
+        # Detect and set the current git branch
+        #
+        # @raise [UnknownBranch] If branch cannot be detected
         def set_branches()
             begin
                 @local_branch = runGit("branch --show current").chomp()
@@ -73,6 +101,13 @@ module KernelWork
             end
         end
 
+        # Prompt the user for confirmation
+        #
+        # @param opts [Hash] Options hash
+        # @param msg [String] Confirmation message
+        # @param ignore_default [Boolean] Ignore default yes/no options
+        # @param allowed_reps [Array<String>] Allowed responses
+        # @return [String] User response
         def confirm(opts, msg, ignore_default=false, allowed_reps=[ "y", "n" ])
             rep = 't'
             while allowed_reps.index(rep) == nil && rep != '' do
@@ -92,6 +127,12 @@ module KernelWork
         end
 
         public
+        # Run a shell command
+        #
+        # @param cmd [String] Command to run
+        # @param check_err [Boolean] Raise error on failure
+        # @return [String] Command output
+        # @raise [RunError] If command fails and check_err is true
         def run(cmd, check_err = true)
             cmd_debug('', cmd)
             ret = `cd #{@path} && #{cmd}`.chomp()
@@ -99,6 +140,12 @@ module KernelWork
             return ret
         end
 
+        # Run a shell command using system() (interactive)
+        #
+        # @param cmd [String] Command to run
+        # @param check_err [Boolean] Raise error on failure
+        # @return [Boolean] Command success status
+        # @raise [RunError] If command fails and check_err is true
         def runSystem(cmd, check_err = true)
             cmd_debug('interactive', cmd)
             ret = system("cd #{@path} && #{cmd}")
@@ -106,6 +153,13 @@ module KernelWork
             return ret
         end
 
+        # Run a git command
+        #
+        # @param cmd [String] Git command arguments
+        # @param opts [Hash] Options (e.g., :env)
+        # @param check_err [Boolean] Raise error on failure
+        # @return [String] Command output
+        # @raise [RunError] If command fails and check_err is true
         def runGit(cmd, opts={}, check_err = true)
             cmd_debug('git', cmd)
             ret = `cd #{@path} && #{opts[:env]} git #{cmd}`.chomp()
@@ -113,6 +167,13 @@ module KernelWork
             return ret
         end
 
+        # Run a git command interactively
+        #
+        # @param cmd [String] Git command arguments
+        # @param opts [Hash] Options (e.g., :env)
+        # @param check_err [Boolean] Raise error on failure
+        # @return [Boolean] Command success status
+        # @raise [RunError] If command fails and check_err is true
         def runGitInteractive(cmd, opts={}, check_err = true)
             cmd_debug('git interactive', cmd)
             ret = system("cd #{@path} && #{opts[:env]} git #{cmd}")
@@ -120,98 +181,15 @@ module KernelWork
             return ret
         end
 
+        # List available actions
+        #
+        # @param opts [Hash] Options hash
+        # @return [Integer] 0
         def list_actions(opts)
             puts KernelWork::getActionAttr("ACTION_LIST").map(){|x| KernelWork::actionToString(x)}.join("\n")
             return 0
         end
     end
 end
-
-# require here
-require 'upstream'
-require 'suse'
-require 'kenv'
-
-$LOAD_PATH.pop()
-
-
-
-module KernelWork
-   ACTION_CLASS = [ Common, Suse, Upstream, KEnv ]
-    @@load_class = []
-    @@verbose_log = false
-
-    def stringToAction(str)
-        action = str.to_sym()
-        raise("Invalid action '#{str}'") if KernelWork::getActionAttr("ACTION_LIST").index(action) == nil
-        return action
-    end
-    module_function :stringToAction
-
-    def actionToString(sym)
-        return sym.to_s()
-    end
-    module_function :actionToString
-
-    def getActionAttr(attr)
-        if Common.const_get(attr).class == Hash
-            return ACTION_CLASS.inject({}){|h, x| h.merge(x.const_get(attr))}
-        else
-            return ACTION_CLASS.map(){|x| x.const_get(attr)}.flatten()
-        end
-    end
-    module_function :getActionAttr
-
-
-    def _runOnClass(action, sym, &block)
-        ACTION_CLASS.each(){|x|
-            next if x::ACTION_LIST.index(action) == nil
-            if sym == nil || x.singleton_methods().index(sym) != nil then
-                return yield(x)
-            end
-            return 0
-        }
-        return -1
-    end
-    module_function :_runOnClass
-
-    def setOpts(action, optsParser, opts)
-        KernelWork::_runOnClass(action, :set_opts) {|kClass|
-            kClass.set_opts(action, optsParser, opts)
-        }
-    end
-    module_function :setOpts
-
-    def checkOpts(opts)
-         KernelWork::_runOnClass(opts[:action], :check_opts) {|kClass|
-             kClass.check_opts(opts)
-        }
-    end
-    module_function :checkOpts
-
-    def execAction(opts, action)
-        KernelWork::_runOnClass(action, nil) {|kClass|
-            obj = kClass.new()
-            begin
-                return obj.public_send(action, opts)
-            rescue RunError => e
-                puts("# " + "ERROR".red().to_s() + ": Action '#{action}' failed with err '#{e.err_code()}'")
-                e.backtrace.each(){|l|
-                    puts("# " + "ERROR".red().to_s() + ": \t" + l)
-                }
-                return e.err_code()
-            end
-        }
-    end
-    module_function :execAction
-
-    def self.verbose_log=(val)
-        @@verbose_log = val
-    end
-    def self.verbose_log()
-        @@verbose_log
-    end
-end
-
 
 

@@ -3,14 +3,21 @@ require 'yaml'
 require 'fileutils'
 module KernelWork
 
+    # Class for handling upstream Linux kernel git operations
     class Upstream < Common
+        # Upstream remote name
         @@UPSTREAM_REMOTE="SUSE"
+        # URL for fetching git fixes
         @@GIT_FIXES_URL="http://fixes.prg2.suse.org/current/"
+        # Default subtree for git fixes
         @@GIT_FIXES_SUBTREE="infiniband"
 
+        # Default number of parallel jobs for build
         DEFAULT_J_OPT="$(nproc --all --ignore=4)"
 
 
+        # Load supported architectures configuration
+        # @return [Hash] Supported architectures config
         def self.load_supported_archs
             defaults = {
                 "x86_64" => {
@@ -35,17 +42,19 @@ module KernelWork
                 File.open(f, 'w') {|file| file.write(defaults.to_yaml)}
             end
 
-            # YAML.load_file returns string keys by default. 
+            # YAML.load_file returns string keys by default.
             # We want String keys for Arch names, but Symbol keys for inner attributes.
             data = YAML.load_file(f)
 
             # Convert inner keys to symbols to match existing code usage
-            data.each { |k, v| 
-                data[k] = v.transform_keys(&:to_sym) 
+            data.each { |k, v|
+                data[k] = v.transform_keys(&:to_sym)
             }
             return data
         end
+        # List of supported architectures and their compiler flags
         SUPPORTED_ARCHS = load_supported_archs()
+        # List of available actions for Upstream class
         ACTION_LIST = [
             :apply_pending,
             :scp,
@@ -56,6 +65,7 @@ module KernelWork
             :backport_todo,
             :git_fixes,
         ]
+        # Help text for actions
         ACTION_HELP = {
             :"*** LINUX_GIT commands *** *" => "",
             :apply_pending => "Reset LINUX_GIT branch and reapply all unmerged patches from kernel-source",
@@ -68,6 +78,11 @@ module KernelWork
             :git_fixes => "Fetch git-fixes list from #{@@GIT_FIXES_URL}/../#{@@GIT_FIXES_SUBTREE} and try to scp them.",
         }
 
+        # Set options for Upstream actions
+        #
+        # @param action [Symbol] The action
+        # @param optsParser [OptionParser] The option parser
+        # @param opts [Hash] The options hash
         def self.set_opts(action, optsParser, opts)
             opts[:commits] = []
             opts[:arch] = "x86_64"
@@ -132,7 +147,7 @@ module KernelWork
                 optsParser.on("-I", "--infiniband", String,
                               "Build infiniband subtree") {
                     |val| opts[:build_subset] = "drivers/infiniband"}
-                optsParser.on("-v", "--verbose", 
+                optsParser.on("-v", "--verbose",
                               "Build with V=1") {
                     |val| opts[:build_verbose] = true}
             when :backport_todo
@@ -165,6 +180,11 @@ module KernelWork
             else
             end
         end
+
+        # Check options for validity
+        #
+        # @param opts [Hash] The options hash
+        # @raise [RuntimeError] If required options are missing
         def self.check_opts(opts)
             case opts[:action]
             when :backport_todo
@@ -174,6 +194,8 @@ module KernelWork
             end
         end
 
+        # Initialize a new Upstream object
+        # @param suse [Suse, nil] Suse object
         def initialize(suse = nil)
             @path=ENV["LINUX_GIT"].chomp()
             begin
@@ -187,17 +209,28 @@ module KernelWork
 
         end
 
+        # Get current branch
+        # @return [String] Branch name
+        # @raise [UnknownBranch] If branch is not detected
         def branch()
             raise UnknownBranch.new(@path) if @branch == nil
             @suse.branch?(@branch)
             return @branch
         end
 
+        # Get local branch name
+        # @return [String] Local branch name
+        # @raise [UnknownBranch] If branch is not detected
         def local_branch()
             raise UnknownBranch.new(@path) if @local_branch == nil
             return @local_branch
         end
 
+        # Check if current branch matches expected
+        # @param br [String] Expected branch
+        # @return [Boolean] True if match
+        # @raise [UnknownBranch] If branch is not detected
+        # @raise [BranchMismatch] If branches do not match
         def branch?(br)
             raise UnknownBranch.new(@path) if @branch == nil
             raise BranchMismatch.new(@branch, br) if @branch != br
@@ -205,6 +238,9 @@ module KernelWork
             return @branch == br
         end
 
+        # Get the kernel base version
+        # @return [KV] Kernel version object
+        # @raise [BaseKernelError] If version cannot be determined
         def get_kernel_base()
             return @kv if @kv != nil
             begin
@@ -215,6 +251,8 @@ module KernelWork
             end
         end
 
+        # Load compiler configuration from YAML
+        # @return [Array<Hash>] Compiler rules
         def self.load_compiler_config
             defaults = [
                 { :range => "0.0...4.0", :gcc => "gcc-4.8" },
@@ -241,8 +279,12 @@ module KernelWork
             end
             return rules
         end
+        # Compiler rules based on kernel version
         COMPILER_RULES = load_compiler_config()
 
+        # Generate make flags for build
+        # @param opts [Hash] Options hash
+        # @return [String] Make flags
         def genMakeFlags(opts)
             archName, arch, bDir=optsToBDir(opts)
             cc = arch[:CC].to_s()
@@ -283,6 +325,10 @@ module KernelWork
                     " #{arch[:ARCH].to_s()} #{crossCompile} "
         end
 
+        # Run the build command
+        # @param opts [Hash] Options hash
+        # @param flags [String] Additional make flags
+        # @return [Integer] Exit code
         def runBuild(opts, flags="")
             makeFlags = genMakeFlags(opts)
 
@@ -290,6 +336,9 @@ module KernelWork
             return 0
         end
 
+        # Run oldconfig or olddefconfig
+        # @param opts [Hash] Options hash
+        # @param force [Boolean] Force regeneration of config
         def runOldConfig(opts, force=true)
             archName, arch, bDir=optsToBDir(opts)
 
@@ -307,6 +356,11 @@ module KernelWork
             end
         end
 
+        # Get mainline tag containing the commit
+        # @param commit [Commit] Commit object
+        # @return [String] Tag name
+        # @raise [ShaNotCommitError] If commit is not valid
+        # @raise [NoSuchMainline] If mainline not found
         def get_mainline(commit)
             raise ShaNotCommitError.new() if !commit.is_a(KernelWork::Commit)
             begin
@@ -316,6 +370,9 @@ module KernelWork
             end
         end
 
+        # Convert opts to build directory and arch info
+        # @param opts [Hash] Options hash
+        # @return [String, Hash, String] Arch name, Arch info, Build dir
         def optsToBDir(opts)
             archName=opts[:arch]
             raise ("Unsupported arch '#{archName}'") if SUPPORTED_ARCHS[archName] == nil
@@ -324,6 +381,11 @@ module KernelWork
             return archName, arch, bDir
         end
 
+        # Generate list of patches to backport
+        # @param ahead [String] Ahead reference
+        # @param trailing [String] Trailing reference
+        # @param path [String] Path filter
+        # @return [Array<Commit>] List of commits
         def genBackportList(ahead, trailing, path)
             patches = runGit("log --no-merges --format=oneline #{ahead} ^#{trailing} -- #{path}").
                        split("\n")
@@ -342,6 +404,10 @@ module KernelWork
             return list
         end
 
+        # Filter already backported patches
+        # @param opts [Hash] Options hash
+        # @param head [Array<Commit>] List of upstream commits
+        # @param house [Array<Commit>] List of in-house commits
         def filterInHouse(opts, head, house)
             houseList = house.inject({}){|h, x|
                 h[x.patch_id] = true
@@ -369,6 +435,9 @@ module KernelWork
         #
         # ACTIONS
         #
+        # Apply pending patches action
+        # @param opts [Hash] Options hash
+        # @return [Integer] Exit code
         def apply_pending(opts)
             # Ignore errors here, we're aborting just in case
             runGit("am --abort", {}, false)
@@ -392,6 +461,10 @@ module KernelWork
             runGitInteractive("am #{amList.join(" ")}") if amList.length > 0
             return 0
         end
+
+        # SCP (cherry-pick) action
+        # @param opts [Hash] Options hash
+        # @return [Integer] Exit code
         def scp(opts)
             branch()
 
@@ -433,10 +506,16 @@ module KernelWork
             return status
         end
 
+        # Oldconfig action
+        # @param opts [Hash] Options hash
+        # @return [Integer] Exit code
         def oldconfig(opts)
             return runOldConfig(opts, true)
         end
 
+        # Build action
+        # @param opts [Hash] Options hash
+        # @return [Integer] Exit code
         def build(opts)
             buildTarget=""
             if opts[:build_subset] != nil then
@@ -463,6 +542,9 @@ module KernelWork
             return runBuild(opts, buildTarget)
         end
 
+        # Diff paths action
+        # @param opts [Hash] Options hash
+        # @return [Integer] Exit code
         def diffpaths(opts)
             puts runGit("diff #{@@UPSTREAM_REMOTE}/#{branch()}..HEAD --stat=500").split("\n").map() {|l|
                 next if l =~ /files changed/
@@ -471,6 +553,9 @@ module KernelWork
             return 0
         end
 
+        # Check kABI action
+        # @param opts [Hash] Options hash
+        # @return [Integer] Exit code
         def kabi_check(opts)
             branch()
             archName, arch, bDir=optsToBDir(opts)
@@ -482,6 +567,9 @@ module KernelWork
             return 0
         end
 
+        # Backport TODO list action
+        # @param opts [Hash] Options hash
+        # @return [Integer] Exit code
         def backport_todo(opts)
             head=(opts[:upstream_ref])
             tBranch=local_branch()
@@ -516,6 +604,9 @@ module KernelWork
             return 0
         end
 
+        # Git fixes action
+        # @param opts [Hash] Options hash
+        # @return [Integer] Exit code
         def git_fixes(opts)
             branch()
             commits = []
@@ -551,6 +642,12 @@ module KernelWork
         #### PRIVATE methods                   ####
         ###########################################
         private
+
+        # Fetch the list of git-fixes from the SUSE fixes server
+        #
+        # @param opts [Hash] Options hash including :git_fixes_subtree
+        # @return [Array<Commit>] List of fixes identified for the current branch
+        # @raise [GitFixesFetchError] If retrieval fails
         def _fetch_git_fixes(opts)
             str = nil
             begin
@@ -588,6 +685,12 @@ module KernelWork
             return fixes
         end
 
+        # Cherry-pick a single commit into the Linux git tree, handling conflicts
+        #
+        # @param opts [Hash] Options hash
+        # @param commit [Commit] The commit to cherry-pick
+        # @raise [SCPSkip] If user skips the patch or it fails to apply and skip_broken is set
+        # @raise [SCPAbort] If user aborts the operation
         def _cherry_pick_one(opts, commit)
             raise ShaNotCommitError.new() if !commit.is_a?(KernelWork::Commit)
 
@@ -618,6 +721,10 @@ module KernelWork
             return
         end
 
+        # Run checkpatch and prompt user to meld fixes if necessary
+        #
+        # @param opts [Hash] Options hash
+        # @return [Integer] 0
         def _tune_last_patch(opts)
             run("rm -f 0001*.patch")
             runGit("format-patch -n1 HEAD")
@@ -634,6 +741,13 @@ module KernelWork
             return 0
         end
 
+        # Internal method to handle the full SCP process for a single commit
+        #
+        # @param opts [Hash] Options hash
+        # @param commit [Commit] The commit to backport
+        # @return [Integer] Exit code (0 for success)
+        # @raise [ShaNotFoundError] If SHA is invalid
+        # @raise [SCPSkip] If skipped
         def _scp_one(opts, commit)
             rep="t"
             raise ShaNotCommitError.new() if !commit.is_a?(KernelWork::Commit)
@@ -678,6 +792,11 @@ module KernelWork
         end
 
         # Returns [status, unhandled_shas]
+        # Internal method to loop through multiple commits for SCP
+        #
+        # @param opts [Hash] Options hash
+        # @param commits [Array<Commit>] List of commits to backport
+        # @return [Array] [status, unhandled_commits]
         def _scp(opts, commits)
             unhandled = commits.dup
             commits.each(){ |commit|

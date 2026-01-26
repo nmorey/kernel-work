@@ -3,8 +3,14 @@ require 'fileutils'
 
 module KernelWork
 
+    # Class for handling SUSE kernel source directory operations
     class Suse < Common
+        # Remote name for SUSE repository
         @@SUSE_REMOTE="origin"
+
+        # Load branch configuration from YAML file
+        #
+        # @return [Array<Hash>] List of configured branches
         def self.load_branches
              defaults = [
                 { :name => "SAMPLE",
@@ -21,9 +27,12 @@ module KernelWork
 
             return YAML.load_file(f, symbolize_names: true)
         end
+        # List of maintenance branches loaded from config
         @@MAINT_BRANCHES = load_branches()
+        # List of branch names
         @@BR_LIST=@@MAINT_BRANCHES.map(){|x| x[:name]}
 
+        # List of available actions for Suse class
         ACTION_LIST = [
             :source_rebase,
             :meld_lastpatch,
@@ -36,6 +45,7 @@ module KernelWork
             :push,
             :register_branch,
         ]
+        # Help text for actions
         ACTION_HELP = {
             :"*** KERNEL_SOURCE_DIR commands *** *" => "",
             :source_rebase => "Rebase KERNEL_SOURCE_DIR branch to the latest tip",
@@ -50,6 +60,11 @@ module KernelWork
             :register_branch => "Register a branch for maintenance in branches.yml",
         }
 
+        # Set options for Suse actions
+        #
+        # @param action [Symbol] The action
+        # @param optsParser [OptionParser] The option parser
+        # @param opts [Hash] The options hash
         def self.set_opts(action, optsParser, opts)
             opts[:commits] = []
             opts[:full_check] = false
@@ -96,6 +111,10 @@ module KernelWork
             end
         end
 
+        # Check options for validity
+        #
+        # @param opts [Hash] The options hash
+        # @raise [RuntimeError] If required options are missing
         def self.check_opts(opts)
             case opts[:action]
             when :register_branch
@@ -105,6 +124,9 @@ module KernelWork
             end
         end
 
+        # Initialize a new Suse object
+        #
+        # @param upstream [Upstream, nil] Upstream object
         def initialize(upstream = nil)
             @path=ENV["KERNEL_SOURCE_DIR"].chomp()
            begin
@@ -126,32 +148,61 @@ module KernelWork
                 @patch_path = @branch_infos[:patch_path] if @branch_infos[:patch_path] != nil
             end
         end
+
+        # Get current branch
+        # @return [String] Branch name
+        # @raise [UnknownBranch] If branch is not detected
         def branch()
             raise UnknownBranch.new(@path) if @branch == nil
             return @branch
         end
+
+        # Check if current branch matches expected
+        # @param br [String] Expected branch
+        # @return [Boolean] True if match
+        # @raise [UnknownBranch] If branch is not detected
+        # @raise [BranchMismatch] If branches do not match
         def branch?(br)
             raise UnknownBranch.new(@path) if @branch == nil
             raise BranchMismatch.new(br, @branch) if br != @branch
 
             return @branch == br
         end
+
+        # Get local branch name
+        # @return [String] Local branch name
+        # @raise [UnknownBranch] If branch is not detected
         def local_branch()
             raise UnknownBranch.new(@path) if @local_branch == nil
             return @local_branch
         end
 
+        # Get the filename of the last applied patch
+        # @param opts [Hash] Options hash
+        # @return [String] Filename
         def get_last_patch(opts)
             runGit("show HEAD --stat --stat-width=1000 --no-decorate").
                 split("\n").each().grep(/patches\.[^\/]*/)[0].lstrip().split(/[ \t]/)[0]
         end
+
+        # Get the filename of the currently modified patch
+        # @param opts [Hash] Options hash
+        # @return [String] Filename
         def get_current_patch(opts)
             runGit("diff --cached --stat --stat-width=1000").
                 split("\n").each().grep(/patches\.[^\/]*/)[0].lstrip().split(/[ \t]/)[0]
         end
+
+        # Get the Git-commit ID from a patch file
+        # @param patchfile [String] Path to patch file
+        # @return [String] Commit SHA
         def get_patch_commit_id(patchfile = nil)
             return runGit("grep Git-commit #{patchfile}").split(/[ \t]/)[-1]
         end
+
+        # Check for blacklist.conf conflict
+        # @param opts [Hash] Options hash
+        # @return [Boolean] True if conflict exists
         def is_blacklist_conflict?(opts)
             begin
                 return runGit("status --porcelain -- blacklist.conf").lstrip().split(/[ \t]/)[0] == "UU"
@@ -162,6 +213,8 @@ module KernelWork
             return false
         end
 
+        # Generate ordered list of patches to apply/revert
+        # @return [Array<String>] List of patch paths or revert commands
         def gen_ordered_patchlist()
             up_ref = get_upstream_base()
             patchOrder = []
@@ -202,6 +255,9 @@ module KernelWork
             return toDoList
         end
 
+        # Generate a list of commit IDs already in the patch directory
+        # @param opts [Hash] Options hash
+        # @return [Hash] Hash with SHA keys and true values
         def gen_commit_id_list(opts)
             h={}
             run("git grep Git-commit: #{get_patch_dir(opts)} | awk '{ print $NF}'").
@@ -211,20 +267,36 @@ module KernelWork
             return h
         end
 
+        # Get the patch directory path
+        # @param opts [Hash] Options hash
+        # @return [String] Path to patch directory
         def get_patch_dir(opts)
             return opts[:patch_path] if opts[:patch_path] != nil
             return @patch_path
         end
 
+        # Convert patch name to local path
+        # @param opts [Hash] Options hash
+        # @param pname [String] Patch name
+        # @return [String] Local path
         def patchname_to_local_path(opts, pname)
             return get_patch_dir(opts) + "/" + pname
         end
+
+        # Convert patch name to absolute path
+        # @param opts [Hash] Options hash
+        # @param pname [String] Patch name
+        # @return [String] Absolute path
         def patchname_to_absolute_path(opts, pname)
             return ENV["KERNEL_SOURCE_DIR"] + "/" + patchname_to_local_path(opts, pname)
         end
 
+        # Fill in target patch reference if missing
+        # @param h [Hash] Target patch info
+        # @param override_cve [Boolean] Whether to override CVE
+        # @raise [NoRefError] If no reference can be found
         def fill_targetPatch_ref(h, override_cve = false)
-            return if h[:cve] == true && override_cve == false 
+            return if h[:cve] == true && override_cve == false
             if h[:ref] == nil then
                 h[:ref] = @branch_infos[:ref]
             end
@@ -240,10 +312,13 @@ module KernelWork
         # Find commit local branch started from upstream
         # so we can check local changes not in upstream and not break everything
         # when upstream has moved forward
+        # @return [String] SHA of merge base
         def get_upstream_base()
             return runGit("merge-base HEAD #{@@SUSE_REMOTE}/#{branch()}")
         end
 
+        # Meld the last patch with changes
+        # @param opts [Hash] Options hash
         def do_meld_lastpatch(opts)
             file = get_last_patch(opts)
             runSystem("meld \"#{file}\" \"#{ENV["LINUX_GIT"]}\"/0001-*.patch")
@@ -251,6 +326,9 @@ module KernelWork
             return
         end
 
+        # Run checkpatch on the current state
+        # @param opts [Hash] Options hash
+        # @raise [CheckPatchError] If checkpatch fails
         def do_checkpatch(opts)
             rOpt = " --rapid "
             rOpt = "" if opts[:full_check] == true
@@ -262,6 +340,9 @@ module KernelWork
             return 0
         end
 
+        # Check if a commit is already applied
+        # @param sha [Commit, String] Commit or SHA
+        # @return [Boolean] True if applied
         def is_applied?(sha)
             sha = sha.sha if sha.is_a?(Commit)
             begin
@@ -271,10 +352,16 @@ module KernelWork
                 return false
             end
         end
+
+        # List unmerged commits
+        # @param opts [Hash] Options hash
         def list_unmerged(opts)
             runGitInteractive("log --no-decorate  --format=oneline \"^#{@@SUSE_REMOTE}/#{branch()}\" HEAD")
             return 0
         end
+
+        # List unpushed commits
+        # @param opts [Hash] Options hash
         def list_unpushed(opts)
             remoteRefs=" \"^#{@@SUSE_REMOTE}/#{branch()}\""
             begin
@@ -293,6 +380,9 @@ module KernelWork
         # ACTIONS
         #
         public
+        # Rebase kernel-source directory
+        # @param opts [Hash] Options hash
+        # @return [Integer] Exit code
         def source_rebase(opts)
             intOpts="-i"
             if opts[:no_interactive] == true
@@ -327,6 +417,9 @@ module KernelWork
             end
         end
 
+        # Meld last patch action
+        # @param opts [Hash] Options hash
+        # @return [Integer] Exit code
         def meld_lastpatch(opts)
             begin
                 do_meld_lastpatch(opts)
@@ -336,6 +429,11 @@ module KernelWork
             return 0
         end
 
+        # Extract a single patch
+        # @param opts [Hash] Options hash
+        # @param commit [Commit] Commit to extract
+        # @return [Integer] Exit code
+        # @raise [ShaNotCommitError] If commit is not a Commit object
         def extract_single_patch(opts, commit)
             raise ShaNotCommitError.new() if !commit.is_a?(KernelWork::Commit)
             return 1 if commit.check_patch_info(opts) == false
@@ -357,6 +455,9 @@ module KernelWork
             return _insert_and_commit_patch(opts, commit, targetPatch)
         end
 
+        # Extract patches action
+        # @param opts [Hash] Options hash
+        # @return [Integer] Exit code
         def extract_patch(opts)
             fill_patchInfo_ref(opts)
             if opts[:commits].length == 0 then
@@ -370,6 +471,12 @@ module KernelWork
             }
             return 0
         end
+
+        # Fix series.conf action
+        # @param opts [Hash] Options hash
+        # @return [Integer] Exit code
+        # @raise [BlacklistConflictError] If blacklist.conf conflicts
+        # @raise [EmptyCommitError] If no current patch found
         def fix_series(opts)
             runGit("checkout -f HEAD -- series.conf")
             patch = nil
@@ -386,6 +493,10 @@ module KernelWork
             runGitInteractive("status")
             return 0
         end
+
+        # Checkpatch action
+        # @param opts [Hash] Options hash
+        # @return [Integer] Exit code
         def checkpatch(opts)
             begin
                 do_checkpatch(opts)
@@ -395,6 +506,10 @@ module KernelWork
             end
             return 0
         end
+
+        # Fix mainline tag in patch
+        # @param opts [Hash] Options hash
+        # @return [Integer] Exit code
         def fix_mainline(opts)
             patch = get_last_patch(opts)
             sha = get_patch_commit_id(patch)
@@ -404,12 +519,18 @@ module KernelWork
             runGitInteractive("diff --cached")
             return 0
         end
+
+        # Check for missing fixes
+        # @param opts [Hash] Options hash
+        # @return [Integer] Exit code
         def check_fixes(opts)
             log(:INFO, "Checking potential missing git-fixes between #{@@SUSE_REMOTE}/#{branch()} and HEAD")
             runSystem("./scripts/git-fixes  $(git rev-parse \"#{@@SUSE_REMOTE}/#{branch()}\")")
             return 0
         end
 
+        # List commits action
+        # @param opts [Hash] Options hash
         def list_commits(opts)
             case opts[:list_commits]
             when :unpushed
@@ -420,6 +541,9 @@ module KernelWork
         end
         alias_method :lc, :list_commits
 
+        # Push action
+        # @param opts [Hash] Options hash
+        # @return [Integer] Exit code
         def push(opts)
             pOpts=""
             log(:INFO, "Pending patches")
@@ -429,6 +553,9 @@ module KernelWork
             return 0
         end
 
+        # Register a branch
+        # @param opts [Hash] Options hash
+        # @return [Integer] Exit code
         def register_branch(opts)
             f = Common.get_config_file('branches.yml')
             if !File.exist?(f)
@@ -464,6 +591,11 @@ module KernelWork
         ###########################################
         private
 
+        # Generate a unique patch name, prompting the user if a conflict exists.
+        #
+        # @param opts [Hash] Options including potential custom filename
+        # @param commit [Commit] The commit to generate a name for
+        # @return [Hash, nil] Patch metadata (pname, local_path, full_path, ref) or nil if aborted
         def _gen_patch_name(opts, commit)
             pname= commit.patchname().gsub(/^0001-/,"")
             # Default name might be overriden from CLI
@@ -504,6 +636,12 @@ module KernelWork
             }
         end
 
+        # Copy a patch from the Linux tree and fill in custom headers (Git-commit, Patch-mainline, etc.)
+        #
+        # @param opts [Hash] Options hash
+        # @param commit [Commit] The source commit
+        # @param targetPatch [Hash] Destination patch metadata
+        # @return [Integer] 0
         def _copy_and_fill_patch(opts, commit, targetPatch)
             i = File.open(ENV["LINUX_GIT"] + "/" + commit.patchname,"r")
             o = File.open(targetPatch[:full_path] , "w+")
@@ -542,6 +680,12 @@ module KernelWork
             return 0
         end
 
+        # Insert the patch into series.conf and commit it to the SUSE repository
+        #
+        # @param opts [Hash] Options hash
+        # @param commit [Commit] The source commit
+        # @param targetPatch [Hash] Target patch metadata
+        # @return [Integer] Exit code from git commit
         def _insert_and_commit_patch(opts, commit, targetPatch)
             lpath = targetPatch[:local_path]
             cname=run("mktemp")
@@ -562,7 +706,13 @@ module KernelWork
             return 0
         end
 
-        def _patch_fill_in_CVE(opts, commit, patchInfos)
+        # Automatically extract CVE and BSC references for a patch using suse-add-cves
+        #
+        # @param opts [Hash] Options hash
+        # @param commit [Commit] The source commit
+        # @param targetPatch [Hash] Target patch metadata
+        # @return [Integer] 0 or error code
+        def _patch_fill_in_CVE(opts, commit, targetPatch)
             lpath = targetPatch[:local_path]
             log(:INFO, "Auto referencing CVE id and BSC")
             runSystem("echo '#{lpath}' | suse-add-cves  -v $VULNS_GIT  -f")
@@ -586,6 +736,10 @@ module KernelWork
             return 0
         end
 
+        # Insert a patch file into series.conf using the project's sort script
+        #
+        # @param opts [Hash] Options hash
+        # @param file [String] Path to the patch file
         def _series_insert(opts, file)
             runSystem("./scripts/git_sort/series_insert \"#{file}\"")
             runGit("add series.conf")
