@@ -9,16 +9,13 @@ module KernelWork
         #   @return [String] The git repository URL where the commit was introduced (ie maintainer tree)
         attr_reader :sha, :orig_tag, :git_repo
 
-        # Maintainer branches to check for commit presence if not found in tags
-        @@Q_BRANCHES = [ "linux-rdma/for-rc", "linux-rdma/for-next" ]
-
         # Initialize a new Commit object
         #
         # @param sha [String] The commit SHA
         # @param subject [String, nil] The commit subject (optional)
         # @param patch_id [String, nil] The patch ID (optional)
         def initialize(sha, subject = nil, patch_id = nil)
-            @path=ENV["LINUX_GIT"].chomp()
+            @path=KernelWork.config.linux_git
             @sha = sha
             @subject = subject
             @patch_id = patch_id
@@ -153,12 +150,12 @@ module KernelWork
                                      each().grep(/remotes\//).map(){|x|
                      x.lstrip.split(/[ \t]/)[0].gsub(/remotes\//,'')}.
                                      each(){|r|
-                     idx = @@Q_BRANCHES.index(r)
+                     idx = KernelWork.config.upstream.maintainer_branches.index(r)
                      next if idx ==nil
 
-                     log(:INFO, "Found it in #{@@Q_BRANCHES[idx]}")
+                     log(:INFO, "Found it in #{KernelWork.config.upstream.maintainer_branches[idx]}")
                      @orig_tag = "Queued in subsystem maintainer repository"
-                     remote=@@Q_BRANCHES[idx].gsub(/\/.*/,'')
+                     remote=KernelWork.config.upstream.maintainer_branches[idx].gsub(/\/.*/,'')
                      @git_repo=@upstream.runGit("config remote.#{remote}.url")
                      return
                  }

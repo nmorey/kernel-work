@@ -5,32 +5,6 @@ module KernelWork
 
     # Class for handling SUSE kernel source directory operations
     class Suse < Common
-        # Remote name for SUSE repository
-        @@SUSE_REMOTE="origin"
-
-        # Load branch configuration from YAML file
-        #
-        # @return [Array<Hash>] List of configured branches
-        def self.load_branches
-             defaults = [
-                { :name => "SAMPLE",
-                  :ref => nil,
-                },
-            ]
-
-            f = Common.get_config_file('branches.yml')
-            if !File.exist?(f)
-                d = File.dirname(f)
-                FileUtils.mkdir_p(d) unless File.directory?(d)
-                File.open(f, 'w') {|file| file.write(defaults.to_yaml)}
-            end
-
-            return YAML.load_file(f, symbolize_names: true)
-        end
-        # List of maintenance branches loaded from config
-        @@MAINT_BRANCHES = load_branches()
-        # List of branch names
-        @@BR_LIST=@@MAINT_BRANCHES.map(){|x| x[:name]}
 
         # List of available actions for Suse class
         ACTION_LIST = [
@@ -57,7 +31,7 @@ module KernelWork
             :check_fixes => "Use KERNEL_SOURCE_DIR script to detect missing git-fixes pulled by commited patches",
             :list_commits => "List pending commits (default = unmerged)",
             :push=> "Push KERNEL_SOURCE_DIR pending patches",
-            :register_branch => "Register a branch for maintenance in branches.yml",
+            :register_branch => "Register a branch for maintenance in config.yml",
         }
 
         # Set options for Suse actions
@@ -128,7 +102,7 @@ module KernelWork
         #
         # @param upstream [Upstream, nil] Upstream object
         def initialize(upstream = nil)
-            @path=ENV["KERNEL_SOURCE_DIR"].chomp()
+            @path=KernelWork.config.kernel_source_dir
            begin
                set_branches()
            rescue UnknownBranch
@@ -139,12 +113,17 @@ module KernelWork
            @upstream = Upstream.new(self) if @upstream == nil
 
             @patch_path = "patches.suse"
-            idx = @@BR_LIST.index(@branch)
-            if idx == nil then
+
+            # Access branches directly from config
+            branches = KernelWork.config.suse.branches
+
+            # Find branch info
+            @branch_infos = branches.find { |b| b[:name] == @branch }
+
+            if @branch_infos == nil then
                 log(:WARNING, "Branch '#{@branch}' not in supported list")
                 @branch_infos = {}
             else
-                @branch_infos = @@MAINT_BRANCHES[idx]
                 @patch_path = @branch_infos[:patch_path] if @branch_infos[:patch_path] != nil
             end
         end
@@ -288,7 +267,7 @@ module KernelWork
         # @param pname [String] Patch name
         # @return [String] Absolute path
         def patchname_to_absolute_path(opts, pname)
-            return ENV["KERNEL_SOURCE_DIR"] + "/" + patchname_to_local_path(opts, pname)
+            return KernelWork.config.kernel_source_dir + "/" + patchname_to_local_path(opts, pname)
         end
 
         # Fill in target patch reference if missing
@@ -314,14 +293,14 @@ module KernelWork
         # when upstream has moved forward
         # @return [String] SHA of merge base
         def get_upstream_base()
-            return runGit("merge-base HEAD #{@@SUSE_REMOTE}/#{branch()}")
+            return runGit("merge-base HEAD #{KernelWork.config.suse.remote}/#{branch()}")
         end
 
         # Meld the last patch with changes
         # @param opts [Hash] Options hash
         def do_meld_lastpatch(opts)
             file = get_last_patch(opts)
-            runSystem("meld \"#{file}\" \"#{ENV["LINUX_GIT"]}\"/0001-*.patch")
+            runSystem("meld \"#{file}\" \"#{KernelWork.config.linux_git}\"/0001-*.patch")
             runSystem("git add \"#{file}\" && git amend --no-verify")
             return
         end
@@ -356,17 +335,17 @@ module KernelWork
         # List unmerged commits
         # @param opts [Hash] Options hash
         def list_unmerged(opts)
-            runGitInteractive("log --no-decorate  --format=oneline \"^#{@@SUSE_REMOTE}/#{branch()}\" HEAD")
+            runGitInteractive("log --no-decorate  --format=oneline \"^#{KernelWork.config.suse.remote}/#{branch()}\" HEAD")
             return 0
         end
 
         # List unpushed commits
         # @param opts [Hash] Options hash
         def list_unpushed(opts)
-            remoteRefs=" \"^#{@@SUSE_REMOTE}/#{branch()}\""
+            remoteRefs=" \"^#{KernelWork.config.suse.remote}/#{branch()}\""
             begin
-                runGit("rev-parse --verify --quiet #{@@SUSE_REMOTE}/#{local_branch()}")
-                remoteRefs += " \"^#{@@SUSE_REMOTE}/#{local_branch()}\""
+                runGit("rev-parse --verify --quiet #{KernelWork.config.suse.remote}/#{local_branch()}")
+                remoteRefs += " \"^#{KernelWork.config.suse.remote}/#{local_branch()}\""
             rescue
                 log(:INFO, "Remote user branch does not exists. Checking against main branch only.")
                 # Remote user branch does not exists
@@ -389,7 +368,7 @@ module KernelWork
                 intOpts = ""
             end
             begin
-                runGitInteractive("rebase #{intOpts} #{@@SUSE_REMOTE}/#{branch()}")
+                runGitInteractive("rebase #{intOpts} #{KernelWork.config.suse.remote}/#{branch()}")
             rescue
                 ret = 1
                 while opts[:autofix] == true && ret != 0
@@ -524,8 +503,8 @@ module KernelWork
         # @param opts [Hash] Options hash
         # @return [Integer] Exit code
         def check_fixes(opts)
-            log(:INFO, "Checking potential missing git-fixes between #{@@SUSE_REMOTE}/#{branch()} and HEAD")
-            runSystem("./scripts/git-fixes  $(git rev-parse \"#{@@SUSE_REMOTE}/#{branch()}\")")
+            log(:INFO, "Checking potential missing git-fixes between #{KernelWork.config.suse.remote}/#{branch()} and HEAD")
+            runSystem("./scripts/git-fixes  $(git rev-parse \"#{KernelWork.config.suse.remote}/#{branch()}\")")
             return 0
         end
 
@@ -557,16 +536,7 @@ module KernelWork
         # @param opts [Hash] Options hash
         # @return [Integer] Exit code
         def register_branch(opts)
-            f = Common.get_config_file('branches.yml')
-            if !File.exist?(f)
-                 # Should ensure file exists with defaults if not present, though load_branches does this too.
-                 # But we might be in a context where load_branches hasn't run yet if we just called this action.
-                 # Actually, Suse class variables initialize calls load_branches.
-                 # But let's be safe.
-                 Suse.load_branches
-            end
-
-            branches = Suse.load_branches()
+            branches = KernelWork.config.settings[:suse][:branches]
 
             # Check if branch exists
             idx = branches.index { |b| b[:name] == opts[:branch] }
@@ -577,12 +547,12 @@ module KernelWork
                 log(:INFO, "Updating existing branch '#{opts[:branch]}'")
                 branches[idx] = entry
             else
-                log(:INFO, "Registering new branch '#{opts[:branch]}'")
+                log(:INFO, "Registering new branch '#{opts[:branch]}'" )
                 branches << entry
             end
 
-            File.open(f, 'w') {|file| file.write(branches.to_yaml)}
-            log(:INFO, "Configuration saved to #{f}")
+            KernelWork.config.save_config
+            log(:INFO, "Configuration saved to #{KernelWork.config.config_file}")
 
             return 0
         end
@@ -643,7 +613,7 @@ module KernelWork
         # @param targetPatch [Hash] Destination patch metadata
         # @return [Integer] 0
         def _copy_and_fill_patch(opts, commit, targetPatch)
-            i = File.open(ENV["LINUX_GIT"] + "/" + commit.patchname,"r")
+            i = File.open(KernelWork.config.linux_git + "/" + commit.patchname,"r")
             o = File.open(targetPatch[:full_path] , "w+")
 
             p_split=0

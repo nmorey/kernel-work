@@ -1,59 +1,33 @@
 require 'csv'
 require 'yaml'
 require 'fileutils'
+
 module KernelWork
 
     # Class for handling upstream Linux kernel git operations
     class Upstream < Common
-        # Upstream remote name
-        @@UPSTREAM_REMOTE="SUSE"
-        # URL for fetching git fixes
-        @@GIT_FIXES_URL="http://fixes.prg2.suse.org/current/"
-        # Default subtree for git fixes
-        @@GIT_FIXES_SUBTREE="infiniband"
 
-        # Default number of parallel jobs for build
-        DEFAULT_J_OPT="$(nproc --all --ignore=4)"
-
-
-        # Load supported architectures configuration
-        # @return [Hash] Supported architectures config
-        def self.load_supported_archs
-            defaults = {
-                "x86_64" => {
-                    :CC => "CC=\"ccache gcc\"",
-                },
-                "arm64" => {
-                    :CC => "CC=\"ccache gcc\"",
-                    :CROSS_COMPILE => "aarch64-suse-linux-",
-                    :ARCH => "ARCH=arm64",
-                },
-                "s390x" => {
-                    :CC => "CC=\"ccache gcc\"",
-                    :CROSS_COMPILE => "s390x-suse-linux-",
-                    :ARCH => "ARCH=s390",
-                }
-            }
-
-            f = Common.get_config_file('archs.yml')
-            if !File.exist?(f)
-                d = File.dirname(f)
-                FileUtils.mkdir_p(d) unless File.directory?(d)
-                File.open(f, 'w') {|file| file.write(defaults.to_yaml)}
-            end
-
-            # YAML.load_file returns string keys by default.
-            # We want String keys for Arch names, but Symbol keys for inner attributes.
-            data = YAML.load_file(f)
-
-            # Convert inner keys to symbols to match existing code usage
-            data.each { |k, v|
-                data[k] = v.transform_keys(&:to_sym)
-            }
-            return data
+        # Helper to access supported archs from config
+        def self.supported_archs
+            KernelWork.config.upstream.archs
         end
-        # List of supported architectures and their compiler flags
-        SUPPORTED_ARCHS = load_supported_archs()
+
+        # Helper to access compiler rules from config and process ranges
+        def self.compiler_rules
+            rules = KernelWork.config.upstream.compiler_rules.to_a.map(&:dup)
+            # Parse ranges
+            rules.each do |r|
+                if r[:range]
+                    if r[:range] =~ /^(.*)\.\.\.(.*)$/
+                        r[:range_obj] = Range.new(KV.new($1), KV.new($2), true)
+                    elsif r[:range] =~ /^(.*)\.\.(.*)$/
+                        r[:range_obj] = Range.new(KV.new($1), KV.new($2), false)
+                    end
+                 end
+            end
+            rules
+        end
+
         # List of available actions for Upstream class
         ACTION_LIST = [
             :apply_pending,
@@ -75,7 +49,7 @@ module KernelWork
             :diffpaths => "List changed paths (dir) since reference branch",
             :kabi_check => "Check kABI compatibility",
             :backport_todo => "List all patches in origin/master that are not applied to the specified tree",
-            :git_fixes => "Fetch git-fixes list from #{@@GIT_FIXES_URL}/../#{@@GIT_FIXES_SUBTREE} and try to scp them.",
+            :git_fixes => "Fetch git-fixes list from #{KernelWork.config.upstream.git_fixes_url}/../#{KernelWork.config.upstream.git_fixes_subtree} and try to scp them.",
         }
 
         # Set options for Upstream actions
@@ -86,13 +60,13 @@ module KernelWork
         def self.set_opts(action, optsParser, opts)
             opts[:commits] = []
             opts[:arch] = "x86_64"
-            opts[:j] = DEFAULT_J_OPT
+            opts[:j] = KernelWork.config.upstream.default_j_opt
             opts[:backport_apply] = false
             opts[:skip_broken] = false
             opts[:skip_treewide] = false
             opts[:old_kernel] = false
             opts[:build_subset] = nil
-            opts[:git_fixes_subtree] = @@GIT_FIXES_SUBTREE
+            opts[:git_fixes_subtree] = KernelWork.config.upstream.git_fixes_subtree
             opts[:git_fixes_listonly] = false
             opts[:upstream_ref] = "origin/master"
             opts[:backport_include] = []
@@ -111,12 +85,12 @@ module KernelWork
                     |val| opts[:skip_treewide] = true }
             when :oldconfig, :build,:kabi_check
                 optsParser.on("-a", "--arch <arch>", String, "Arch to build for. Default=x86_64. Supported=" +
-                                                             SUPPORTED_ARCHS.map(){|x, y| x}.join(", ")) {
+                                                             supported_archs.map(){|x, y| x}.join(", ")) {
                     |val|
-                    raise ("Unsupported arch '#{val}'") if SUPPORTED_ARCHS[val] == nil
+                    raise ("Unsupported arch '#{val}'") if supported_archs[val] == nil
                     opts[:arch] = val
                 }
-                optsParser.on("-j<num>", Integer, "Number of // builds. Default '#{DEFAULT_J_OPT}'") {
+                optsParser.on("-j<num>", Integer, "Number of // builds. Default '#{KernelWork.config.upstream.default_j_opt}'") {
                     |val|
                     opts[:j] = val
                 }
@@ -197,7 +171,7 @@ module KernelWork
         # Initialize a new Upstream object
         # @param suse [Suse, nil] Suse object
         def initialize(suse = nil)
-            @path=ENV["LINUX_GIT"].chomp()
+            @path=KernelWork.config.linux_git
             begin
                 set_branches()
             rescue UnknownBranch
@@ -251,37 +225,6 @@ module KernelWork
             end
         end
 
-        # Load compiler configuration from YAML
-        # @return [Array<Hash>] Compiler rules
-        def self.load_compiler_config
-            defaults = [
-                { :range => "0.0...4.0", :gcc => "gcc-4.8" },
-                { :range => "4.0..5.3",  :gcc => "gcc-7"   },
-                {                        :gcc => "gcc -std=gnu11" }
-            ]
-            f = Common.get_config_file('kernel-compiler.yml')
-             if !File.exist?(f)
-                d = File.dirname(f)
-                FileUtils.mkdir_p(d) unless File.directory?(d)
-                File.open(f, 'w') {|file| file.write(defaults.to_yaml)}
-            end
-
-            rules = YAML.load_file(f, symbolize_names: true)
-            # Parse ranges
-            rules.each do |r|
-                if r[:range]
-                    if r[:range] =~ /^(.*)\.\.\.(.*)$/
-                        r[:range_obj] = Range.new(KV.new($1), KV.new($2), true)
-                    elsif r[:range] =~ /^(.*)\.\.(.*)$/
-                        r[:range_obj] = Range.new(KV.new($1), KV.new($2), false)
-                    end
-                 end
-            end
-            return rules
-        end
-        # Compiler rules based on kernel version
-        COMPILER_RULES = load_compiler_config()
-
         # Generate make flags for build
         # @param opts [Hash] Options hash
         # @return [String] Make flags
@@ -296,7 +239,7 @@ module KernelWork
             gccVer="gcc"
 
             kv = get_kernel_base()
-            found_rule = COMPILER_RULES.find do |rule|
+            found_rule = Upstream.compiler_rules.find do |rule|
                 if rule[:range_obj]
                     rule[:range_obj].cover?(kv)
                 else
@@ -321,7 +264,7 @@ module KernelWork
             if opts[:build_verbose] == true then
                 extraOpts="#{extraOpts} V=1"
             end
-            return "#{cc} #{hostCC} -j#{opts[:j]} O=#{bDir} #{extraOpts}"+
+            return "#{cc} #{hostCC} -j#{opts[:j]} O=#{bDir} #{extraOpts}"
                     " #{arch[:ARCH].to_s()} #{crossCompile} "
         end
 
@@ -346,7 +289,7 @@ module KernelWork
 
             runSystem("rm -Rf #{bDir} && " +
                       "mkdir #{bDir} && " +
-                      "cp #{ENV["KERNEL_SOURCE_DIR"]}/config/#{archName}/default #{bDir}/.config")
+                      "cp #{KernelWork.config.kernel_source_dir}/config/#{archName}/default #{bDir}/.config")
 
             case get_kernel_base()
             when KV.new(0,0) ... KV.new(3,7)
@@ -375,8 +318,8 @@ module KernelWork
         # @return [String, Hash, String] Arch name, Arch info, Build dir
         def optsToBDir(opts)
             archName=opts[:arch]
-            raise ("Unsupported arch '#{archName}'") if SUPPORTED_ARCHS[archName] == nil
-            arch=SUPPORTED_ARCHS[archName]
+            raise ("Unsupported arch '#{archName}'") if Upstream.supported_archs[archName] == nil
+            arch=Upstream.supported_archs[archName]
             bDir="build-#{archName}/"
             return archName, arch, bDir
         end
@@ -441,7 +384,7 @@ module KernelWork
         def apply_pending(opts)
             # Ignore errors here, we're aborting just in case
             runGit("am --abort", {}, false)
-            runGitInteractive("reset --hard #{@@UPSTREAM_REMOTE}/#{branch()}")
+            runGitInteractive("reset --hard #{KernelWork.config.upstream.remote}/#{branch()}")
 
             patches = @suse.gen_ordered_patchlist()
 
@@ -532,7 +475,7 @@ module KernelWork
                     buildTarget="SUBDIRS=#{sub}"
                 else
                     # Newer build system do require one and only one though
-                    sub=sub.gsub(/\/+$/, '') + '/'
+                    sub=sub.gsub( /\/+$/, '') + '/'
                     buildTarget="#{sub}"
                 end
             end
@@ -546,7 +489,7 @@ module KernelWork
         # @param opts [Hash] Options hash
         # @return [Integer] Exit code
         def diffpaths(opts)
-            puts runGit("diff #{@@UPSTREAM_REMOTE}/#{branch()}..HEAD --stat=500").split("\n").map() {|l|
+            puts runGit("diff #{KernelWork.config.upstream.remote}/#{branch()}..HEAD --stat=500").split("\n").map() {|l|
                 next if l =~ /files changed/
                 p = File.dirname(l.strip.gsub(/[ \t]+.*$/, ''))
             }.uniq!().compact!()
@@ -559,10 +502,10 @@ module KernelWork
         def kabi_check(opts)
             branch()
             archName, arch, bDir=optsToBDir(opts)
-            kDir=ENV["KERNEL_SOURCE_DIR"]
+            kDir=KernelWork.config.kernel_source_dir
 
             runSystem("#{kDir}/rpm/kabi.pl --rules #{kDir}/kabi/severities " +
-                      " #{kDir}/kabi/#{archName}/symvers-default "+
+                      " #{kDir}/kabi/#{archName}/symvers-default " +
                       " #{bDir}/Module.symvers")
             return 0
         end
@@ -651,7 +594,7 @@ module KernelWork
         def _fetch_git_fixes(opts)
             str = nil
             begin
-                str = run("curl -f -s #{@@GIT_FIXES_URL}/#{opts[:git_fixes_subtree]}")
+                str = run("curl -f -s #{KernelWork.config.upstream.git_fixes_url}/#{opts[:git_fixes_subtree]}")
             rescue RunError => e
                 if e.err_code() != 22
                     raise(GitFixesFetchError)
@@ -674,7 +617,7 @@ module KernelWork
                 when /^([0-9a-f]+) (.*)$/
                     cur_sha=$1
                     cur_subject=$2
-                when /^[\t ]+Considered for ([^ ]+)/
+                when /^[	 ]+Considered for ([^ ]+)/
                     commit = Commit.new(cur_sha, cur_subject) if pre == false && $1 == branch()
                 when /^$/
                     cur_sha=nil

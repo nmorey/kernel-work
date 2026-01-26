@@ -4,6 +4,7 @@ $LOAD_PATH.push(KERNELWORK_LIB_DIR)
 require 'error'
 require 'string'
 require 'kv'
+require 'config'
 
 
 ###
