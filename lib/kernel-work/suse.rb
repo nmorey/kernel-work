@@ -391,6 +391,7 @@ module KernelWork
                 do_checkpatch(opts)
             rescue => e
                 log(:ERROR, e.to_s())
+                return 1
             end
             return 0
         end

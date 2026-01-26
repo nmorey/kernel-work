@@ -544,8 +544,7 @@ module KernelWork
             end
             return 0 if opts[:git_fixes_listonly] == true
 
-            scp(opts)
-            return 0
+            return scp(opts)
         end
 
         ###########################################
@@ -683,7 +682,10 @@ module KernelWork
             unhandled = commits.dup
             commits.each(){ |commit|
                 begin
-                     _scp_one(opts, commit)
+                     ret = _scp_one(opts, commit)
+                     if ret != 0
+                         return ret, unhandled
+                     end
                      unhandled.shift # Remove success from list
                 rescue SCPAbort
                     log(:INFO, "Aborted")
