@@ -123,6 +123,8 @@ module KernelWork
                     |val| opts[:sha1] << val}
                 optsParser.on("-C", "--cve", "Auto extract reference from VULNS."){
                     |val| opts[:cve] = true }
+                optsParser.on("-f", "--file <FILE>", String, "File containing list of SHA1 to backport.") {
+                    |val| opts[:file] = val }
             when :build
                 optsParser.on("-p", "--path <path>", String,
                               "Path to subtree to build.") {
@@ -143,6 +145,9 @@ module KernelWork
                 optsParser.on("-A", "--apply",
                               "Apply all patches using the scp command.") {
                     |val| opts[:backport_apply] = true}
+                optsParser.on("-f", "--file <FILE>", String,
+                              "Save the list to a file (load it if --apply).") {
+                              |val| opts[:file] = val}
                 optsParser.on("-i", "--include <sha>", String,
                               "Force including this SHA in the TODO list.") {
                     |val| opts[:backport_include] << val}
@@ -388,20 +393,37 @@ module KernelWork
         end
         def scp(opts)
             branch()
+
+            # If a file is provided, read the SHAs from it
+            if opts[:file]
+                if !File.exist?(opts[:file])
+                    log(:ERROR, "File #{opts[:file]} does not exist")
+                    return 1
+                end
+                # Read file, ignoring comments or empty lines, assuming SHA is first word
+                opts[:sha1] = File.readlines(opts[:file]).map { |l| 
+                    l.strip.split(/\s+/).first 
+                }.compact.reject { |s| s.empty? }
+            end
+
             if opts[:sha1].length == 0 then
                 log(:ERROR, "No SHA1 provided")
                 return 1
             end
             @suse.fill_patchInfo_ref(opts)
-            opts[:sha1].each(){ |sha|
-                begin
-                     _scp_one(opts, sha)
-                rescue SCPAbort
-                    log(:INFO, "Aborted")
-                    return 1
+
+            status, unhandled = _scp(opts, opts[:sha1])
+
+            # If we used a file and have unhandled patches, write them back
+            if opts[:file] && (!unhandled.empty? || status != 0)
+                # Write back remaining SHAs
+                File.open(opts[:file], 'w') do |f|
+                    unhandled.each { |u| f.puts u }
                 end
-            }
-            return 0
+                log(:INFO, "Unhandled patches written back to #{opts[:file]}")
+            end
+
+            return status
         end
 
         def oldconfig(opts)
@@ -467,10 +489,24 @@ module KernelWork
                 return 0
             end
 
+            # Reverse to have oldest first (application order)
+            to_apply = inHead.map(){|x| x[:sha]}.reverse
+
+            if opts[:file]
+                File.open(opts[:file], 'w') do |f|
+                    inHead.reverse.each do |x|
+                        # Write SHA and Name for better readability
+                        f.puts "#{x[:sha]} #{x[:name]}"
+                    end
+                end
+                log(:INFO, "Patch list written to #{opts[:file]}")
+            end
+
             runGitInteractive("show --no-patch --format=oneline #{inHead.map(){|x| x[:sha]}.join(" ")}")
 
             if opts[:backport_apply] == true then
-                opts[:sha1] = inHead.map(){|x| x[:sha]}.reverse
+                opts[:sha1] = to_apply
+                # opts[:file] is already set if provided, so scp will use it for state management
                 return scp(opts)
             end
             return 0
@@ -629,5 +665,24 @@ module KernelWork
 
             return _tune_last_patch(opts)
         end
+
+        # Returns [status, unhandled_shas]
+        def _scp(opts, shas)
+            unhandled = shas.dup
+            shas.each(){ |sha|
+                begin
+                     _scp_one(opts, sha)
+                     unhandled.shift # Remove success from list
+                rescue SCPAbort
+                    log(:INFO, "Aborted")
+                    return 1, unhandled
+                rescue Interrupt
+                    log(:INFO, "Interrupted")
+                    return 1, unhandled
+                end
+            }
+            return 0, []
+        end
+
     end
 end
