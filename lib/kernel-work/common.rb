@@ -8,18 +8,6 @@ module KernelWork
         # Help text for actions
         ACTION_HELP = {}
 
-        # Retrieve the path to a configuration file
-        #
-        # @param filename [String] The name of the config file
-        # @return [String] Full path to the config file
-        def self.get_config_file(filename)
-            config_home = ENV['XDG_CONFIG_HOME']
-            if config_home.nil? || config_home.empty?
-                config_home = File.join(Dir.home, '.config')
-            end
-            File.join(config_home, 'kernel-work', filename)
-        end
-
         private
         # Internal log method
         # @param lvl [String] Log level string (colored)
