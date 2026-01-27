@@ -435,18 +435,22 @@ module KernelWork
             end
             @suse.fill_targetPatch_ref(opts)
 
-            status, unhandled = _scp(opts, opts[:commits])
-
-            # If we used a file and have unhandled patches, write them back
-            if opts[:file] && (!unhandled.empty? || status != 0)
-                # Write back remaining SHAs
-                File.open(opts[:file], 'w') do |f|
-                    unhandled.each { |u| f.puts u.to_s }
+            commits = opts[:commits].dup
+            begin
+                status, unhandled = _scp(opts, commits)
+            rescue SCPAbort
+                # If we used a file and have unhandled patches, write them back
+                if opts[:file] && !commits.empty?
+                    # Write back remaining SHAs
+                    File.open(opts[:file], 'w') do |f|
+                        commits.each { |u| f.puts u.to_s }
+                    end
+                    log(:INFO, "Unhandled patches written back to #{opts[:file]}")
                 end
-                log(:INFO, "Unhandled patches written back to #{opts[:file]}")
+                return 1
             end
 
-            return status
+            return 0
         end
 
         # Oldconfig action
@@ -632,6 +636,7 @@ module KernelWork
         #
         # @param opts [Hash] Options hash
         # @param commit [Commit] The commit to cherry-pick
+        # @return [void]
         # @raise [SCPSkip] If user skips the patch or it fails to apply and skip_broken is set
         # @raise [SCPAbort] If user aborts the operation
         def _cherry_pick_one(opts, commit)
@@ -661,13 +666,12 @@ module KernelWork
                     raise(e)
                 end
             end
-            return
         end
 
         # Run checkpatch and prompt user to meld fixes if necessary
         #
         # @param opts [Hash] Options hash
-        # @return [Integer] 0
+        # @return [void]
         def _tune_last_patch(opts)
             run("rm -f 0001*.patch")
             runGit("format-patch -n1 HEAD")
@@ -681,14 +685,14 @@ module KernelWork
                     @suse.do_meld_lastpatch(opts)
                 end
             end
-            return 0
+            return
         end
 
         # Internal method to handle the full SCP process for a single commit
         #
         # @param opts [Hash] Options hash
         # @param commit [Commit] The commit to backport
-        # @return [Integer] Exit code (0 for success)
+        # @return [void]
         # @raise [ShaNotFoundError] If SHA is invalid
         # @raise [SCPSkip] If skipped
         # @raise [ShaNotCommitError] If commit is not a Commit object
@@ -727,12 +731,14 @@ module KernelWork
                 return 0
             end
 
-            if @suse.extract_single_patch(opts, commit) != 0 then
+            begin
+                @suse.extract_single_patch(opts, commit)
+            rescue
                 runGitInteractive("reset --hard HEAD~1")
                 raise PatchExtractionError.new("Failed to extract patch in KERNEL_SOURCE_DIR, reverted in LINUX_GIT")
             end
 
-            return _tune_last_patch(opts)
+            _tune_last_patch(opts)
         end
 
         # Returns [status, unhandled_shas]
@@ -740,28 +746,22 @@ module KernelWork
         #
         # @param opts [Hash] Options hash
         # @param commits [Array<Commit>] List of commits to backport
-        # @return [Array] [status, unhandled_commits]
+        # @return [void]
         def _scp(opts, commits)
-            unhandled = commits.dup
-            commits.each(){ |commit|
+            while ! commits.empty?
+                commit = commits.first
                 begin
-                     ret = _scp_one(opts, commit)
-                     if ret != 0
-                         return ret, unhandled
-                     end
-                     unhandled.shift # Remove success from list
-                rescue SCPAbort
+                    _scp_one(opts, commit)
+                    commits.shift # Remove success from list
+                rescue SCPAbort => e
                     log(:INFO, "Aborted")
-                    return 1, unhandled
+                     raise e
                 rescue Interrupt
                     log(:INFO, "Interrupted")
-                    return 1, unhandled
-#                rescue ShaNotFoundError
-#                    return 1, unhandled
+                    raise SCPAbort.new()
                 end
-            }
-            return 0, []
+            end
         end
 
-    end
+        end
 end
