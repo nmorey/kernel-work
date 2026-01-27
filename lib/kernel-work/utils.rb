@@ -96,7 +96,7 @@ module KernelWork
                 puts("# " + "ERROR".red().to_s() + ": Action '#{action}' failed: #{e.message}")
                 e.backtrace.each(){|l|
                     puts("# " + "ERROR".red().to_s() + ": \t" + l)
-                } if KernelWork.config.verbose
+                } if KernelWork.verbose_log
 
                 if e.is_a?(RunError)
                     return e.err_code

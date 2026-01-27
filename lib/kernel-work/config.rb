@@ -4,6 +4,11 @@ require 'fileutils'
 module KernelWork
   # Configuration management for Kernel Work
   class Config
+    class << self
+      attr_accessor :custom_config_path
+      attr_accessor :force_generation
+    end
+
     # Default configuration values
     DEFAULTS = {
       linux_git_env_var: "LINUX_GIT",
@@ -69,6 +74,9 @@ module KernelWork
     def initialize
       @settings = deep_copy(DEFAULTS)
       load_config
+      if self.class.force_generation
+        save_config
+      end
     end
 
     # Access the raw settings hash
@@ -135,6 +143,7 @@ module KernelWork
     # Get the path to the configuration file
     # @return [String]
     def config_file
+        return self.class.custom_config_path if self.class.custom_config_path
         config_home = ENV['XDG_CONFIG_HOME']
         if config_home.nil? || config_home.empty?
             config_home = File.join(Dir.home, '.config')

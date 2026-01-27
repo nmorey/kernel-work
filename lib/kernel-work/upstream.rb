@@ -49,7 +49,7 @@ module KernelWork
             :diffpaths => "List changed paths (dir) since reference branch",
             :kabi_check => "Check kABI compatibility",
             :backport_todo => "List all patches in origin/master that are not applied to the specified tree",
-            :git_fixes => "Fetch git-fixes list from #{KernelWork.config.upstream.git_fixes_url}/../#{KernelWork.config.upstream.git_fixes_subtree} and try to scp them.",
+            :git_fixes => "Fetch git-fixes list from configured upstream url and subtree and try to scp them.",
         }
 
         # Set options for Upstream actions

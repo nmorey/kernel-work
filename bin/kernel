@@ -14,6 +14,8 @@ actionParser.banner = "Usage: #{__FILE__} <action> [action options]"
 actionParser.separator ""
 actionParser.separator "Options:"
 actionParser.on("-h", "--help", "Display usage.") { |val| puts actionParser.to_s; exit 0 }
+actionParser.on("-c", "--config-file FILE", "Specify an alternate config file path.") { |val| KernelWork::Config.custom_config_path = val }
+actionParser.on("-f", "--force-config", "Force the generation of a config file.") { |val| KernelWork::Config.force_generation = true }
 actionParser.separator "Possible actions:"
 lColS = 0
 ACTION_HELPS.each(){|k, x|
@@ -26,6 +28,7 @@ ACTION_HELPS.each(){|k, x|
 }
 
 rest = actionParser.order!(ARGV);
+
 if rest.length <= 0 then
     STDERR.puts("Error: No action provided")
     puts actionParser.to_s()
