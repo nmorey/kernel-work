@@ -408,14 +408,15 @@ module KernelWork
         # SCP (cherry-pick) action
         # @param opts [Hash] Options hash
         # @return [Integer] Exit code
+        # @raise [FileNotFoundError] If the provided file does not exist
+        # @raise [MissingArgumentError] If no commits are provided
         def scp(opts)
             branch()
 
             # If a file is provided, read the SHAs from it
             if opts[:file]
                 if !File.exist?(opts[:file])
-                    log(:ERROR, "File #{opts[:file]} does not exist")
-                    return 1
+                    raise FileNotFoundError.new(opts[:file])
                 end
                 # Read file, ignoring comments or empty lines, assuming SHA is first word
                 opts[:commits] = File.readlines(opts[:file]).map { |l|
@@ -430,8 +431,7 @@ module KernelWork
             end
 
             if opts[:commits].length == 0 then
-                log(:ERROR, "No SHA1 provided")
-                return 1
+                raise MissingArgumentError.new("No SHA1 provided")
             end
             @suse.fill_targetPatch_ref(opts)
 
@@ -691,6 +691,8 @@ module KernelWork
         # @return [Integer] Exit code (0 for success)
         # @raise [ShaNotFoundError] If SHA is invalid
         # @raise [SCPSkip] If skipped
+        # @raise [ShaNotCommitError] If commit is not a Commit object
+        # @raise [PatchExtractionError] If patch extraction fails
         def _scp_one(opts, commit)
             rep="t"
             raise ShaNotCommitError.new() if !commit.is_a?(KernelWork::Commit)
@@ -726,9 +728,8 @@ module KernelWork
             end
 
             if @suse.extract_single_patch(opts, commit) != 0 then
-                log(:ERROR, "Failed to extract patch in KERNEL_SOURCE_DIR, reverting in LINUX_GIT")
                 runGitInteractive("reset --hard HEAD~1")
-                return 1
+                raise PatchExtractionError.new("Failed to extract patch in KERNEL_SOURCE_DIR, reverted in LINUX_GIT")
             end
 
             return _tune_last_patch(opts)

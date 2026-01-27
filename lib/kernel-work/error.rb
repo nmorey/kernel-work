@@ -1,7 +1,11 @@
 module KernelWork
 
+    # Base class for all KernelWork exceptions
+    class KernelWorkError < RuntimeError
+    end
+
     # Exception raised when a shell command fails
-    class RunError < RuntimeError
+    class RunError < KernelWorkError
         # Initialize a new RunError
         # @param err_code [Integer] Exit code
         # @param msg [String] Error message
@@ -18,7 +22,7 @@ module KernelWork
     end
 
     # Exception raised when the git branch cannot be determined
-    class UnknownBranch < RuntimeError
+    class UnknownBranch < KernelWorkError
         # Initialize a new UnknownBranch error
         # @param path [String] Path where branch detection failed
         def initialize(path)
@@ -27,7 +31,7 @@ module KernelWork
     end
 
     # Exception raised when upstream and SUSE branches do not match
-    class BranchMismatch < RuntimeError
+    class BranchMismatch < KernelWorkError
         # Initialize a new BranchMismatch error
         # @param upstream_br [String] Upstream branch name
         # @param suse_br [String] SUSE branch name
@@ -37,11 +41,11 @@ module KernelWork
     end
 
     # Exception raised when SCP is aborted by user
-    class SCPAbort < RuntimeError
+    class SCPAbort < KernelWorkError
     end
 
     # Exception raised when SCP of a patch is skipped by user
-    class SCPSkip < RuntimeError
+    class SCPSkip < KernelWorkError
         # Initialize a new SCPSkip error
         # @param s [String] Message or patch info
         def initialize(s="")
@@ -50,19 +54,19 @@ module KernelWork
     end
 
     # Exception raised when git-fixes cannot be fetched
-    class GitFixesFetchError < RuntimeError
+    class GitFixesFetchError < KernelWorkError
     end
 
     # Exception raised when no mainline tag is found for a SHA
-    class NoSuchMainline < RuntimeError
+    class NoSuchMainline < KernelWorkError
     end
 
     # Exception raised when the base kernel version cannot be determined
-    class BaseKernelError < RuntimeError
+    class BaseKernelError < KernelWorkError
     end
 
     # Exception raised when no bug/CVE reference is provided
-    class NoRefError < RuntimeError
+    class NoRefError < KernelWorkError
         # Initialize a new NoRefError
         def initialize()
             super("No bug/CVE ref provided nor default set")
@@ -70,7 +74,7 @@ module KernelWork
     end
 
     # Exception raised when checkpatch fails
-    class CheckPatchError < RuntimeError
+    class CheckPatchError < KernelWorkError
         # Initialize a new CheckPatchError
         def initialize()
             super("Patchlist does not apply")
@@ -78,11 +82,11 @@ module KernelWork
     end
 
     # Exception raised when a commit is empty
-    class EmptyCommitError < RuntimeError
+    class EmptyCommitError < KernelWorkError
     end
 
     # Exception raised when blacklist.conf conflicts cannot be auto-resolved
-    class BlacklistConflictError < RuntimeError
+    class BlacklistConflictError < KernelWorkError
         # Initialize a new BlacklistConflictError
         def initialize()
             super("Cannot auto-resolve blacklist.conf conflicts")
@@ -90,7 +94,7 @@ module KernelWork
     end
 
     # Exception raised when a SHA is provided instead of a Commit object
-    class ShaNotCommitError < RuntimeError
+    class ShaNotCommitError < KernelWorkError
         # Initialize a new ShaNotCommitError
         def initialize()
             super("SHA provided instead of KernelWork::Commit objecty")
@@ -98,11 +102,56 @@ module KernelWork
     end
 
     # Exception raised when a SHA is not found in the repository
-    class ShaNotFoundError < RuntimeError
+    class ShaNotFoundError < KernelWorkError
         # Initialize a new ShaNotFoundError
         # @param sha [String] The missing SHA
         def initialize(sha)
             super("SHA '#{sha}' was not found in the repository")
+        end
+    end
+
+    # Exception raised when a required argument is missing
+    class MissingArgumentError < KernelWorkError
+        # Initialize a new MissingArgumentError
+        # @param arg [String] The name of the missing argument
+        def initialize(arg)
+            super("Missing required argument: #{arg}")
+        end
+    end
+
+    # Exception raised when a file is not found
+    class FileNotFoundError < KernelWorkError
+        # Initialize a new FileNotFoundError
+        # @param path [String] The path to the missing file
+        def initialize(path)
+            super("File not found: #{path}")
+        end
+    end
+
+    # Exception raised when a target file already exists
+    class TargetFileExistsError < KernelWorkError
+        # Initialize a new TargetFileExistsError
+        # @param path [String] The path to the existing file
+        def initialize(path)
+            super("Target file already exists: #{path}")
+        end
+    end
+
+    # Exception raised when patch information is invalid or missing
+    class PatchInfoError < KernelWorkError
+        # Initialize a new PatchInfoError
+        # @param msg [String] Error message
+        def initialize(msg="Invalid patch information")
+            super(msg)
+        end
+    end
+
+    # Exception raised when patch extraction fails
+    class PatchExtractionError < KernelWorkError
+        # Initialize a new PatchExtractionError
+        # @param msg [String] Error message
+        def initialize(msg="Failed to extract patch")
+            super(msg)
         end
     end
 end

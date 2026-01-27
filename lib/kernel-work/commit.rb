@@ -78,22 +78,21 @@ module KernelWork
         #
         # @param opts [Hash] Options hash
         # @option opts [Boolean] :ignore_tag Whether to ignore missing tags
-        # @return [Boolean] True if valid, false otherwise
+        # @return [void]
+        # @raise [PatchInfoError] If commit is not in any tag/repo and ignore_tag is false
         def check_patch_info(opts)
             f_sha()
             get_mainline()
 
             if @orig_tag == "" then
                 if opts[:ignore_tag] != true then
-                    log(:ERROR, "Commit is not contained in any tag nor maintainer repo")
-                    return false
+                    raise PatchInfoError.new("Commit is not contained in any tag nor maintainer repo")
                 else
                     @f_sha = ""
                     @orig_tag="Never, in-house patch"
 
                 end
             end
-            return true
         end
 
         # Generate a patch file for the commit

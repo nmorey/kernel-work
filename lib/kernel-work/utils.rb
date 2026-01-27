@@ -90,13 +90,19 @@ module KernelWork
         KernelWork::_runOnClass(action, nil) {|kClass|
             obj = kClass.new()
             begin
-                return obj.public_send(action, opts)
-            rescue RunError => e
-                puts("# " + "ERROR".red().to_s() + ": Action '#{action}' failed with err '#{e.err_code()}'")
+                ret = obj.public_send(action, opts)
+                return ret.is_a?(Integer) ? ret : 0
+            rescue KernelWorkError => e
+                puts("# " + "ERROR".red().to_s() + ": Action '#{action}' failed: #{e.message}")
                 e.backtrace.each(){|l|
                     puts("# " + "ERROR".red().to_s() + ": \t" + l)
-                }
-                return e.err_code()
+                } if KernelWork.config.verbose
+
+                if e.is_a?(RunError)
+                    return e.err_code
+                else
+                    return 1
+                end
             end
         }
     end
