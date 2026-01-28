@@ -71,6 +71,7 @@ module KernelWork
             opts[:upstream_ref] = "origin/master"
             opts[:backport_include] = []
             opts[:backport_exclude] = []
+            opts[:path] = []
 
             # Option commonds to multiple commands
             case action
@@ -127,7 +128,7 @@ module KernelWork
             when :backport_todo
                 optsParser.on("-p", "--path <path>", String,
                               "Path to subtree to monitor for non-backported patches.") {
-                    |val| opts[:path] = val}
+                    |val| opts[:path] << val}
                 optsParser.on("-R", "--upstream-ref <ref>", String,
                               "Check patches up to <ref> in upstream kernel. Default is origin/master.") {
                     |val| opts[:upstream_ref] = val}
@@ -162,7 +163,7 @@ module KernelWork
         def self.check_opts(opts)
             case opts[:action]
             when :backport_todo
-                raise("Path to sub-tree is needed") if opts[:path].to_s() == ""
+                raise("Path to sub-tree is needed") if opts[:path].length == 0
             when :build_subset
                 raise("Path to build is needed") if opts[:build_subset].to_s() == ""
             end
@@ -327,10 +328,10 @@ module KernelWork
         # Generate list of patches to backport
         # @param ahead [String] Ahead reference
         # @param trailing [String] Trailing reference
-        # @param path [String] Path filter
+        # @param paths [Array<String>] Array of Path filter
         # @return [Array<Commit>] List of commits
-        def genBackportList(ahead, trailing, path)
-            patches = runGit("log --no-merges --format=oneline #{ahead} ^#{trailing} -- #{path}").
+        def genBackportList(ahead, trailing, paths)
+            patches = runGit("log --no-merges --format=oneline #{ahead} ^#{trailing} -- #{paths.join(" ")}").
                        split("\n")
             nPatches = patches.length
             idx = 0
