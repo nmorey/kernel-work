@@ -29,15 +29,15 @@ module KernelWork
         # Note: Arch keys are strings in usage, but symbols in this hash definition.
         # We will ensure they are accessible as needed.
         archs: {
-            "x86_64" => {
+            :x86_64 => {
                 :CC => "CC=\"ccache gcc\"",
             },
-            "arm64" => {
+            :arm64 => {
                 :CC => "CC=\"ccache gcc\"",
                 :CROSS_COMPILE => "aarch64-suse-linux-",
                 :ARCH => "ARCH=arm64",
             },
-            "s390x" => {
+            :s390x => {
                 :CC => "CC=\"ccache gcc\"",
                 :CROSS_COMPILE => "s390x-suse-linux-",
                 :ARCH => "ARCH=s390",

@@ -59,7 +59,7 @@ module KernelWork
         # @param opts [Hash] The options hash
         def self.set_opts(action, optsParser, opts)
             opts[:commits] = []
-            opts[:arch] = "x86_64"
+            opts[:arch] = :x86_64
             opts[:j] = KernelWork.config.upstream.default_j_opt
             opts[:backport_apply] = false
             opts[:skip_broken] = false
@@ -86,7 +86,7 @@ module KernelWork
             when :oldconfig, :build,:kabi_check
                 optsParser.on("-a", "--arch <arch>", String, "Arch to build for. Default=x86_64. Supported=" +
                                                              supported_archs.map(){|x, y| x}.join(", ")) {
-                    |val|
+                    |val| val = val.to_sym()
                     raise ("Unsupported arch '#{val}'") if supported_archs[val] == nil
                     opts[:arch] = val
                 }
@@ -264,8 +264,8 @@ module KernelWork
             if opts[:build_verbose] == true then
                 extraOpts="#{extraOpts} V=1"
             end
-            return "#{cc} #{hostCC} -j#{opts[:j]} O=#{bDir} #{extraOpts}"
-                    " #{arch[:ARCH].to_s()} #{crossCompile} "
+            return "#{cc} #{hostCC} -j#{opts[:j]} O=#{bDir} #{extraOpts}" +
+                  " #{arch[:ARCH].to_s()} #{crossCompile} "
         end
 
         # Run the build command
