@@ -14,6 +14,7 @@ module KernelWork
             :fix_series,
             :checkpatch,
             :fix_mainline,
+            :fix_ref,
             :check_fixes,
             :list_commits, :lc,
             :push,
@@ -28,6 +29,7 @@ module KernelWork
             :fix_series => "Auto fix conflicts in series.conf during rebases",
             :checkpatch => "Fast checkpatch pass on all pending patches",
             :fix_mainline => "Fix Git-mainline in the last KERNEL_SOURCE_DIR patch",
+            :fix_ref => "Fix ref in the in the last KERNEL_SOURCE_DIR commit",
             :check_fixes => "Use KERNEL_SOURCE_DIR script to detect missing git-fixes pulled by commited patches",
             :list_commits => "List pending commits (default = unmerged)",
             :push=> "Push KERNEL_SOURCE_DIR pending patches",
@@ -81,6 +83,9 @@ module KernelWork
                     |val| opts[:branch] = val}
                 optsParser.on("-r", "--ref <ref>", String, "Default reference.") {
                     |val| opts[:ref] = val}
+            when :fix_ref
+                optsParser.on("-r", "--ref <ref>", String, "Bug reference.") {
+                    |val| opts[:ref] = val}
             else
             end
         end
@@ -94,6 +99,10 @@ module KernelWork
             when :register_branch
                 if opts[:branch].nil?
                     raise("Branch name is required. Use -b <branch>")
+                end
+            when :fix_ref
+                if opts[:ref].nil?
+                    raise("Ref is required. Use -r <ref>")
                 end
             end
         end
@@ -488,6 +497,25 @@ module KernelWork
             runSystem("sed -i -e 's/Patch-mainline:.*/Patch-mainline: #{tag}/' \"#{patch}\"")
             runGit("add \"#{patch}\"")
             runGitInteractive("diff --cached")
+        end
+
+        # Fix ref tag in patch and commit message
+        # @param opts [Hash] Options hash
+        # @return [void]
+        def fix_ref(opts)
+            patch = get_last_patch(opts)
+            runSystem("sed -i -e 's/^References: git-fixes/References: #{opts[:ref]}/' \"#{patch}\"")
+            runGit("add \"#{patch}\"")
+            runGitInteractive("diff --cached")
+            cname=run("mktemp")
+            begin
+                runGit("log -1 --pretty=%B > #{cname}")
+                run("sed -i -e 's/(git-fixes)/(#{opts[:ref]})/' #{cname}")
+                runGitInteractive("commit --amend -F #{cname}")
+            rescue => e
+                run("rm -f #{cname}")
+                raise e
+            end
         end
 
         # Check for missing fixes
