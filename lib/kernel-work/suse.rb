@@ -1,5 +1,6 @@
 require 'yaml'
 require 'fileutils'
+require 'readline'
 
 module KernelWork
 
@@ -606,8 +607,11 @@ module KernelWork
                 rep="t"
                 nName=nil
                 while rep != "y"
-                    puts "Enter a filename (auto name was: #{pname} ):"
-                    nName=STDIN.gets.chomp()
+                    nName = Readline.readline("Enter a filename (auto name was: #{pname} ): ", true)
+                    if nName == nil
+                        raise SCPAbort.new("User aborted filename selection")
+                    end
+                    nName.strip!
                     rep = confirm(opts, "keep the filename '#{nName}'", true, ["y", "n", "A" ])
                     if rep == "A" then
                         raise SCPAbort.new("User aborted filename selection")
