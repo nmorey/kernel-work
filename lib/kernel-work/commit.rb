@@ -84,7 +84,7 @@ module KernelWork
             f_sha()
             get_mainline()
 
-            if @orig_tag == "" then
+            if @orig_tag == nil then
                 if opts[:ignore_tag] != true then
                     raise PatchInfoError.new("Commit is not contained in any tag nor maintainer repo")
                 else
