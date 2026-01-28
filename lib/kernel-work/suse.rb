@@ -444,7 +444,7 @@ module KernelWork
         # @return [void]
         # @raise [MissingArgumentError] If no commits are provided
         def extract_patch(opts)
-            fill_patchInfo_ref(opts)
+            fill_targetPatch_ref(opts)
             if opts[:commits].length == 0 then
                 raise MissingArgumentError.new("No SHA1 provided")
             end
