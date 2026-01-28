@@ -170,7 +170,7 @@ module KernelWork
         # @return [String] Filename
         def get_last_patch(opts)
             runGit("show HEAD --stat --stat-width=1000 --no-decorate").
-                split("\n").each().grep(/patches\.[^\/]*/)[0].lstrip().split(/[ \t]/)[0]
+                split("\n").each().grep(/patches\.[^\/]*/).grep(/ \++$/)[0].lstrip().split(/[ \t]/)[0]
         end
 
         # Get the filename of the currently modified patch
@@ -178,7 +178,7 @@ module KernelWork
         # @return [String] Filename
         def get_current_patch(opts)
             runGit("diff --cached --stat --stat-width=1000").
-                split("\n").each().grep(/patches\.[^\/]*/)[0].lstrip().split(/[ \t]/)[0]
+                split("\n").each().grep(/patches\.[^\/]*/).grep(/ \++$/)[0].lstrip().split(/[ \t]/)[0]
         end
 
         # Get the Git-commit ID from a patch file
