@@ -181,11 +181,11 @@ module KernelWork
                 split("\n").each().grep(/patches\.[^\/]*/).grep(/ \++$/)[0].lstrip().split(/[ \t]/)[0]
         end
 
-        # Get the Git-commit ID from a patch file
+        # Get the Git-commit  from a patch file
         # @param patchfile [String] Path to patch file
         # @return [String] Commit SHA
-        def get_patch_commit_id(patchfile = nil)
-            return runGit("grep Git-commit #{patchfile}").split(/[ \t]/)[-1]
+        def get_patch_commit(patchfile = nil)
+            return Commit.new(runGit("grep Git-commit #{patchfile}").split(/[ \t]/)[-1])
         end
 
         # Check for blacklist.conf conflict
@@ -492,8 +492,8 @@ module KernelWork
         # @return [void]
         def fix_mainline(opts)
             patch = get_last_patch(opts)
-            sha = get_patch_commit_id(patch)
-            tag = @upstream.get_mainline(sha)
+            commit = get_patch_commit(patch)
+            tag = @upstream.get_mainline(commit)
             runSystem("sed -i -e 's/Patch-mainline:.*/Patch-mainline: #{tag}/' \"#{patch}\"")
             runGit("add \"#{patch}\"")
             runGitInteractive("diff --cached")
