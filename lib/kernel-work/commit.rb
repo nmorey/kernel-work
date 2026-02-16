@@ -155,7 +155,7 @@ module KernelWork
                      log(:INFO, "Found it in #{KernelWork.config.upstream.maintainer_branches[idx]}")
                      @orig_tag = "Queued in subsystem maintainer repository"
                      remote=KernelWork.config.upstream.maintainer_branches[idx].gsub(/\/.*/,'')
-                     @git_repo=@upstream.runGit("config remote.#{remote}.url")
+                     @git_repo=runGit("config remote.#{remote}.url")
                      return
                  }
             end
