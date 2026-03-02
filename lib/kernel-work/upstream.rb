@@ -65,6 +65,7 @@ module KernelWork
             opts[:skip_broken] = false
             opts[:skip_treewide] = false
             opts[:old_kernel] = false
+            opts[:oldconfig_full] = false
             opts[:build_subset] = nil
             opts[:git_fixes_subtree] = KernelWork.config.upstream.git_fixes_subtree
             opts[:git_fixes_listonly] = false
@@ -152,6 +153,10 @@ module KernelWork
                               "Only list pending patches.") {
                     |val| opts[:git_fixes_listonly] = true}
 
+            when :oldconfig
+                optsParser.on("-F", "--full",
+                              "Do not disable MODVERSIONS.") {
+                    |val| opts[:oldconfig_full] = true}
             else
             end
         end
@@ -291,7 +296,10 @@ module KernelWork
             runSystem("rm -Rf #{bDir} && " +
                       "mkdir #{bDir} && " +
                       "cp #{KernelWork.config.kernel_source_dir}/config/#{archName}/default #{bDir}/.config")
-
+            if opts[:oldconfig_full] == false
+                runSystem("./scripts/config --file #{bDir}/.config --disable CONFIG_LIVEPATCH_IPA_CLONES")
+                runSystem("./scripts/config --file #{bDir}/.config --disable CONFIG_MODVERSIONS")
+            end
             case get_kernel_base()
             when KV.new(0,0) ... KV.new(3,7)
                 runBuild(opts, "oldnoconfig")
@@ -485,7 +493,7 @@ module KernelWork
                 end
             end
 
-            # Auto run olddefconfig if necessart
+            # Auto run olddefconfig if necessary
             runOldConfig(opts, false)
             return runBuild(opts, buildTarget)
         end
