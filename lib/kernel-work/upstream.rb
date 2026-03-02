@@ -759,6 +759,7 @@ module KernelWork
             while ! commits.empty?
                 commit = commits.first
                 begin
+                    log(:INFO, "# #{commits.length} commits left")
                     _scp_one(opts, commit)
                     commits.shift # Remove success from list
                 rescue SCPAbort => e
