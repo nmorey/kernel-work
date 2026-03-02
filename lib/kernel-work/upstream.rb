@@ -715,12 +715,19 @@ module KernelWork
             end
             while rep != "y"
                 rep = confirm(opts, "pick commit '#{desc}' up",
-                              false, ["y", "n", "?"])
+                              false, ["y", "n", "?", "r"])
                 case rep
                 when "n"
                     break
                 when "?"
                     runGitInteractive("show #{commit.sha}", {}, false)
+                when "r"
+                    ref = Readline.readline("Enter reference for this commit: ", true)
+                    if ref != nil
+                        opts = opts.dup
+                        opts[:ref] = ref
+                    end
+                    rep = "y"
                 end
             end
 
