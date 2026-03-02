@@ -21,9 +21,9 @@ module KernelWork
         maintainer_branches: [ "linux-rdma/for-rc", "linux-rdma/for-next" ],
         # Default compiler rules
         compiler_rules: [
-          { :range => "0.0...4.0", :gcc => "gcc-4.8" },
-          { :range => "4.0..5.3",  :gcc => "gcc-7"   },
-          {                        :gcc => "gcc -std=gnu11" }
+          { :range => "0.0...4.0", :gcc => "gcc-4.8", :cflags => "" },
+          { :range => "4.0..5.3",  :gcc => "gcc-7",   :cflags => ""   },
+          {                        :gcc => "gcc",     :cflags => " -std=gnu11" }
         ],
         # Default archs
         # Note: Arch keys are strings in usage, but symbols in this hash definition.

@@ -243,6 +243,7 @@ module KernelWork
 
             # For very old kernel, use an ancient GCC if none is specified
             gccVer="gcc"
+            cflags=""
 
             kv = get_kernel_base()
             found_rule = Upstream.compiler_rules.find do |rule|
@@ -253,7 +254,7 @@ module KernelWork
                 end
             end
             gccVer = found_rule[:gcc] if found_rule
-
+            cflags = found_rule[:cflags] if found_rule
             cc = cc.gsub(/gcc/, gccVer)
             hostCC = hostCC.gsub(/gcc/, gccVer)
 
@@ -267,8 +268,12 @@ module KernelWork
             if opts[:hostcc] != nil
                 hostCC = "HOSTCC=#{opts[:hostcc]}"
             end
+            extraOpts="KERNELRELEASE=\"devel\" KBUILD_BUILD_TIMESTAMP=\"now\""
             if opts[:build_verbose] == true then
-                extraOpts="#{extraOpts} V=1"
+                extraOpts+=" #{extraOpts} V=1"
+            end
+            if cflags != ""
+                extraOpts+=" KCFLAGS=\"#{cflags}\" HOSTCFLAGS=\"#{cflags}\""
             end
             return "#{cc} #{hostCC} -j#{opts[:j]} O=#{bDir} #{extraOpts}" +
                   " #{arch[:ARCH].to_s()} #{crossCompile} "
