@@ -1,5 +1,7 @@
 # Path to the library directory for Kernel Work
 KERNELWORK_LIB_DIR = File.dirname(File.realdirpath(__FILE__)) + '/kernel-work/'
+require 'readline'
+
 $LOAD_PATH.push(KERNELWORK_LIB_DIR)
 require 'error'
 require 'string'

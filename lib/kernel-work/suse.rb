@@ -1,6 +1,5 @@
 require 'yaml'
 require 'fileutils'
-require 'readline'
 
 module KernelWork
 
