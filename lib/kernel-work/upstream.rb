@@ -268,7 +268,7 @@ module KernelWork
             if opts[:hostcc] != nil
                 hostCC = "HOSTCC=#{opts[:hostcc]}"
             end
-            extraOpts="KERNELRELEASE=\"devel\" KBUILD_BUILD_TIMESTAMP=\"now\""
+            extraOpts="KERNELRELEASE=\"devel\" KBUILD_BUILD_TIMESTAMP=\"2024-01-01 00:00:00\""
             if opts[:build_verbose] == true then
                 extraOpts+=" #{extraOpts} V=1"
             end
@@ -302,6 +302,11 @@ module KernelWork
                       "mkdir #{bDir} && " +
                       "cp #{KernelWork.config.kernel_source_dir}/config/#{archName}/default #{bDir}/.config")
             if opts[:oldconfig_full] == false
+                runSystem("./scripts/config --file #{bDir}/.config --disable CONFIG_DEBUG_INFO")
+                runSystem("./scripts/config --file #{bDir}/.config --disable CONFIG_DEBUG_INFO_BTF")
+                runSystem("./scripts/config --file #{bDir}/.config --disable CONFIG_DEBUG_INFO_REDUCED")
+                runSystem("./scripts/config --file #{bDir}/.config --disable CONFIG_GDB_SCRIPTS")
+                runSystem("./scripts/config --file #{bDir}/.config --disable CONFIG_GCC_PLUGINS")
                 runSystem("./scripts/config --file #{bDir}/.config --disable CONFIG_LIVEPATCH_IPA_CLONES")
                 runSystem("./scripts/config --file #{bDir}/.config --disable CONFIG_MODVERSIONS")
             end
