@@ -313,9 +313,12 @@ module KernelWork
             case get_kernel_base()
             when KV.new(0,0) ... KV.new(3,7)
                 runBuild(opts, "oldnoconfig")
+                runBuild(opts, "modules_prepare")
             else
                 runBuild(opts, "olddefconfig")
+                runBuild(opts, "modules_prepare")
             end
+
         end
 
         # Get mainline tag containing the commit
