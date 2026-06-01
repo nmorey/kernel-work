@@ -28,10 +28,16 @@ module CLIClassTool
         def getActionAttr(attr)
             action_classes = self::ACTION_CLASS
             common_class = self::Common
+
+            # Resolve overridden/extended class (addon) if getExtendedClass is defined
+            resolved_classes = action_classes.map do |x|
+                self.respond_to?(:getExtendedClass) ? self.getExtendedClass(x) : x
+            end
+
             if common_class.const_get(attr).class == Hash
-                return action_classes.inject({}){|h, x| h.merge(x.const_get(attr))}
+                return resolved_classes.inject({}){|h, x| h.merge(x.const_get(attr))}
             else
-                return action_classes.map(){|x| x.const_get(attr)}.flatten()
+                return resolved_classes.map(){|x| x.const_get(attr)}.flatten()
             end
         end
 
@@ -44,8 +50,21 @@ module CLIClassTool
         def _runOnClass(action, sym, &block)
             self::ACTION_CLASS.each(){|x|
                 next if x::ACTION_LIST.index(action) == nil
-                if sym == nil || x.singleton_methods().index(sym) != nil then
-                    return yield(x)
+                
+                # Resolve overridden/extended class (addon)
+                class_to_use = self.respond_to?(:getExtendedClass) ? self.getExtendedClass(x) : x
+
+                if sym != nil
+                    has_base = x.singleton_methods().index(sym) != nil
+                    has_addon = class_to_use != x && class_to_use.singleton_methods().index(sym) != nil
+
+                    if has_base || has_addon
+                        yield(x) if has_base
+                        yield(class_to_use) if has_addon
+                        return 0
+                    end
+                else
+                    return yield(class_to_use)
                 end
                 return 0
             }
@@ -82,11 +101,17 @@ module CLIClassTool
             caught_error_class = error_class || StandardError
 
             self._runOnClass(action, nil) {|kClass|
-                obj = kClass.new()
                 begin
-                    ret = obj.public_send(action, opts)
+                    # Some class have their own execAction, because object creation might be tricky.
+                    if kClass.respond_to?(:execAction)
+                        ret = kClass.execAction(opts, action)
+                    else
+                        # Use load factory method if defined, else fall back to .new
+                        obj = kClass.respond_to?(:load) ? kClass.load() : kClass.new()
+                        ret = obj.public_send(action, opts)
+                    end
                     return ret.is_a?(Integer) ? ret : 0
-                rescue error_class => e
+                rescue caught_error_class => e
                     puts("# " + "ERROR".red().to_s() + ": Action '#{action}' failed: #{e.message}")
                     e.backtrace.each(){|l|
                         puts("# " + "ERROR".red().to_s() + ": \t" + l)
@@ -113,6 +138,44 @@ module CLIClassTool
         # @return [Boolean] Verbose logging status
         def verbose_log()
             @verbose_log
+        end
+
+        # Load all custom addon classes/files from a directory
+        #
+        # @param path [String] Absolute or relative directory path containing .rb files
+        def loadAddons(path)
+            return unless Dir.exist?(path)
+
+            $LOAD_PATH.push(path)
+            Dir.entries(path).each() do |entry|
+                next if !File.file?(File.join(path, entry)) || entry !~ /\.rb$/
+                require entry.sub(/\.rb$/, "")
+            end
+            $LOAD_PATH.pop()
+        end
+
+        # Safely load an overridden/extended class instance using a generic addon_key
+        def loadClass(default_class, addon_key, *more)
+            @load_class ||= []
+            @load_class.push(default_class)
+
+            # Resolve overridden class using getExtendedClass if available
+            extended_class = self.respond_to?(:getExtendedClass) ? self.getExtendedClass(default_class, addon_key) : default_class
+            obj = extended_class.new(*more)
+            @load_class.pop()
+            return obj
+        end
+
+        # Validate that the constructor was only called through loadClass
+        def checkDirectConstructor(theClass)
+            @load_class ||= []
+            curLoad = @load_class.last()
+            cl = theClass
+            while cl != Object
+                return if cl == curLoad
+                cl = cl.superclass
+            end
+            raise("Use #{self.name}::loadClass to construct a #{theClass} class")
         end
     end
 end

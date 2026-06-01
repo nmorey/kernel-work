@@ -1,5 +1,3 @@
-require 'cli_class_tool/common'
-
 module KernelWork
     # Common utility class providing logging, configuration, and shell execution methods
     # Inherits generic capabilities from CLIClassTool::Common and implements project-specific branch handling

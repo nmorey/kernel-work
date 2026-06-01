@@ -67,8 +67,7 @@ In your library entrypoint (e.g. `lib/my-project.rb`), require the `cli_class_to
 # Add lib to load path if necessary
 $LOAD_PATH.push(File.dirname(__FILE__))
 
-require 'cli_class_tool/string'
-require 'cli_class_tool/common'
+require 'cli_class_tool'
 
 module MyProject
   # Define project-specific base Common class
@@ -80,9 +79,6 @@ end
 # Require all your custom action classes
 require 'my_project/suse'
 require 'my_project/other_actions'
-
-# Load CLIClassTool Utils
-require 'cli_class_tool/utils'
 
 module MyProject
   # List of classes that implement various CLI actions
@@ -112,6 +108,7 @@ optsParser.parse!(ARGV)
 MyProject.checkOpts(opts)
 
 # 3. Execute action dynamically
+# Uses the class `load` factory method if defined, falling back to `.new`.
 # If an exception is thrown, it will be caught and logged cleanly, returning the correct exit status.
 exit MyProject.execAction(opts, opts[:action])
 ```
@@ -127,3 +124,83 @@ By inheriting from `CLIClassTool::Common`, your action classes have access to a 
 - `log(:PROGRESS, "msg")`: In-place update logs (Green with `\r` carriage return).
 - `log(:WARNING, "msg")`: Warning logs (Brown).
 - `log(:ERROR, "msg")`: Prints to STDERR (Red).
+
+---
+
+## Dynamic Class Overrides (Addons)
+
+`CLIClassTool` natively supports dynamic class overrides (addons). This allows projects to load repository-specific or custom subclasses that extend or override base action behaviors without modifying the core codebase.
+
+### 1. Set Up `getExtendedClass`
+
+To enable class overrides, define a `getExtendedClass` class/module method on your parent module:
+
+```ruby
+module MyProject
+  # Map of repository names to overridden classes
+  @@custom_classes = {}
+
+  def self.registerCustom(repo_name, classes)
+    @@custom_classes[repo_name] = classes
+  end
+
+  # Resolve the customized/overridden subclass (addon) if registered
+  def self.getExtendedClass(default_class, repo_name = File.basename(Dir.pwd))
+    custom = @@custom_classes[repo_name]
+    if custom != nil && custom[default_class] != nil
+      return custom[default_class]
+    else
+      return default_class
+    end
+  end
+end
+```
+
+If defined, `CLIClassTool` will automatically:
+- Execute actions using the extended class instead of the base class.
+- For options setup (`setOpts`) and validation checks (`checkOpts`), it will sequentially call BOTH the base class hooks and the extended class hooks to ensure clean options merging.
+
+### 2. Dynamically Loading Addons
+
+`CLIClassTool` provides a `loadAddons(path)` helper to dynamically scan a folder and load all custom Ruby classes/addons present in it. 
+
+```ruby
+module MyProject
+  extend CLIClassTool::Utils
+
+  # Load all core addons
+  loadAddons(File.expand_path('addons', __dir__))
+
+  # Load optional user addons from an environment variable path
+  if ENV["MY_PROJECT_ADDON_DIR"]
+    loadAddons(ENV["MY_PROJECT_ADDON_DIR"])
+  end
+end
+```
+
+### 3. Factory Class Loading & Validation
+
+`CLIClassTool` provides helper methods to implement safe, validated factory class loading. This ensures that subclasses are only instantiated through the authorized factory methods rather than being directly instantiated:
+
+- `loadClass(default_class, addon_key, *args)`: Safely loads and instantiates an overridden/extended class instance.
+- `checkDirectConstructor(class)`: Raises an error if the class is directly instantiated instead of going through `loadClass`.
+
+#### Example Setup:
+
+```ruby
+module MyProject
+  class Suse < Common
+    def initialize(path)
+      # Validate that constructor was only called through loadClass factory
+      MyProject.checkDirectConstructor(self.class)
+      @path = path
+    end
+
+    # Factory loading method
+    def self.load(path=".")
+      # Safely instantiate via CLIClassTool loadClass
+      return MyProject.loadClass(Suse, "suse-addon-key", path)
+    end
+  end
+end
+```

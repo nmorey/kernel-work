@@ -5,8 +5,9 @@ require 'readline'
 
 $LOAD_PATH.push(CLI_CLASS_TOOL_LIB_DIR)
 $LOAD_PATH.push(KERNELWORK_LIB_DIR)
+require 'cli_class_tool'
+
 require 'error'
-require 'cli_class_tool/string'
 require 'kv'
 require 'config'
 
@@ -19,9 +20,6 @@ require 'commit'
 require 'upstream'
 require 'suse'
 require 'kenv'
-
-# Action class utils
-require 'cli_class_tool/utils'
 
 module KernelWork
   ACTION_CLASS = [ Common, Suse, Upstream, KEnv ]
