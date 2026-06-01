@@ -8,55 +8,13 @@ $LOAD_PATH.pop()
 
 opts = {
 }
-ACTION_HELPS = KernelWork::getActionAttr("ACTION_HELP")
-actionParser = OptionParser.new(nil, 60)
-actionParser.banner = "Usage: #{__FILE__} <action> [action options]"
-actionParser.separator ""
-actionParser.separator "Options:"
-actionParser.on("-h", "--help", "Display usage.") { |val| puts actionParser.to_s; exit 0 }
-actionParser.on("-c", "--config-file FILE", "Specify an alternate config file path.") { |val| KernelWork::Config.custom_config_path = val }
-actionParser.on("-f", "--force-config", "Force the generation of a config file.") { |val| KernelWork::Config.force_generation = true }
-actionParser.separator "Possible actions:"
-lColS = 0
-ACTION_HELPS.each(){|k, x|
-    l = k.length() + 38
-    lColS = l if l > lColS
-}
-ACTION_HELPS.each(){|k, x|
-    indent = lColS - k.length()
-    actionParser.separator "\t * " + KernelWork::actionToString(k) + (" " * indent )+ x
-}
-
-rest = actionParser.order!(ARGV);
-
-if rest.length <= 0 then
-    STDERR.puts("Error: No action provided")
-    puts actionParser.to_s()
-    exit 1
+KernelWork.run_cli(opts) do |parser, phase, action_opts|
+    case phase
+    when :global
+        parser.on("-c", "--config-file FILE", "Specify an alternate config file path.") { |val| KernelWork::Config.custom_config_path = val }
+        parser.on("-f", "--force-config", "Force the generation of a config file.") { |val| KernelWork::Config.force_generation = true }
+    when :action
+        parser.on("-b", "--branch-suffix [SUFFIX]", "Branch suffix. Default is 'master'.") { |val| action_opts[:br_suff] = val }
+    end
 end
-
-action_s = ARGV[0]
-action = opts[:action] = KernelWork::stringToAction(action_s)
-ARGV.shift()
-
-optsParser = OptionParser.new(nil, 60)
-optsParser.banner = "Usage: #{__FILE__} #{action_s} "
-optsParser.separator "# " + ACTION_HELPS[action].to_s()
-optsParser.separator ""
-optsParser.separator "Options:"
-optsParser.on("-h", "--help", "Display usage.") { |val| puts optsParser.to_s; exit 0 }
-optsParser.on("--verbose", "Displays more informations.") {
-    |val| KernelWork::verbose_log=true}
-KernelWork::setOpts(action, optsParser, opts)
-
-if opts[:ignore_opts] != true then
-    rest = optsParser.order!(ARGV);
-    raise("Extra Unexpected extra arguments provided: " + rest.map(){|x|"'" + x + "'"}.join(", ")) if rest.length != 0
-else
-    opts[:extra_args] = ARGV
-end
-
-KernelWork::checkOpts(opts)
-ret =  KernelWork::execAction(opts, opts[:action])
-exit ret
 

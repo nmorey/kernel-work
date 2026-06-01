@@ -177,5 +177,85 @@ module CLIClassTool
             end
             raise("Use #{self.name}::loadClass to construct a #{theClass} class")
         end
+
+        # Generic CLI runner and argument parser for class-based applications.
+        #
+        # @param opts [Hash] Initial options hash
+        # @param argv [Array<String>] Command line arguments (defaults to ARGV)
+        # @yield [parser, phase, action_opts] Custom options setup callback block
+        def run_cli(opts = {}, argv = ARGV)
+            # Fetch actions and action helps
+            action_helps = self.getActionAttr("ACTION_HELP")
+            action_list = self.getActionAttr("ACTION_LIST")
+
+            # 1. Action Parser Setup
+            action_parser = OptionParser.new(nil, 60)
+            action_parser.banner = "Usage: #{$0} <action> [action options]"
+            action_parser.separator ""
+            action_parser.separator "Options:"
+            action_parser.on("-h", "--help", "Display usage.") { puts action_parser.to_s; exit 0 }
+            action_parser.on("--verbose", "Displays more informations.") { self.verbose_log = true }
+
+            # Yield parser to allow caller to customize the global options
+            yield(action_parser, :global, opts) if block_given?
+
+            action_parser.separator "Possible actions:"
+            
+            # Format actions nicely with padding
+            max_len = action_helps.keys.map { |k| self.actionToString(k).length }.max || 0
+            col_width = max_len + 4
+            action_helps.each do |k, x|
+                indent = col_width - self.actionToString(k).length
+                action_parser.separator "\t * " + self.actionToString(k) + (" " * indent) + x
+            end
+
+            # Include any registered custom addon class listings if defined
+            if self.respond_to?(:getCustomClasses) && self.getCustomClasses.length > 0
+                action_parser.separator "Custom repo addons available:"
+                self.getCustomClasses.each do |k, x|
+                    action_parser.separator "\t * #{k}"
+                end
+            end
+
+            rest = action_parser.order!(argv)
+            if rest.length <= 0
+                STDERR.puts("Error: No action provided")
+                puts action_parser.to_s
+                exit 1
+            end
+
+            action_s = argv[0]
+            action = opts[:action] = self.stringToAction(action_s)
+            argv.shift()
+
+            # 2. Options Parser Setup
+            opts_parser = OptionParser.new(nil, 60)
+            opts_parser.banner = "Usage: #{$0} #{action_s} "
+            opts_parser.separator "# " + action_helps[action].to_s()
+            opts_parser.separator ""
+            opts_parser.separator "Options:"
+            opts_parser.on("-h", "--help", "Display usage.") { puts opts_parser.to_s; exit 0 }
+            opts_parser.on("-n", "--no", "Assume no to all questions.") { opts[:yn_default] = :no }
+            opts_parser.on("-y", "--yes", "Assume yes to all questions.") { opts[:yn_default] = :yes }
+            opts_parser.on("--verbose", "Displays more informations.") { self.verbose_log = true }
+
+            # Provide custom block hook for option parser customization
+            yield(opts_parser, :action, opts) if block_given?
+
+            # Set options on classes
+            self.setOpts(action, opts_parser, opts)
+
+            # Order remaining arguments
+            if opts[:ignore_opts] != true
+                rest = opts_parser.order!(argv)
+                raise("Extra Unexpected extra arguments provided: " + rest.map(){|x|"'" + x + "'"}.join(", ")) if rest.length != 0
+            else
+                opts[:extra_args] = argv
+            end
+
+            # Validate options and execute action
+            self.checkOpts(opts)
+            exit self.execAction(opts, action)
+        end
     end
 end

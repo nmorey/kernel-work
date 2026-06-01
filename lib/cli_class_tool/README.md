@@ -204,3 +204,42 @@ module MyProject
   end
 end
 ```
+
+### 4. Fully Automated CLI Runner (`run_cli`)
+
+`CLIClassTool` provides a highly configurable, automated CLI runner (`run_cli`) that eliminates repetitive parsing and formatting boilerplate from your executable binaries.
+
+- `run_cli(opts={}, argv=ARGV) { |parser, phase, action_opts| ... }`
+
+#### Built-in Default Options:
+To simplify applications, `run_cli` natively defines and handles standard options by default:
+- `--verbose`: Handled both globally and action-specifically, setting `MyProject.verbose_log = true`.
+- `-y`, `--yes` and `-n`, `--no`: Handled action-specifically, setting `opts[:yn_default] = :yes` or `:no` respectively (which is natively recognized by the inherited `confirm` method).
+
+#### Customization Phases:
+- `:global`: Customize options parsed globally before the action is matched.
+- `:action`: Customize options parsed specifically for the targeted action.
+
+#### Addon Help Integration (`getCustomClasses`):
+If your project uses dynamic class overrides (addons) and defines a `getCustomClasses` method on the parent module returning a hash/list of registered addon names, `run_cli` will automatically append a list of these custom repository addons to the `--help` output of the CLI for seamless help integration.
+
+#### Example Executable (`bin/mytool`):
+
+```ruby
+#!/usr/bin/ruby
+require 'my-project'
+
+opts = {
+  :default_setting => "value"
+}
+
+# The entire CLI parsing, formatting, listing, option checking, and action routing is fully automated!
+# Built-in options like --verbose, -y/--yes, -n/--no are parsed and processed automatically.
+MyProject.run_cli(opts) do |parser, phase, action_opts|
+  case phase
+  when :global
+    parser.on("-c", "--config FILE") { |val| MyProject::Config.path = val }
+  end
+end
+```
+```
