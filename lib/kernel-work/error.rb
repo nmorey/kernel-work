@@ -4,23 +4,6 @@ module KernelWork
     class KernelWorkError < RuntimeError
     end
 
-    # Exception raised when a shell command fails
-    class RunError < KernelWorkError
-        # Initialize a new RunError
-        # @param err_code [Integer] Exit code
-        # @param msg [String] Error message
-        def initialize(err_code, msg = nil)
-            super("Command failed with error code '#{err_code}'")
-            @err_code = err_code
-            @msg = msg
-        end
-        # @!attribute [r] err_code
-        #   @return [Integer] The exit code of the failed command
-        # @!attribute [r] msg
-        #   @return [String] Optional error message
-        attr_reader :err_code, :msg
-    end
-
     # Exception raised when the git branch cannot be determined
     class UnknownBranch < KernelWorkError
         # Initialize a new UnknownBranch error
