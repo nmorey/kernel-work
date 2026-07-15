@@ -429,7 +429,7 @@ module KernelWork
 
             _copy_and_fill_patch(opts, commit, targetPatch)
 
-            runGitInteractive("add #{targetPatch[:local_path]}")
+            #runGitInteractive("add #{targetPatch[:local_path]}")
 
             refs = opts[:ref]
             if opts[:cve] == true then
@@ -558,8 +558,7 @@ module KernelWork
 
             # Check if branch exists
             idx = branches.index { |b| b[:name] == opts[:branch] }
-
-            entry = { :name => opts[:branch], :ref => opts[:ref] }
+            entry = { :name => opts[:branch], :ref => opts[:ref], :no_sorted_series => opts[:no_sorted_series] }
 
             if idx
                 log(:INFO, "Updating existing branch '#{opts[:branch]}'")
@@ -688,9 +687,14 @@ module KernelWork
             f.close()
 
             log(:INFO, "Inserting patch")
-            _series_insert(opts, lpath)
-            runGitInteractive("add #{lpath}")
-
+            begin
+                _series_insert(opts, lpath)
+                runGitInteractive("add #{lpath}")
+            rescue SCPAbort, SCPSkip => e
+                # post-cancel cleanup
+                run("rm -f #{lpath} #{cname}")
+                raise e
+            end
             log(:INFO, "Commiting '#{subject}'")
             runGitInteractive("commit -F #{cname}")
             run("rm -f #{cname}")
@@ -729,8 +733,23 @@ module KernelWork
         # @param opts [Hash] Options hash
         # @param file [String] Path to the patch file
         def _series_insert(opts, file)
-            runSystem("./scripts/git_sort/series_insert \"#{file}\"")
-            runGit("add series.conf")
+            if @branch_infos[:no_sorted_series] != true then
+                runSystem("./scripts/git_sort/series_insert \"#{file}\"")
+                runGit("add series.conf")
+            else
+                log(:INFO, "No auto-sorted patch series on this branch")
+                log(:INFO, "Please insert it yourself.")
+                runSystem("PS1_WARNING='SERIES INSERT' bash", false)
+                rep = confirm(opts, "continue with scp [y(es), n(o), s(kip)]?", true, ["y", "n", "s"])
+                case rep
+                when "n"
+                    raise(SCPAbort)
+                when "s"
+                    e = SCPSkip.new(commit.to_s())
+                    log(:INFO, e.to_s())
+                    raise(e)
+                end
+            end
         end
     end
 end

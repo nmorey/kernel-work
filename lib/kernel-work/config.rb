@@ -61,11 +61,15 @@ module KernelWork
                :ref => "git-fixes",
             },
             {  :name => "cve/linux-5.14-LTSS",
-               :ref => nil
+               :ref => "git-fixes"
             },
             {  :name => "cve/linux-5.3-LTSS",
-               :ref => nil
-            }
+               :ref => "git-fixes"
+            },
+            {  :name => "SLE11-SP4-LTSS",
+               :ref => "git-fixes",
+               :no_sorted_series => true
+            },
         ]
       }
     }
