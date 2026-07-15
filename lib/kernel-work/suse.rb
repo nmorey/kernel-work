@@ -429,7 +429,7 @@ module KernelWork
 
             _copy_and_fill_patch(opts, commit, targetPatch)
 
-            #runGitInteractive("add #{targetPatch[:local_path]}")
+            runGitInteractive("add #{targetPatch[:local_path]}")
 
             refs = opts[:ref]
             if opts[:cve] == true then
@@ -692,6 +692,7 @@ module KernelWork
                 runGitInteractive("add #{lpath}")
             rescue SCPAbort, SCPSkip => e
                 # post-cancel cleanup
+                runGit("rm -f #{lpath}")
                 run("rm -f #{lpath} #{cname}")
                 raise e
             end
@@ -716,6 +717,7 @@ module KernelWork
                 targetPatch[:ref] = newRefs
             rescue => e
                 log(:WARNING, "No CVE reference found")
+                exit(1)
 
                 if targetPatch[:ref] == nil then
                     # We have not set any ref as we were expecting CVE ones.
