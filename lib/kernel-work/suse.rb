@@ -238,7 +238,11 @@ module KernelWork
             refreshedPatches.each(){|p|
                 kernSha = runGit("log -n1 --diff-filter=A --format='%H' -- #{p}").chomp()
                 linSha = @upstream.runGit("log -n1 --format='%H'  --grep 'suse-commit: #{kernSha}'").chomp()
-                toDoList.insert(0, "-#{linSha}")
+                if linSha != ""
+                    toDoList.insert(0, "-#{linSha}")
+                else
+                    log(:WARNING, "Patch #{p} was edited but no matching commit found in $LINUX_GIT")
+                end
             }
             return toDoList
         end
