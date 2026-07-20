@@ -721,7 +721,6 @@ module KernelWork
                 targetPatch[:ref] = newRefs
             rescue => e
                 log(:WARNING, "No CVE reference found")
-                exit(1)
 
                 if targetPatch[:ref] == nil then
                     # We have not set any ref as we were expecting CVE ones.
