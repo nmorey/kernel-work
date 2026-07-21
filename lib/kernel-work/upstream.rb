@@ -63,7 +63,6 @@ module KernelWork
             opts[:j] = KernelWork.config.upstream.default_j_opt
             opts[:backport_apply] = false
             opts[:skip_broken] = false
-            opts[:skip_treewide] = false
             opts[:old_kernel] = false
             opts[:oldconfig_full] = false
             opts[:build_subset] = nil
@@ -72,7 +71,13 @@ module KernelWork
             opts[:upstream_ref] = "origin/master"
             opts[:backport_include] = []
             opts[:backport_exclude] = []
-            opts[:path] = []
+            opts[:filter] = {
+                :paths => [],
+                :fixes => false,
+                :grep => nil,
+                :author => nil,
+                :skip_treewide => false
+            }
 
             # Option commonds to multiple commands
             case action
@@ -84,7 +89,7 @@ module KernelWork
                 optsParser.on("-S", "--skip-broken", "Automatically skip patches that do not apply.") {
                     |val| opts[:skip_broken] = true }
                 optsParser.on("-T", "--skip-treewide", "Automatically skip tree wide patches.") {
-                    |val| opts[:skip_treewide] = true }
+                    |val| opts[:filter][:skip_treewide] = true }
             when :oldconfig, :build,:kabi_check
                 optsParser.on("-a", "--arch <arch>", String, "Arch to build for. Default=x86_64. Supported=" +
                                                              supported_archs.map(){|x, y| x}.join(", ")) {
@@ -129,7 +134,16 @@ module KernelWork
             when :backport_todo
                 optsParser.on("-p", "--path <path>", String,
                               "Path to subtree to monitor for non-backported patches.") {
-                    |val| opts[:path] << val}
+                    |val| opts[:filter][:paths] << val}
+                optsParser.on("-F", "--fixes",
+                              "Only look at commits containing 'Fixes:' tag.") {
+                    |val| opts[:filter][:fixes] = true}
+                optsParser.on("-g", "--grep <pattern>", String,
+                              "Filter commits with a specific keyword/pattern in commit message.") {
+                    |val| opts[:filter][:grep] = val}
+                optsParser.on("--author <author>", String,
+                              "Filter commits with a specific author.") {
+                    |val| opts[:filter][:author] = val}
                 optsParser.on("-R", "--upstream-ref <ref>", String,
                               "Check patches up to <ref> in upstream kernel. Default is origin/master.") {
                     |val| opts[:upstream_ref] = val}
@@ -167,8 +181,6 @@ module KernelWork
         # @raise [RuntimeError] If required options are missing
         def self.check_opts(opts)
             case opts[:action]
-            when :backport_todo
-                raise("Path to sub-tree is needed") if opts[:path].length == 0
             when :build_subset
                 raise("Path to build is needed") if opts[:build_subset].to_s() == ""
             end
@@ -349,11 +361,29 @@ module KernelWork
         # Generate list of patches to backport
         # @param ahead [String] Ahead reference
         # @param trailing [String] Trailing reference
-        # @param paths [Array<String>] Array of Path filter
+        # @param filters [Hash] Filter options (e.g. :paths => Array, :fixes => Boolean, :grep => String, :author => String)
         # @return [Array<Commit>] List of commits
-        def genBackportList(ahead, trailing, paths)
-            patches = runGit("log --no-merges --format=oneline #{ahead} ^#{trailing} -- #{paths.join(" ")}").
-                       split("\n")
+        def genBackportList(ahead, trailing, filters = {})
+            git_opts = ["log", "--no-merges", "--format=oneline"]
+            if filters[:fixes]
+                git_opts << "--grep='Fixes:'"
+            end
+            if filters[:grep]
+                git_opts << "--grep='#{filters[:grep]}'"
+            end
+            if filters[:author]
+                git_opts << "--author='#{filters[:author]}'"
+            end
+            git_opts << "#{ahead} ^#{trailing}"
+            if filters[:paths] && !filters[:paths].empty?
+                git_opts << "--"
+                git_opts << filters[:paths].join(" ")
+            end
+
+            patches = runGit(git_opts.join(" ")).split("\n")
+            if filters[:skip_treewide]
+                patches.delete_if() {|x| x =~ /(tree|kernel)-?wide/ }
+            end
             nPatches = patches.length
             idx = 0
             list = patches.map(){|x|
@@ -386,8 +416,6 @@ module KernelWork
                 next false if opts[:backport_include].index(x.sha) != nil
                 # DROP: We already have this patch in house
                 next true if houseList[x.patch_id] == true
-                # DROP: if tree wide and we were asked to drop them
-                (opts[:skip_treewide] == true && x.subject =~ /(tree|kernel)-?wide/)
             }
 
             # Some patches may have conflicted and the fix changes the patch-id
@@ -543,8 +571,8 @@ module KernelWork
             head=(opts[:upstream_ref])
             tBranch=local_branch()
 
-            inHead = genBackportList(head, tBranch, opts[:path])
-            inHouse = genBackportList(tBranch, head, opts[:path])
+            inHead = genBackportList(head, tBranch, opts[:filter])
+            inHouse = genBackportList(tBranch, head, opts[:filter])
 
             filterInHouse(opts, inHead, inHouse)
 
