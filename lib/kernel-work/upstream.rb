@@ -81,8 +81,6 @@ module KernelWork
                     |val| opts[:yn_default] = :yes }
                 optsParser.on("-S", "--skip-broken", "Automatically skip patches that do not apply.") {
                     |val| opts[:skip_broken] = true }
-                optsParser.on("-T", "--skip-treewide", "Automatically skip tree wide patches.") {
-                    |val| opts[:filter][:skip_treewide] = true }
             when :oldconfig, :build,:kabi_check
                 optsParser.on("-a", "--arch <arch>", String, "Arch to build for. Default=x86_64. Supported=" +
                                                              supported_archs.map(){|x, y| x}.join(", ")) {
