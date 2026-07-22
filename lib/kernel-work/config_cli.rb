@@ -72,16 +72,14 @@ module KernelWork
                 def self.set_opts(action, optsParser, opts)
                     case action
                     when :add
-                        optsParser.on("-n", "--name <name>", String, "Name of the filter to save.") {
-                            |val| opts[:filter_name] = val}
                         Common.set_filter_opts(optsParser, opts)
-                        optsParser.on("-T", "--skip-treewide", "Automatically skip tree wide patches.") {
-                            |val| opts[:filter][:skip_treewide] = true}
+                        # filter_name is already part of the default filter opts
+                        opts[:filter_may_be_missing] = true
                     when :list
                         optsParser.on("--raw", "Output only the names of the filters.") {
                             |val| opts[:raw] = true}
                     when :show, :delete
-                        optsParser.on("-n", "--name <name>", String, "Name of the saved filter.") {
+                        optsParser.on("--filter <name>", String, "Name of the saved filter.") {
                             |val| opts[:filter_name] = val}
                     end
                 end
@@ -102,6 +100,14 @@ module KernelWork
                     cfg = KernelWork.config.settings
                     cfg[:filters] ||= {}
 
+                    if cfg[:filters][name.to_sym] != nil then
+
+                        rep= confirm(opts, "update the existing #{name} filter", true, ["y", "n"])
+                        if rep == "n" then
+                            raise SCPAbort.new("User aborted filter update")
+                        end
+                        log(:INFO, "Updating filter #{name} with new settings")
+                   end
                     cfg[:filters][name.to_sym] = opts[:filter]
 
                     KernelWork.config.save_config

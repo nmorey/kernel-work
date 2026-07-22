@@ -45,7 +45,7 @@ _kernel_work_filter_opts(){
             COMPREPLY=( $(compgen -f -- "$cur") )
             return 0
             ;;
-        -n|--name|--filter)
+        --filter)
             COMPREPLY=( $( compgen -W "$(kernel config filter list --raw 2>/dev/null )" -- "$cur" ) )
             return 0
             ;;
