@@ -27,4 +27,9 @@ task :check_whitespace do
   end
 end
 
-task :default => [:check_whitespace, :yard]
+task :test do
+  puts "Running tests..."
+  sh "ruby test/test_gen_backport_list.rb"
+end
+
+task :default => [:check_whitespace, :test, :yard]

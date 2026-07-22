@@ -123,6 +123,7 @@ module KernelWork
                             filters.each do |name, f_opts|
                                 details = []
                                 details << "paths: #{f_opts[:paths].join(', ')}" if f_opts[:paths] && !f_opts[:paths].empty?
+                                details << "exclude_paths: #{f_opts[:exclude_paths].join(', ')}" if f_opts[:exclude_paths] && !f_opts[:exclude_paths].empty?
                                 details << "fixes: true" if f_opts[:fixes]
                                 details << "grep: '#{f_opts[:grep]}'" if f_opts[:grep]
                                 details << "author: '#{f_opts[:author]}'" if f_opts[:author]

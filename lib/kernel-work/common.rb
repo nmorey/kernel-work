@@ -11,6 +11,9 @@ module KernelWork
             optsParser.on("-p", "--path <path>", String,
                           "Path to subtree to monitor for non-backported patches.") {
                 |val| opts[:filter][:paths] ||= []; opts[:filter][:paths] << val}
+            optsParser.on("-e", "--exclude-path <path>", String,
+                          "Path to exclude from the monitor.") {
+                |val| opts[:filter][:exclude_paths] ||= []; opts[:filter][:exclude_paths] << val}
             optsParser.on("-F", "--fixes",
                           "Only look at commits containing 'Fixes:' tag.") {
                 |val| opts[:filter][:fixes] = true}
@@ -48,6 +51,7 @@ module KernelWork
                 # 1. Start with the base defaults
                 base_filter = {
                     :paths => [],
+                    :exclude_paths => [],
                     :fixes => false,
                     :grep => nil,
                     :author => nil,

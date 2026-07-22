@@ -358,9 +358,23 @@ module KernelWork
                 git_opts << "--author='#{filters[:author]}'"
             end
             git_opts << "#{ahead} ^#{trailing}"
+            paths_arg = []
             if filters[:paths] && !filters[:paths].empty?
+                paths_arg += filters[:paths]
+            end
+            if filters[:exclude_paths] && !filters[:exclude_paths].empty?
+                filters[:exclude_paths].each do |p|
+                    if p.start_with?(":(exclude)")
+                        paths_arg << p
+                    else
+                        paths_arg << ":(exclude)#{p}"
+                    end
+                end
+            end
+
+            if !paths_arg.empty?
                 git_opts << "--"
-                git_opts << filters[:paths].join(" ")
+                git_opts << paths_arg.join(" ")
             end
 
             patches = runGit(git_opts.join(" ")).split("\n")
