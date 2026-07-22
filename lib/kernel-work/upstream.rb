@@ -365,9 +365,9 @@ module KernelWork
             if filters[:exclude_paths] && !filters[:exclude_paths].empty?
                 filters[:exclude_paths].each do |p|
                     if p.start_with?(":(exclude)")
-                        paths_arg << p
+                        paths_arg << "'#{p}'"
                     else
-                        paths_arg << ":(exclude)#{p}"
+                        paths_arg << "':(exclude)#{p}'"
                     end
                 end
             end
