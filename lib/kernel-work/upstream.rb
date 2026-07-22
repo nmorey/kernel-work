@@ -487,15 +487,10 @@ module KernelWork
                 status, unhandled = _scp(opts, commits)
             rescue SCPAbort
                 # If we used a file and have unhandled patches, write them back
-                if opts[:file] && !commits.empty?
-                    # Write back remaining SHAs
-                    File.open(opts[:file], 'w') do |f|
-                        commits.each { |u| f.puts u.to_s }
-                    end
-                    log(:INFO, "Unhandled patches written back to #{opts[:file]}")
-                end
+                _save_scp_commits(opts, commits)
                 return 1
             end
+            _save_scp_commits(opts, commits)
 
             return 0
         end
@@ -818,5 +813,15 @@ module KernelWork
             end
         end
 
-        end
+        def _save_scp_commits(opts, commits)
+            if opts[:file]
+                File.open(opts[:file], 'w') do |f|
+                    commits.each { |u| f.puts u.to_s }
+                end
+                if !commits.empty?
+                    log(:INFO, "Unhandled patches written back to #{opts[:file]}")
+                end
+            end
+       end
+    end
 end
