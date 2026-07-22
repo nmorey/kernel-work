@@ -14,23 +14,65 @@ _kernel_work_genoptlist(){
 	${_KERNEL_WORK_CMD_SORT} -u
 }
 
+_kernel_work_opt_takes_arg(){
+    local prev=$1
+    shift
+    local cmd=("$@")
+    
+    # 1. Get the option line
+    local option_line=$("${cmd[@]}" --help 2>/dev/null | grep -E "([[:space:]]|^)$prev([^a-zA-Z0-9-]|$)" | head -n1)
+    [ -z "$option_line" ] && return 1
+    
+    # 2. Extract option definition (before the description)
+    local opt_def=$(echo "$option_line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]\{2,\}.*$//')
+    
+    # 3. Check if it contains < or [
+    if [[ "$opt_def" == *"<"* || "$opt_def" == *"["* ]]; then
+        return 0
+    fi
+    return 1
+}
+
+_kernel_work_filter_opts(){
+    local prev=$1
+    shift
+    local cmd=("$@")
+    
+    case "$prev" in
+        -p|--path|-e|--exclude-path|--patch-path)
+            compopt -o filenames +o nospace
+            cd $LINUX_GIT/
+            COMPREPLY=( $(compgen -f -- "$cur") )
+            return 0
+            ;;
+        --filter)
+            COMPREPLY=( $( compgen -W "$( ${words[0]} config filter list --raw 2>/dev/null )" -- "$cur" ) )
+            return 0
+            ;;
+    esac
+
+    if [[ "$cur" != -* ]] && _kernel_work_opt_takes_arg "$prev" "${cmd[@]}"; then
+        COMPREPLY=()
+        return 0
+    fi
+    return 1
+}
+
+_kernel_work_comp_nl(){
+    __gitcomp_nl "$1" "" "$cur" ""
+}
+
 _kernel_work_backport_todo(){
     local OPT_LIST=$(_kernel_work_genoptlist kernel backport_todo)
     _get_comp_words_by_ref cur
     _get_comp_words_by_ref prev
     _get_comp_words_by_ref words
 
-    cd $LINUX_GIT/
+    _kernel_work_filter_opts "$prev" kernel backport_todo && return
+
     case "$prev" in
-	-p|--path)
-            compopt -o filenames +o nospace
-	    COMPREPLY=( $( compgen -f  -- "$cur"))
-	    ;;
-	--filter)
-	    COMPREPLY=( $( compgen -W "$( ${words[0]} config filter list --raw 2>/dev/null )" -- "$cur" ) )
-	    ;;
 	*)
-	    __gitcomp_nl "$OPT_LIST"
+	    _kernel_work_comp_nl "$OPT_LIST"
 	    ;;
     esac;
 }
@@ -42,7 +84,7 @@ _kernel_work_config(){
     _get_comp_words_by_ref cword
 
     if [ $cword -eq 2 ]; then
-        __gitcomp_nl "$(${words[0]} config list_actions)"
+        _kernel_work_comp_nl "$(${words[0]} config list_actions)"
         return
     fi
 
@@ -50,37 +92,35 @@ _kernel_work_config(){
     case "$sub_cmd" in
         filter)
             if [ $cword -eq 3 ]; then
-                __gitcomp_nl "$(${words[0]} config filter list_actions)"
+                _kernel_work_comp_nl "$(${words[0]} config filter list_actions)"
                 return
             fi
             local action=${words[3]}
             local opt_list=$(_kernel_work_genoptlist ${words[0]} config filter $action)
+            _kernel_work_filter_opts "$prev" ${words[0]} config filter $action && return
             case "$prev" in
-                -n|--name|--filter)
+                -n|--name)
                     COMPREPLY=( $( compgen -W "$(${words[0]} config filter list --raw 2>/dev/null )" -- "$cur" ) )
                     ;;
-                -p|--path)
-                    compopt -o filenames +o nospace
-                    COMPREPLY=( $( compgen -f  -- "$cur"))
-                    ;;
                 *)
-                    __gitcomp_nl "$opt_list"
+                    _kernel_work_comp_nl "$opt_list"
                     ;;
             esac
             ;;
         branch)
             if [ $cword -eq 3 ]; then
-                __gitcomp_nl "$(${words[0]} config branch list_actions)"
+                _kernel_work_comp_nl "$(${words[0]} config branch list_actions)"
                 return
             fi
             local action=${words[3]}
             local opt_list=$(${words[0]}_work_genoptlist ${words[0]} config branch $action)
+            _kernel_work_filter_opts "$prev" ${words[0]} config branch $action && return
             case "$prev" in
                 -b|--branch)
                     COMPREPLY=( $( compgen -W "$(${words[0]} config branch list --raw 2>/dev/null )" -- "$cur" ) )
                     ;;
                 *)
-                    __gitcomp_nl "$opt_list"
+                    _kernel_work_comp_nl "$opt_list"
                     ;;
             esac
             ;;
@@ -93,14 +133,11 @@ _kernel_work_build(){
     local OPT_LIST=$(_kernel_work_genoptlist ${words[0]} build)
     _get_comp_words_by_ref cur
 
-    cd $LINUX_GIT/
+    _kernel_work_filter_opts "$prev" ${words[0]} build && return
+
     case "$prev" in
-	-p|--path)
-            compopt -o filenames +o nospace
-	    COMPREPLY=( $( compgen -f  -- "$cur"))
-	    ;;
 	*)
-	    __gitcomp_nl "$OPT_LIST"
+	    _kernel_work_comp_nl "$OPT_LIST"
 	    ;;
     esac;
 }
@@ -109,13 +146,11 @@ _kernel_work_extract_path(){
     local OPT_LIST=$(_kernel_work_genoptlist ${words[0]} extract_patch)
     _get_comp_words_by_ref cur
 
+    _kernel_work_filter_opts "$prev" ${words[0]} extract_patch && return
+
     case "$prev" in
-	-p|--patch-path)
-            compopt -o filenames +o nospace
-	    COMPREPLY=( $( compgen -f  -- "$cur"))
-	    ;;
 	*)
-	    __gitcomp_nl "$OPT_LIST"
+	    _kernel_work_comp_nl "$OPT_LIST"
 	    ;;
     esac;
 }
@@ -136,11 +171,11 @@ _kernel_work(){
     if [ $cword -eq $cmd_word ]; then
 	case "$cur" in
 	    -*)
-		__gitcomp_nl "$(_kernel_work_genoptlist ${words[0]})"
+		_kernel_work_comp_nl "$(_kernel_work_genoptlist ${words[0]})"
 		return
 		;;
 	    *)
-		__gitcomp_nl "$(${words[0]} list_actions | grep -v list_actions)"
+		_kernel_work_comp_nl "$(${words[0]} list_actions | grep -v list_actions)"
 		return
 		;;
 	esac
@@ -158,9 +193,10 @@ _kernel_work(){
 	else
 
 	    OPT_LIST=$(_kernel_work_genoptlist ${words[0]} $cmd_name)
+	    _kernel_work_filter_opts "$prev" ${words[0]} $cmd_name && return
 	    case "$prev" in
 		*)
-		    __gitcomp_nl "$OPT_LIST"
+		    _kernel_work_comp_nl "$OPT_LIST"
 
 	    esac
 	fi
