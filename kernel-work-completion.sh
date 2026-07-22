@@ -27,7 +27,7 @@ _kernel_work_backport_todo(){
 	    COMPREPLY=( $( compgen -f  -- "$cur"))
 	    ;;
 	--filter)
-	    COMPREPLY=( $( compgen -W "$( RUBYLIB=/work1/nmorey/workspace/alternates/master/cli_class_tool/lib ${words[0]} config filter list --raw 2>/dev/null )" -- "$cur" ) )
+	    COMPREPLY=( $( compgen -W "$( ${words[0]} config filter list --raw 2>/dev/null )" -- "$cur" ) )
 	    ;;
 	*)
 	    __gitcomp_nl "$OPT_LIST"
@@ -42,7 +42,7 @@ _kernel_work_config(){
     _get_comp_words_by_ref cword
 
     if [ $cword -eq 2 ]; then
-        __gitcomp_nl "diff show filter branch"
+        __gitcomp_nl "$(${words[0]} config list_actions)"
         return
     fi
 
@@ -50,14 +50,14 @@ _kernel_work_config(){
     case "$sub_cmd" in
         filter)
             if [ $cword -eq 3 ]; then
-                __gitcomp_nl "add list show delete"
+                __gitcomp_nl "$(${words[0]} config filter list_actions)"
                 return
             fi
             local action=${words[3]}
             local opt_list=$(_kernel_work_genoptlist ${words[0]} config filter $action)
             case "$prev" in
                 -n|--name|--filter)
-                    COMPREPLY=( $( compgen -W "$( RUBYLIB=/work1/nmorey/workspace/alternates/master/cli_class_tool/lib ${words[0]} config filter list --raw 2>/dev/null )" -- "$cur" ) )
+                    COMPREPLY=( $( compgen -W "$(${words[0]} config filter list --raw 2>/dev/null )" -- "$cur" ) )
                     ;;
                 -p|--path)
                     compopt -o filenames +o nospace
@@ -70,14 +70,14 @@ _kernel_work_config(){
             ;;
         branch)
             if [ $cword -eq 3 ]; then
-                __gitcomp_nl "add list show delete"
+                __gitcomp_nl "$(${words[0]} config branch list_actions)"
                 return
             fi
             local action=${words[3]}
-            local opt_list=$(_kernel_work_genoptlist ${words[0]} config branch $action)
+            local opt_list=$(${words[0]}_work_genoptlist ${words[0]} config branch $action)
             case "$prev" in
                 -b|--branch)
-                    COMPREPLY=( $( compgen -W "$( RUBYLIB=/work1/nmorey/workspace/alternates/master/cli_class_tool/lib ${words[0]} config branch list --raw 2>/dev/null )" -- "$cur" ) )
+                    COMPREPLY=( $( compgen -W "$(${words[0]} config branch list --raw 2>/dev/null )" -- "$cur" ) )
                     ;;
                 *)
                     __gitcomp_nl "$opt_list"
@@ -90,7 +90,7 @@ _kernel_work_config(){
 }
 
 _kernel_work_build(){
-    local OPT_LIST=$(_kernel_work_genoptlist kernel build)
+    local OPT_LIST=$(_kernel_work_genoptlist ${words[0]} build)
     _get_comp_words_by_ref cur
 
     cd $LINUX_GIT/
@@ -106,7 +106,7 @@ _kernel_work_build(){
 }
 
 _kernel_work_extract_path(){
-    local OPT_LIST=$(_kernel_work_genoptlist kernel extract_patch)
+    local OPT_LIST=$(_kernel_work_genoptlist ${words[0]} extract_patch)
     _get_comp_words_by_ref cur
 
     case "$prev" in
@@ -136,11 +136,11 @@ _kernel_work(){
     if [ $cword -eq $cmd_word ]; then
 	case "$cur" in
 	    -*)
-		__gitcomp_nl "$(_kernel_work_genoptlist kernel)"
+		__gitcomp_nl "$(_kernel_work_genoptlist ${words[0]})"
 		return
 		;;
 	    *)
-		__gitcomp_nl "$(kernel list_actions | grep -v list_actions)"
+		__gitcomp_nl "$(${words[0]} list_actions | grep -v list_actions)"
 		return
 		;;
 	esac
@@ -157,7 +157,7 @@ _kernel_work(){
 	    $completion_func
 	else
 
-	    OPT_LIST=$(_kernel_work_genoptlist kernel $cmd_name)
+	    OPT_LIST=$(_kernel_work_genoptlist ${words[0]} $cmd_name)
 	    case "$prev" in
 		*)
 		    __gitcomp_nl "$OPT_LIST"
