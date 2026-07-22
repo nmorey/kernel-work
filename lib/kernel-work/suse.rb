@@ -18,7 +18,6 @@ module KernelWork
             :check_fixes,
             :list_commits, :lc,
             :push,
-            :register_branch,
         ]
         # Help text for actions
         ACTION_HELP = {
@@ -33,7 +32,6 @@ module KernelWork
             :check_fixes => "Use KERNEL_SOURCE_DIR script to detect missing git-fixes pulled by commited patches",
             :list_commits => "List pending commits (default = unmerged)",
             :push=> "Push KERNEL_SOURCE_DIR pending patches",
-            :register_branch => "Register a branch for maintenance in config.yml",
         }
 
         # Set options for Suse actions
@@ -78,11 +76,6 @@ module KernelWork
                     |val| opts[:list_commits] = :unpushed}
                 optsParser.on("--unmerged", "List unmerged commits.") {
                     |val| opts[:list_commits] = :unmerged}
-            when :register_branch
-                optsParser.on("-b", "--branch <branch>", String, "Branch name.") {
-                    |val| opts[:branch] = val}
-                optsParser.on("-r", "--ref <ref>", String, "Default reference.") {
-                    |val| opts[:ref] = val}
             when :fix_ref
                 optsParser.on("-r", "--ref <ref>", String, "Bug reference.") {
                     |val| opts[:ref] = val}
@@ -96,10 +89,6 @@ module KernelWork
         # @raise [RuntimeError] If required options are missing
         def self.check_opts(opts)
             case opts[:action]
-            when :register_branch
-                if opts[:branch].nil?
-                    raise("Branch name is required. Use -b <branch>")
-                end
             when :fix_ref
                 if opts[:ref].nil?
                     raise("Ref is required. Use -r <ref>")
@@ -552,28 +541,6 @@ module KernelWork
             list_unpushed(opts)
             pOpts+= "--force " if opts[:force_push] == true
             runGitInteractive("push #{pOpts}")
-        end
-
-        # Register a branch
-        # @param opts [Hash] Options hash
-        # @return [void]
-        def register_branch(opts)
-            branches = KernelWork.config.settings[:suse][:branches]
-
-            # Check if branch exists
-            idx = branches.index { |b| b[:name] == opts[:branch] }
-            entry = { :name => opts[:branch], :ref => opts[:ref], :no_sorted_series => opts[:no_sorted_series] }
-
-            if idx
-                log(:INFO, "Updating existing branch '#{opts[:branch]}'")
-                branches[idx] = entry
-            else
-                log(:INFO, "Registering new branch '#{opts[:branch]}'" )
-                branches << entry
-            end
-
-            KernelWork.config.save_config
-            log(:INFO, "Configuration saved to #{KernelWork.config.config_file}")
         end
         ###########################################
         #### PRIVATE methods                   ####

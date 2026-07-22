@@ -17,6 +17,8 @@ _kernel_work_genoptlist(){
 _kernel_work_backport_todo(){
     local OPT_LIST=$(_kernel_work_genoptlist kernel backport_todo)
     _get_comp_words_by_ref cur
+    _get_comp_words_by_ref prev
+    _get_comp_words_by_ref words
 
     cd $LINUX_GIT/
     case "$prev" in
@@ -24,10 +26,67 @@ _kernel_work_backport_todo(){
             compopt -o filenames +o nospace
 	    COMPREPLY=( $( compgen -f  -- "$cur"))
 	    ;;
+	--filter)
+	    COMPREPLY=( $( compgen -W "$( RUBYLIB=/work1/nmorey/workspace/alternates/master/cli_class_tool/lib ${words[0]} config filter list --raw 2>/dev/null )" -- "$cur" ) )
+	    ;;
 	*)
 	    __gitcomp_nl "$OPT_LIST"
 	    ;;
     esac;
+}
+
+_kernel_work_config(){
+    _get_comp_words_by_ref cur
+    _get_comp_words_by_ref prev
+    _get_comp_words_by_ref words
+    _get_comp_words_by_ref cword
+
+    if [ $cword -eq 2 ]; then
+        __gitcomp_nl "diff show filter branch"
+        return
+    fi
+
+    local sub_cmd=${words[2]}
+    case "$sub_cmd" in
+        filter)
+            if [ $cword -eq 3 ]; then
+                __gitcomp_nl "add list show delete"
+                return
+            fi
+            local action=${words[3]}
+            local opt_list=$(_kernel_work_genoptlist ${words[0]} config filter $action)
+            case "$prev" in
+                -n|--name|--filter)
+                    COMPREPLY=( $( compgen -W "$( RUBYLIB=/work1/nmorey/workspace/alternates/master/cli_class_tool/lib ${words[0]} config filter list --raw 2>/dev/null )" -- "$cur" ) )
+                    ;;
+                -p|--path)
+                    compopt -o filenames +o nospace
+                    COMPREPLY=( $( compgen -f  -- "$cur"))
+                    ;;
+                *)
+                    __gitcomp_nl "$opt_list"
+                    ;;
+            esac
+            ;;
+        branch)
+            if [ $cword -eq 3 ]; then
+                __gitcomp_nl "add list show delete"
+                return
+            fi
+            local action=${words[3]}
+            local opt_list=$(_kernel_work_genoptlist ${words[0]} config branch $action)
+            case "$prev" in
+                -b|--branch)
+                    COMPREPLY=( $( compgen -W "$( RUBYLIB=/work1/nmorey/workspace/alternates/master/cli_class_tool/lib ${words[0]} config branch list --raw 2>/dev/null )" -- "$cur" ) )
+                    ;;
+                *)
+                    __gitcomp_nl "$opt_list"
+                    ;;
+            esac
+            ;;
+        *)
+            ;;
+    esac
 }
 
 _kernel_work_build(){

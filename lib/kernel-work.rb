@@ -16,8 +16,9 @@ require_relative 'kernel-work/commit'
 require_relative 'kernel-work/upstream'
 require_relative 'kernel-work/suse'
 require_relative 'kernel-work/kenv'
+require_relative 'kernel-work/config_cli'
 
 module KernelWork
-  ACTION_CLASS = [ Common, Suse, Upstream, KEnv ]
+  ACTION_CLASS = [ Suse, Upstream, KEnv ]
   extend CLIClassTool::Utils
 end

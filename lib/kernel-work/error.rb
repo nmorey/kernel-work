@@ -137,4 +137,13 @@ module KernelWork
             super(msg)
         end
     end
+
+    # Exception raised when a saved filter is not found
+    class SavedFilterNotFoundError < KernelWorkError
+        # Initialize a new SavedFilterNotFoundError
+        # @param name [String] The missing filter name
+        def initialize(name)
+            super("Saved filter '#{name}' not found in configuration")
+        end
+    end
 end

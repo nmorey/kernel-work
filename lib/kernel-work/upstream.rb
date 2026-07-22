@@ -132,18 +132,7 @@ module KernelWork
                               "Build with V=1") {
                     |val| opts[:build_verbose] = true}
             when :backport_todo
-                optsParser.on("-p", "--path <path>", String,
-                              "Path to subtree to monitor for non-backported patches.") {
-                    |val| opts[:filter][:paths] << val}
-                optsParser.on("-F", "--fixes",
-                              "Only look at commits containing 'Fixes:' tag.") {
-                    |val| opts[:filter][:fixes] = true}
-                optsParser.on("-g", "--grep <pattern>", String,
-                              "Filter commits with a specific keyword/pattern in commit message.") {
-                    |val| opts[:filter][:grep] = val}
-                optsParser.on("--author <author>", String,
-                              "Filter commits with a specific author.") {
-                    |val| opts[:filter][:author] = val}
+                Common.set_filter_opts(optsParser, opts)
                 optsParser.on("-R", "--upstream-ref <ref>", String,
                               "Check patches up to <ref> in upstream kernel. Default is origin/master.") {
                     |val| opts[:upstream_ref] = val}
@@ -184,6 +173,9 @@ module KernelWork
             when :build_subset
                 raise("Path to build is needed") if opts[:build_subset].to_s() == ""
             end
+
+            # Check and load filter options early
+            Common.check_filter_opts(opts)
         end
 
         # Initialize a new Upstream object
