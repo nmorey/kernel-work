@@ -71,13 +71,6 @@ module KernelWork
             opts[:upstream_ref] = "origin/master"
             opts[:backport_include] = []
             opts[:backport_exclude] = []
-            opts[:filter] = {
-                :paths => [],
-                :fixes => false,
-                :grep => nil,
-                :author => nil,
-                :skip_treewide => false
-            }
 
             # Option commonds to multiple commands
             case action
