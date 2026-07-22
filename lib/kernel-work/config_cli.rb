@@ -5,6 +5,7 @@ module KernelWork
     module ConfigCLI
         CLI_DESCRIPTION = "Manage application configurations"
         CLI_COMMAND_NAME = "config"
+        CLI_HELP_EXPAND = "*** config commands ***"
 
         class ConfigCLIError < KernelWork::KernelWorkError; end
 
