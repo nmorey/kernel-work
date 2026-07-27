@@ -69,6 +69,7 @@ module KernelWork
             opts[:git_fixes_subtree] = KernelWork.config.upstream.git_fixes_subtree
             opts[:git_fixes_listonly] = false
             opts[:upstream_ref] = "origin/master"
+            opts[:base_ref] = nil
             opts[:backport_include] = []
             opts[:backport_exclude] = []
 
@@ -127,6 +128,9 @@ module KernelWork
                 optsParser.on("-R", "--upstream-ref <ref>", String,
                               "Check patches up to <ref> in upstream kernel. Default is origin/master.") {
                     |val| opts[:upstream_ref] = val}
+                optsParser.on("-B", "--base-ref <ref>", String,
+                              "Check patches starting from <ref> in the kernel base. Default is local_branch().") {
+                    |val| opts[:base_ref] = val}
                 optsParser.on("-A", "--apply",
                               "Apply all patches using the scp command.") {
                     |val| opts[:backport_apply] = true}
@@ -347,6 +351,7 @@ module KernelWork
         # @param filters [Hash] Filter options (e.g. :paths => Array, :fixes => Boolean, :grep => String, :author => String)
         # @return [Array<Commit>] List of commits
         def genBackportList(ahead, trailing, filters = {})
+            filters ||= {}
             git_opts = ["log", "--no-merges", "--format=oneline"]
             if filters[:fixes]
                 git_opts << "--grep='Fixes:'"
@@ -561,7 +566,7 @@ module KernelWork
         # @return [Integer] Exit code
         def backport_todo(opts)
             head=(opts[:upstream_ref])
-            tBranch=local_branch()
+            tBranch=opts[:base_ref] || local_branch()
 
             inHead = genBackportList(head, tBranch, opts[:filter])
             inHouse = genBackportList(tBranch, head, opts[:filter])
