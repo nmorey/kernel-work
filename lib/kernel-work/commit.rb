@@ -112,6 +112,25 @@ module KernelWork
             return @patchname
         end
 
+        # Extract SHAs of commits fixed by this commit from the "Fixes:" tags in the commit message
+        #
+        # @return [Array<String>] List of fixed commit SHAs
+        def fixes_shas()
+            return @fixes_shas if @fixes_shas != nil
+            @fixes_shas = []
+            begin
+                msg = runGit("log -n1 --format=%B #{@sha}")
+                msg.each_line do |line|
+                    if line =~ /Fixes:\s*([0-9a-f]{12,40})/i
+                        @fixes_shas << $1
+                    end
+                end
+            rescue
+                # Ignore errors and return empty list
+            end
+            @fixes_shas
+        end
+
         # String representation of the commit
         #
         # @return [String] SHA and subject

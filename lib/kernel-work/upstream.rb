@@ -569,7 +569,7 @@ module KernelWork
             tBranch=opts[:base_ref] || local_branch()
 
             inHead = genBackportList(head, tBranch, opts[:filter])
-            inHouse = genBackportList(tBranch, head, opts[:filter])
+            inHouse = genBackportList(local_branch(), head, opts[:filter])
 
             filterInHouse(opts, inHead, inHouse)
 
@@ -739,12 +739,14 @@ module KernelWork
         #
         # @param opts [Hash] Options hash
         # @param commit [Commit] The commit to backport
+        # @param inHouse [Array<Commit>, nil] Already backported commits list
+        # @param suse_commit_ids [Hash, nil] Suse commit id list
         # @return [void]
         # @raise [ShaNotFoundError] If SHA is invalid
         # @raise [SCPSkip] If skipped
         # @raise [ShaNotCommitError] If commit is not a Commit object
         # @raise [PatchExtractionError] If patch extraction fails
-        def _scp_one(opts, commit)
+        def _scp_one(opts, commit, inHouse = nil, suse_commit_ids = nil)
             rep="t"
             raise ShaNotCommitError.new() if !commit.is_a?(KernelWork::Commit)
 
@@ -759,6 +761,24 @@ module KernelWork
                 log(:INFO, "Patch already applied in KERNEL_SOURCE_DIR: #{desc}")
                 return 0
             end
+
+            fixes = commit.fixes_shas()
+            if !fixes.empty?
+                fixes.each do |f_sha|
+                    fixes_commit = KernelWork::Commit.new(f_sha)
+                    begin
+                        f_desc = fixes_commit.desc()
+                    rescue
+                        f_desc = f_sha
+                    end
+                    if is_fixes_sha_in_house?(f_sha, inHouse, suse_commit_ids)
+                        log(:INFO, "Patch fixes backported #{f_desc}")
+                    else
+                        log(:WARNING, "Patch fixes unbackported #{f_desc}")
+                    end
+                end
+            end
+
             while rep != "y"
                 rep = confirm(opts, "pick commit '#{desc}' up",
                               false, ["y", "n", "?", "r"])
@@ -802,11 +822,40 @@ module KernelWork
         # @param commits [Array<Commit>] List of commits to backport
         # @return [void]
         def _scp(opts, commits)
+            inHouse = nil
+            suse_commit_ids = nil
+
             while ! commits.empty?
                 commit = commits.first
                 begin
                     log(:INFO, "# #{commits.length} commits left")
-                    _scp_one(opts, commit)
+
+                    # Lazily load inHouse and suse_commit_ids if commit has Fixes: tags
+                    fixes = commit.fixes_shas()
+                    if !fixes.empty?
+                        if inHouse.nil?
+                            log(:INFO, "Commit has 'Fixes:' tag. Initializing local branch commit list...")
+                            begin
+                                inHouse = genBackportList(local_branch(), opts[:upstream_ref] || "origin/master", opts[:filter] || {})
+                            rescue
+                                inHouse = []
+                            end
+                        end
+                        if suse_commit_ids.nil?
+                            suse_commit_ids = @suse.gen_commit_id_list(opts)
+                        end
+                    end
+
+                    _scp_one(opts, commit, inHouse, suse_commit_ids)
+
+                    # If successful pick, update the dynamic list
+                    if !inHouse.nil?
+                        inHouse << commit
+                    end
+                    if !suse_commit_ids.nil?
+                        suse_commit_ids[commit.sha] = true
+                    end
+
                     commits.shift # Remove success from list
                 rescue SCPAbort => e
                     log(:INFO, "Aborted")
@@ -816,6 +865,45 @@ module KernelWork
                     raise SCPAbort.new()
                 end
             end
+        end
+
+        def is_fixes_sha_in_house?(f_sha, inHouse, suse_commit_ids)
+            # 1. Is it an ancestor of HEAD in LINUX_GIT?
+            begin
+                full_sha = runGit("rev-parse --verify --quiet #{f_sha}").chomp()
+                if full_sha != ""
+                    runGit("merge-base --is-ancestor #{full_sha} HEAD")
+                    return true
+                end
+            rescue
+            end
+
+            # 2. Is it in the SUSE .patches directory?
+            if suse_commit_ids
+                begin
+                    full_sha ||= runGit("rev-parse --verify --quiet #{f_sha}").chomp()
+                    if full_sha != "" && suse_commit_ids[full_sha] == true
+                        return true
+                    end
+                rescue
+                end
+            end
+
+            # 3. Is its patch_id in our inHouse list?
+            if inHouse
+                begin
+                    fixes_commit = KernelWork::Commit.new(f_sha)
+                    fixes_patch_id = fixes_commit.patch_id()
+                    if fixes_patch_id
+                        inHouse.each do |x|
+                            return true if x.patch_id == fixes_patch_id
+                        end
+                    end
+                rescue
+                end
+            end
+
+            false
         end
 
         def _save_scp_commits(opts, commits)

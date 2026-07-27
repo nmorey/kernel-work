@@ -22,6 +22,21 @@ module KernelWork
       # No-op for test
     end
   end
+
+  class TestCommit < Commit
+    attr_writer :commit_message
+
+    def initialize(sha)
+      super(sha)
+    end
+
+    def runGit(cmd, opts = {}, raise_error = true)
+      if cmd.start_with?("log -n1 --format=%B")
+        return @commit_message || ""
+      end
+      ""
+    end
+  end
 end
 
 test = KernelWork::TestUpstream.new
@@ -108,7 +123,7 @@ end
 # Test Case 7: backport_todo behavior with custom base_ref
 opts = { :upstream_ref => "origin/master", :base_ref => "custom-base-branch", :filter => {} }
 test.backport_todo(opts)
-expected7 = "log --no-merges --format=oneline custom-base-branch ^origin/master"
+expected7 = "log --no-merges --format=oneline mock-local-branch ^origin/master"
 if test.last_git_command == expected7
   puts "Test Case 7 Passed"
 else
@@ -128,6 +143,26 @@ else
   puts "Test Case 8 FAILED!"
   puts "  Expected: #{expected8}"
   puts "  Got:      #{test.last_git_command}"
+  failures += 1
+end
+
+# Test Case 9: Commit#fixes_shas tag parsing
+test_commit = KernelWork::TestCommit.new("some-sha")
+test_commit.commit_message = <<~MSG
+  This is a commit message
+  
+  Fixes: 1234567890abcdef1234567890abcdef12345678 ("some description")
+  Fixes: fedcba0987654321fedcba0987654321fedcba09 ("another description")
+MSG
+
+shas = test_commit.fixes_shas()
+expected_shas = ["1234567890abcdef1234567890abcdef12345678", "fedcba0987654321fedcba0987654321fedcba09"]
+if shas == expected_shas
+  puts "Test Case 9 Passed"
+else
+  puts "Test Case 9 FAILED!"
+  puts "  Expected: #{expected_shas}"
+  puts "  Got:      #{shas}"
   failures += 1
 end
 
