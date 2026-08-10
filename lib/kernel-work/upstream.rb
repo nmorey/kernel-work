@@ -295,7 +295,7 @@ module KernelWork
         def runOldConfig(opts, force=true)
             archName, arch, bDir=optsToBDir(opts)
 
-            return if force != true && File.exist?("#{bDir}/.config")
+            return if force != true && File.exist?("#{@path}/#{bDir}/.config")
 
             runSystem("rm -Rf #{bDir} && " +
                       "mkdir #{bDir} && " +
