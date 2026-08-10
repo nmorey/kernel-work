@@ -832,7 +832,8 @@ module KernelWork
 
                     # Lazily load inHouse and suse_commit_ids if commit has Fixes: tags
                     fixes = commit.fixes_shas()
-                    if !fixes.empty?
+                    # Do not bother with git fixes in CVE mode
+                    if !fixes.empty? &&  opts[:cve] != true
                         if inHouse.nil?
                             log(:INFO, "Commit has 'Fixes:' tag. Initializing local branch commit list...")
                             begin
