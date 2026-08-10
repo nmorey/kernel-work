@@ -271,7 +271,7 @@ module KernelWork
             if opts[:build_verbose] == true then
                 extraOpts+=" #{extraOpts} V=1"
             end
-            if cflags != ""
+            if cflags.to_s() != ""
                 extraOpts+=" KCFLAGS=\"#{cflags}\" HOSTCFLAGS=\"#{cflags}\""
             end
             return "#{cc} #{hostCC} -j#{opts[:j]} O=#{bDir} #{extraOpts}" +
