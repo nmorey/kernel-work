@@ -267,7 +267,7 @@ module KernelWork
             if opts[:hostcc] != nil
                 hostCC = "HOSTCC=#{opts[:hostcc]}"
             end
-            extraOpts="KERNELRELEASE=\"devel\" KBUILD_BUILD_TIMESTAMP=\"2024-01-01 00:00:00\""
+            extraOpts="KERNELRELEASE=\"devel\" KBUILD_NOCMDDEP=1 KBUILD_BUILD_TIMESTAMP=\"2024-01-01 00:00:00\""
             if opts[:build_verbose] == true then
                 extraOpts+=" #{extraOpts} V=1"
             end
