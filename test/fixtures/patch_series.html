@@ -1,0 +1,478 @@
+<html><head><title>[PATCH rdma-next v2 1/8] RDMA/core: Add rdma_restrack_begin/abort/commit_del() operations - Edward Srouji</title><link
+rel=alternate
+title="Atom feed"
+href="../new.atom"
+type="application/atom+xml"/><meta name=viewport content=width=device-width, initial-scale=1><style>*{overflow-wrap:anywhere;font-size:100%;font-family:monospace}</style><link
+type=text/css
+rel=stylesheet
+media=screen,print
+href=../216light.css?69f21b59 /><link
+type=text/css
+rel=stylesheet
+media="screen and (prefers-color-scheme:dark)"
+href=../216dark.css?69f21b59 /></head><body><form
+action="../"><pre><a
+href="../?t=20260713153855"><b>All of lore.kernel.org</b></a>
+<input
+name=q
+type=text /><input
+type=submit
+value=search /> <a
+href="../_/text/help/">help</a> / <a
+href="../_/text/color/">color</a> / <a
+id=mirror
+href="../_/text/mirror/">mirror</a> / <a
+href="../new.atom">Atom feed</a></pre></form><pre
+id=b>From: Edward Srouji &lt;edwards@nvidia.com&gt;
+To: Jason Gunthorpe &lt;jgg@ziepe.ca&gt;, Leon Romanovsky &lt;leon@kernel.org&gt;,
+	&#34;Dennis Dalessandro&#34; &lt;dennis.dalessandro@cornelisnetworks.com&gt;,
+	Gal Pressman &lt;galpress@amazon.com&gt;,
+	Steve Wise &lt;larrystevenwise@gmail.com&gt;,
+	Mark Bloch &lt;markb@mellanox.com&gt;,
+	Neta Ostrovsky &lt;netao@nvidia.com&gt;,
+	Mark Zhang &lt;markzhang@nvidia.com&gt;,
+	Mark Zhang &lt;markz@mellanox.com&gt;, Majd Dibbiny &lt;majd@mellanox.com&gt;,
+	Yishai Hadas &lt;yishaih@nvidia.com&gt;
+Cc: &lt;<a
+href="../../linux-rdma/?t=20260713153855">linux-rdma@vger.kernel.org</a>&gt;, &lt;<a
+href="../../lkml/?t=20260713153855">linux-kernel@vger.kernel.org</a>&gt;,
+	&#34;Edward Srouji&#34; &lt;edwards@nvidia.com&gt;,
+	Patrisious Haddad &lt;phaddad@nvidia.com&gt;,
+	&#34;Michael Guralnik&#34; &lt;michaelgur@nvidia.com&gt;
+Subject: <a
+href="#r"
+id=t>[PATCH rdma-next v2 1/8] RDMA/core: Add rdma_restrack_begin/abort/commit_del() operations</a>
+Date: Mon, 13 Jul 2026 18:38:00 +0300	<a
+href="#r">[thread overview]</a>
+Message-ID: &lt;20260713-restrack-uaf-fix-resub-v2-1-bbe8bb270d51@nvidia.com&gt; (<a href="raw">raw</a>)
+In-Reply-To: &lt;<a
+href="../20260713-restrack-uaf-fix-resub-v2-0-bbe8bb270d51@nvidia.com/">20260713-restrack-uaf-fix-resub-v2-0-bbe8bb270d51@nvidia.com</a>&gt;
+
+From: Patrisious Haddad &lt;phaddad@nvidia.com&gt;
+
+Add rdma_restrack_abort_del(), rdma_restrack_begin_del() and
+rdma_restrack_commit_del() functions to allow deleting a resource from
+the xarray to effectively prevent future access to it and wait for all
+current users to finish while preserving its index in the xarray to
+allow to re-insert it if needed with guaranteed success.
+
+This is a preparatory change for subsequent patches in the series
+which will use these functions to fix the cleanup flow.
+
+Signed-off-by: Patrisious Haddad &lt;phaddad@nvidia.com&gt;
+Reviewed-by: Michael Guralnik &lt;michaelgur@nvidia.com&gt;
+Signed-off-by: Edward Srouji &lt;edwards@nvidia.com&gt;
+---
+ <a
+id=iZ31drivers:infiniband:core:restrack.c
+href=#Z31drivers:infiniband:core:restrack.c>drivers/infiniband/core/restrack.c</a> | 165 +++++++++++++++++++++++++++++--------
+ <a
+id=iZ31drivers:infiniband:core:restrack.h
+href=#Z31drivers:infiniband:core:restrack.h>drivers/infiniband/core/restrack.h</a> |   3 +
+ 2 files <a href="#related">changed</a>, 135 insertions(+), 33 deletions(-)
+
+<span
+class="head"><a
+href=#iZ31drivers:infiniband:core:restrack.c
+id=Z31drivers:infiniband:core:restrack.c>diff</a> --git a/drivers/infiniband/core/restrack.c b/drivers/infiniband/core/restrack.c
+index cfee2071586c16e3dfc4e21e5d58f8488dfb277f..0d7e40f63c8a00fe53441b3d2ff14ea5fd72e82b 100644
+--- a/drivers/infiniband/core/restrack.c
++++ b/drivers/infiniband/core/restrack.c
+</span><span
+class="hunk">@@ -129,6 +129,46 @@ static void rdma_restrack_attach_task(struct rdma_restrack_entry *res,
+</span> 	res-&gt;user = true;
+ }
+ 
+<span
+class="add">+static struct rdma_restrack_root *res_to_rt(struct rdma_restrack_entry *res)
++{
++	struct ib_device *dev = res_to_dev(res);
++
++	if (WARN_ON(!dev))
++		return NULL;
++
++	return &#38;dev-&gt;res[res-&gt;type];
++}
++
++static void restrack_drain_res(struct rdma_restrack_root *rt,
++			       struct rdma_restrack_entry *res)
++{
++	if (rt) {
++		struct rdma_restrack_entry *old;
++
++		old = xa_cmpxchg(&#38;rt-&gt;xa, res-&gt;id, res, XA_ZERO_ENTRY,
++				 GFP_KERNEL);
++		WARN_ON(old != res);
++	}
++
++	rdma_restrack_put(res);
++	wait_for_completion(&#38;res-&gt;comp);
++}
++
++static void restrack_restore_res(struct rdma_restrack_root *rt,
++				 struct rdma_restrack_entry *res)
++{
++	reinit_completion(&#38;res-&gt;comp);
++	kref_init(&#38;res-&gt;kref);
++
++	if (rt) {
++		struct rdma_restrack_entry *old;
++
++		old = xa_cmpxchg(&#38;rt-&gt;xa, res-&gt;id, XA_ZERO_ENTRY, res,
++				 GFP_KERNEL);
++		WARN_ON(old);
++	}
++}
++
+</span> /**
+  * rdma_restrack_set_name() - set the task for this resource
+  * @res:  resource entry
+<span
+class="hunk">@@ -177,22 +217,23 @@ void rdma_restrack_new(struct rdma_restrack_entry *res,
+</span> EXPORT_SYMBOL(rdma_restrack_new);
+ 
+ /**
+<span
+class="del">- * rdma_restrack_add() - add object to the resource tracking database
+</span><span
+class="add">+ * rdma_restrack_add() - add object to the resource tracking database.
++ * If this resource reuses an ID of a resource that was already destroyed
++ * after calling rdma_restrack_begin() but didn&#39;t yet call
++ * rdma_restrack_commit_del() it can result in an untracked QP.
+</span>  * @res:  resource entry
+  */
+ void rdma_restrack_add(struct rdma_restrack_entry *res)
+ {
+<span
+class="del">-	struct ib_device *dev = res_to_dev(res);
+</span> 	struct rdma_restrack_root *rt;
+ 	int ret = 0;
+ 
+<span
+class="del">-	if (!dev)
+-		return;
+-
+</span> 	if (res-&gt;no_track)
+ 		goto out;
+ 
+<span
+class="del">-	rt = &#38;dev-&gt;res[res-&gt;type];
+</span><span
+class="add">+	rt = res_to_rt(res);
++	if (!rt)
++		return;
+</span> 
+ 	if (res-&gt;type == RDMA_RESTRACK_QP) {
+ 		/* Special case to ensure that LQPN points to right QP */
+<span
+class="hunk">@@ -229,6 +270,28 @@ void rdma_restrack_add(struct rdma_restrack_entry *res)
+</span> }
+ EXPORT_SYMBOL(rdma_restrack_add);
+ 
+<span
+class="add">+/**
++ * rdma_restrack_abort_del() - re-add object to the resource tracking database
++ * it can only be used after rdma_restrack_begin_del().
++ * @res:  resource entry
++ */
++void rdma_restrack_abort_del(struct rdma_restrack_entry *res)
++{
++	struct rdma_restrack_root *rt = NULL;
++
++	if (!res-&gt;valid)
++		return;
++
++	if (!res-&gt;no_track) {
++		rt = res_to_rt(res);
++		if (!rt)
++			return;
++	}
++
++	restrack_restore_res(rt, res);
++}
++EXPORT_SYMBOL(rdma_restrack_abort_del);
++
+</span> int __must_check rdma_restrack_get(struct rdma_restrack_entry *res)
+ {
+ 	return kref_get_unless_zero(&#38;res-&gt;kref);
+<span
+class="hunk">@@ -265,7 +328,7 @@ static void restrack_release(struct kref *kref)
+</span> 	struct rdma_restrack_entry *res;
+ 
+ 	res = container_of(kref, struct rdma_restrack_entry, kref);
+<span
+class="del">-	if (res-&gt;task) {
+</span><span
+class="add">+	if (res-&gt;task &#38;&#38; !res-&gt;valid) {
+</span> 		put_task_struct(res-&gt;task);
+ 		res-&gt;task = NULL;
+ 	}
+<span
+class="hunk">@@ -291,37 +354,20 @@ EXPORT_SYMBOL(rdma_restrack_put);
+</span>  */
+ void rdma_restrack_sync(struct rdma_restrack_entry *res)
+ {
+<span
+class="del">-	struct rdma_restrack_entry *old;
+</span> 	struct rdma_restrack_root *rt;
+<span
+class="del">-	struct task_struct *task;
+-	struct ib_device *dev;
+</span> 
+ 	if (!res-&gt;valid || res-&gt;no_track)
+ 		return;
+ 
+<span
+class="del">-	dev = res_to_dev(res);
+-	if (WARN_ON(!dev))
+</span><span
+class="add">+	rt = res_to_rt(res);
++	if (!rt)
+</span> 		return;
+ 
+<span
+class="del">-	rt = &#38;dev-&gt;res[res-&gt;type];
+</span> 	if (WARN_ON(xa_get_mark(&#38;rt-&gt;xa, res-&gt;id, RESTRACK_DD)))
+ 		return;
+ 
+<span
+class="del">-	old = xa_cmpxchg(&#38;rt-&gt;xa, res-&gt;id, res, XA_ZERO_ENTRY, GFP_KERNEL);
+-	if (WARN_ON(old != res))
+-		return;
+-
+-	task = res-&gt;task;
+-	if (task)
+-		get_task_struct(task);
+-	rdma_restrack_put(res);
+-	wait_for_completion(&#38;res-&gt;comp);
+-	reinit_completion(&#38;res-&gt;comp);
+-	if (task)
+-		res-&gt;task = task;
+-	kref_init(&#38;res-&gt;kref);
+-
+-	xa_cmpxchg(&#38;rt-&gt;xa, res-&gt;id, XA_ZERO_ENTRY, res, GFP_KERNEL);
+</span><span
+class="add">+	restrack_drain_res(rt, res);
++	restrack_restore_res(rt, res);
+</span> }
+ EXPORT_SYMBOL(rdma_restrack_sync);
+ 
+<span
+class="hunk">@@ -333,7 +379,6 @@ void rdma_restrack_del(struct rdma_restrack_entry *res)
+</span> {
+ 	struct rdma_restrack_entry *old;
+ 	struct rdma_restrack_root *rt;
+<span
+class="del">-	struct ib_device *dev;
+</span> 
+ 	if (!res-&gt;valid) {
+ 		if (res-&gt;task) {
+<span
+class="hunk">@@ -346,12 +391,10 @@ void rdma_restrack_del(struct rdma_restrack_entry *res)
+</span> 	if (res-&gt;no_track)
+ 		goto out;
+ 
+<span
+class="del">-	dev = res_to_dev(res);
+-	if (WARN_ON(!dev))
+</span><span
+class="add">+	rt = res_to_rt(res);
++	if (!rt)
+</span> 		return;
+ 
+<span
+class="del">-	rt = &#38;dev-&gt;res[res-&gt;type];
+-
+</span> 	old = xa_erase(&#38;rt-&gt;xa, res-&gt;id);
+ 	WARN_ON(old != res);
+ 
+<span
+class="hunk">@@ -359,5 +402,61 @@ void rdma_restrack_del(struct rdma_restrack_entry *res)
+</span> 	res-&gt;valid = false;
+ 	rdma_restrack_put(res);
+ 	wait_for_completion(&#38;res-&gt;comp);
+<span
+class="add">+	if (res-&gt;task) {
++		put_task_struct(res-&gt;task);
++		res-&gt;task = NULL;
++	}
+</span> }
+ EXPORT_SYMBOL(rdma_restrack_del);
+<span
+class="add">+
++/**
++ * rdma_restrack_begin_del() - invalidate the object from the resource tracking
++ * database but preserve its index in the array.
++ * Since this preserves the index in the array until rdma_restrack_commit_del()
++ * is called, if rdma_restrack_add() is called in between with an old QP ID it
++ * can result in an untracked QP.
++ * @res:  resource entry
++ */
++void rdma_restrack_begin_del(struct rdma_restrack_entry *res)
++{
++	struct rdma_restrack_root *rt = NULL;
++
++	if (!res-&gt;valid)
++		return;
++
++	if (!res-&gt;no_track) {
++		rt = res_to_rt(res);
++		if (!rt)
++			return;
++	}
++
++	restrack_drain_res(rt, res);
++}
++EXPORT_SYMBOL(rdma_restrack_begin_del);
++
++/**
++ * rdma_restrack_commit_del() - delete object from the resource tracking
++ * database and free the task.
++ * @res:  resource entry
++ */
++void rdma_restrack_commit_del(struct rdma_restrack_entry *res)
++{
++	struct rdma_restrack_root *rt;
++
++	if (!res-&gt;valid || res-&gt;no_track)
++		goto out;
++
++	rt = res_to_rt(res);
++	if (!rt)
++		return;
++
++	xa_erase(&#38;rt-&gt;xa, res-&gt;id);
++
++out:
++	res-&gt;valid = false;
++	if (res-&gt;task) {
++		put_task_struct(res-&gt;task);
++		res-&gt;task = NULL;
++	}
++}
++EXPORT_SYMBOL(rdma_restrack_commit_del);
+</span><span
+class="head"><a
+href=#iZ31drivers:infiniband:core:restrack.h
+id=Z31drivers:infiniband:core:restrack.h>diff</a> --git a/drivers/infiniband/core/restrack.h b/drivers/infiniband/core/restrack.h
+index 75b8d1005a984b21896e296ac6ace1415a90905f..2df78e084e107c517a2468982add74ce3562e5f2 100644
+--- a/drivers/infiniband/core/restrack.h
++++ b/drivers/infiniband/core/restrack.h
+</span><span
+class="hunk">@@ -26,8 +26,11 @@ struct rdma_restrack_root {
+</span> int rdma_restrack_init(struct ib_device *dev);
+ void rdma_restrack_clean(struct ib_device *dev);
+ void rdma_restrack_add(struct rdma_restrack_entry *res);
+<span
+class="add">+void rdma_restrack_abort_del(struct rdma_restrack_entry *res);
+</span> void rdma_restrack_del(struct rdma_restrack_entry *res);
+ void rdma_restrack_sync(struct rdma_restrack_entry *res);
+<span
+class="add">+void rdma_restrack_begin_del(struct rdma_restrack_entry *res);
++void rdma_restrack_commit_del(struct rdma_restrack_entry *res);
+</span> void rdma_restrack_new(struct rdma_restrack_entry *res,
+ 		       enum rdma_restrack_type type);
+ void rdma_restrack_set_name(struct rdma_restrack_entry *res,
+
+-- 
+2.49.0
+
+</pre><hr><pre><a
+href="../20260713-restrack-uaf-fix-resub-v2-2-bbe8bb270d51@nvidia.com/"
+rel=next>next</a> <a
+href="../20260713-restrack-uaf-fix-resub-v2-0-bbe8bb270d51@nvidia.com/"
+rel=prev>prev parent</a> <a
+href="#R">reply</a>	other threads:[<a
+href="../?t=20260713153855">~2026-07-13 15:38 UTC</a>|<a
+href="../">newest</a>]
+
+<b>Thread overview: </b>10+ messages / expand[<a
+href="T/#u">flat</a>|<a
+href="t/#u">nested</a>]  <a
+href="t.mbox.gz">mbox.gz</a>  <a
+href="t.atom">Atom feed</a>  <a
+href="#b">top</a>
+2026-07-13 15:37 <a
+href="../20260713-restrack-uaf-fix-resub-v2-0-bbe8bb270d51@nvidia.com/">[PATCH rdma-next v2 0/8] RDMA/core: Fix restrack UAF in destroy flows</a> Edward Srouji
+<b>2026-07-13 15:38 ` <a
+id=r
+href="#t">Edward Srouji [this message]</a></b>
+2026-07-13 15:38 ` <a
+href="../20260713-restrack-uaf-fix-resub-v2-2-bbe8bb270d51@nvidia.com/">[PATCH rdma-next v2 2/8] RDMA/core: Fix use after free in ib_query_qp()</a> Edward Srouji
+2026-07-13 15:38 ` <a
+href="../20260713-restrack-uaf-fix-resub-v2-3-bbe8bb270d51@nvidia.com/">[PATCH rdma-next v2 3/8] RDMA/core: Fix potential use after free in ib_destroy_cq_user()</a> Edward Srouji
+2026-07-13 15:38 ` <a
+href="../20260713-restrack-uaf-fix-resub-v2-4-bbe8bb270d51@nvidia.com/">[PATCH rdma-next v2 4/8] RDMA/core: Fix potential use after free in ib_destroy_srq_user()</a> Edward Srouji
+2026-07-13 15:38 ` <a
+href="../20260713-restrack-uaf-fix-resub-v2-5-bbe8bb270d51@nvidia.com/">[PATCH rdma-next v2 5/8] RDMA/core: Fix potential use after free in counter_release()</a> Edward Srouji
+2026-07-13 15:38 ` <a
+href="../20260713-restrack-uaf-fix-resub-v2-6-bbe8bb270d51@nvidia.com/">[PATCH rdma-next v2 6/8] RDMA/core: Fix potential use after free in ib_free_cq()</a> Edward Srouji
+2026-07-13 15:38 ` <a
+href="../20260713-restrack-uaf-fix-resub-v2-7-bbe8bb270d51@nvidia.com/">[PATCH rdma-next v2 7/8] RDMA/core: Fix potential use after free in uverbs_free_dmah()</a> Edward Srouji
+2026-07-13 15:38 ` <a
+href="../20260713-restrack-uaf-fix-resub-v2-8-bbe8bb270d51@nvidia.com/">[PATCH rdma-next v2 8/8] RDMA/core: Fix potential use after free in ib_dealloc_pd_user()</a> Edward Srouji
+2026-07-22  9:40 ` <a
+href="../178471322971.2834918.5524383712332668395.b4-ty@kernel.org/">[PATCH rdma-next v2 0/8] RDMA/core: Fix restrack UAF in destroy flows</a> Leon Romanovsky
+</pre><form id=related
+action=../
+><pre>find likely ancestor, descendant, or conflicting patches for <a
+href=#t>this message</a>:
+<textarea name=q cols=72 rows=6>( dfblob:cfee2071586c16e3dfc4e21e5d58f8488dfb277
+dfblob:0d7e40f63c8a00fe53441b3d2ff14ea5fd72e82
+dfblob:75b8d1005a984b21896e296ac6ace1415a90905
+dfblob:2df78e084e107c517a2468982add74ce3562e5f )
+ OR (
+bs:&#34;[PATCH rdma-next v2 1/8] RDMA/core: Add rdma_restrack_begin/abort/commit_del() operations&#34; )</textarea>
+<input type=submit value=search
+/>	(<a href=../_/text/help/#search>help</a>)</pre></form>
+<hr><pre
+id=R><b>Reply instructions:</b>
+
+You may reply publicly to <a
+href=#t>this message</a> via plain-text email
+using any one of the following methods:
+
+* Save the following mbox file, import it into your mail client,
+  and reply-to-all from there: <a
+href=raw>mbox</a>
+
+  Avoid top-posting and favor interleaved quoting:
+  <a
+href="https://en.wikipedia.org/wiki/Posting_style#Interleaved_style">https://en.wikipedia.org/wiki/Posting_style#Interleaved_style</a>
+
+* Reply using the <b>--to</b>, <b>--cc</b>, and <b>--in-reply-to</b>
+  switches of git-send-email(1):
+
+  git send-email \
+    --in-reply-to=20260713-restrack-uaf-fix-resub-v2-1-bbe8bb270d51@nvidia.com \
+    --to=edwards@nvidia.com \
+    --cc=dennis.dalessandro@cornelisnetworks.com \
+    --cc=galpress@amazon.com \
+    --cc=jgg@ziepe.ca \
+    --cc=larrystevenwise@gmail.com \
+    --cc=leon@kernel.org \
+    --cc=linux-kernel@vger.kernel.org \
+    --cc=linux-rdma@vger.kernel.org \
+    --cc=majd@mellanox.com \
+    --cc=markb@mellanox.com \
+    --cc=markz@mellanox.com \
+    --cc=markzhang@nvidia.com \
+    --cc=michaelgur@nvidia.com \
+    --cc=netao@nvidia.com \
+    --cc=phaddad@nvidia.com \
+    --cc=yishaih@nvidia.com \
+    /path/to/YOUR_REPLY
+
+  <a
+href="https://kernel.org/pub/software/scm/git/docs/git-send-email.html">https://kernel.org/pub/software/scm/git/docs/git-send-email.html</a>
+
+* If your mail client supports setting the <b>In-Reply-To</b> header
+  via mailto: links, try the <a
+href="mailto:edwards@nvidia.com?In-Reply-To=%3C20260713-restrack-uaf-fix-resub-v2-1-bbe8bb270d51@nvidia.com%3E&#38;Cc=dennis.dalessandro%40cornelisnetworks.com%2Cgalpress%40amazon.com%2Cjgg%40ziepe.ca%2Clarrystevenwise%40gmail.com%2Cleon%40kernel.org%2Clinux-kernel%40vger.kernel.org%2Clinux-rdma%40vger.kernel.org%2Cmajd%40mellanox.com%2Cmarkb%40mellanox.com%2Cmarkz%40mellanox.com%2Cmarkzhang%40nvidia.com%2Cmichaelgur%40nvidia.com%2Cnetao%40nvidia.com%2Cphaddad%40nvidia.com%2Cyishaih%40nvidia.com&#38;Subject=Re%3A%20%5BPATCH%20rdma-next%20v2%201%2F8%5D%20RDMA%2Fcore%3A%20Add%20rdma_restrack_begin%2Fabort%2Fcommit_del%28%29%20operations">mailto: link</a>
+</pre>
+
+  Be sure your reply has a <b>Subject:</b> header at the top and a blank line
+  before the message body.
+<hr><pre>This is an external index of several public inboxes,
+see <a href="../_/text/mirror/">mirroring instructions</a> on how to clone and mirror
+all data and code used by this external index.</pre></body></html>

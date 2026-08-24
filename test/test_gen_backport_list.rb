@@ -166,6 +166,56 @@ else
   failures += 1
 end
 
+# Test Case 10: Commit#lore_links tag parsing
+test_commit_link = KernelWork::TestCommit.new("link-sha")
+test_commit_link.commit_message = <<~MSG
+  Subject line
+
+  Some description
+  Link: https://patch.msgid.link/20260713-restrack-uaf-fix-resub-v2-1-bbe8bb270d51@nvidia.com
+  Link: https://lore.kernel.org/r/abc-123@example.com
+  Link: https://github.com/torvalds/linux/commit/1234
+MSG
+
+links = test_commit_link.lore_links()
+expected_links = [
+  "https://patch.msgid.link/20260713-restrack-uaf-fix-resub-v2-1-bbe8bb270d51@nvidia.com",
+  "https://lore.kernel.org/r/abc-123@example.com"
+]
+if links == expected_links
+  puts "Test Case 10 Passed"
+else
+  puts "Test Case 10 FAILED!"
+  puts "  Expected: #{expected_links}"
+  puts "  Got:      #{links}"
+  failures += 1
+end
+
+# Test Case 11: Commit.parse_series_html from local fixture file
+fixture_path = File.join(File.dirname(__FILE__), "fixtures", "patch_series.html")
+if File.exist?(fixture_path)
+  html_content = File.read(fixture_path)
+  series_commits = KernelWork::Commit.parse_series_html(html_content)
+  expected_series = [
+    "RDMA/core: Add rdma_restrack_begin/abort/commit_del() operations",
+    "RDMA/core: Fix use after free in ib_query_qp()",
+    "RDMA/core: Fix potential use after free in ib_destroy_cq_user()",
+    "RDMA/core: Fix potential use after free in ib_destroy_srq_user()",
+    "RDMA/core: Fix potential use after free in counter_release()",
+    "RDMA/core: Fix potential use after free in ib_free_cq()",
+    "RDMA/core: Fix potential use after free in uverbs_free_dmah()",
+    "RDMA/core: Fix potential use after free in ib_dealloc_pd_user()"
+  ]
+  if series_commits == expected_series
+    puts "Test Case 11 Passed"
+  else
+    puts "Test Case 11 FAILED!"
+    puts "  Expected: #{expected_series}"
+    puts "  Got:      #{series_commits}"
+    failures += 1
+  end
+end
+
 if failures == 0
   puts "All tests passed successfully!"
   exit 0

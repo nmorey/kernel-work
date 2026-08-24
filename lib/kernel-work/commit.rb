@@ -1,3 +1,6 @@
+require 'cgi'
+require 'open3'
+
 module KernelWork
     # Represents a git commit with utility methods to retrieve metadata
     class Commit < Common
@@ -129,6 +132,91 @@ module KernelWork
                 # Ignore errors and return empty list
             end
             @fixes_shas
+        end
+
+        # Extract Link: URLs matching patch.msgid.link or lore.kernel.org from the commit message
+        #
+        # @return [Array<String>] List of matching Link URLs
+        def lore_links()
+            return @lore_links if @lore_links != nil
+            @lore_links = []
+            begin
+                msg = runGit("log -n1 --format=%B #{@sha}")
+                msg.each_line do |line|
+                    if line =~ /^\s*Link:\s*<?(https?:\/\/(?:patch\.msgid\.link|lore\.kernel\.org)[^\s>]+)>?/i
+                        @lore_links << $1
+                    end
+                end
+            rescue
+                # Ignore errors and return empty list
+            end
+            @lore_links
+        end
+
+        # Parse patch series commit subjects from public-inbox HTML
+        #
+        # @param html [String, nil] The HTML content
+        # @return [Array<String>] List of commit subjects in the patch series (ordered)
+        def self.parse_series_html(html)
+            return [] if html.nil? || html.empty?
+
+            current_subject = nil
+            if html =~ /Subject:\s*<a[^>]*id=t[^>]*>(.*?)<\/a>/m
+                current_subject = CGI.unescapeHTML($1.strip)
+            elsif html =~ /<title>(.*?)<\/title>/m
+                title = CGI.unescapeHTML($1.strip)
+                current_subject = title.sub(/\s+-\s+[^-]+$/, "")
+            end
+
+            idx, total, subj = nil, nil, nil
+            if current_subject && current_subject =~ /\[[^\]]*?\b(\d+)\/(\d+)\b[^\]]*\]\s*(.*)$/
+                idx = $1.to_i
+                total = $2.to_i
+                subj = $3.strip
+            end
+
+            return [] if total.nil? || total <= 1
+
+            patches = {}
+            patches[idx] = subj if idx && idx > 0
+
+            html.scan(/<a\s+[^>]*href="([^"]+)"[^>]*>([^<]+)<\/a>/m) do |_href, text|
+                text = CGI.unescapeHTML(text.strip)
+                if text =~ /\[[^\]]*?\b(\d+)\/(\d+)\b[^\]]*\]\s*(.*)$/
+                    p_idx = $1.to_i
+                    p_total = $2.to_i
+                    p_subj = $3.strip
+                    if p_total == total && p_idx > 0
+                        patches[p_idx] ||= p_subj
+                    end
+                end
+            end
+
+            patches.keys.sort.map { |k| patches[k] }
+        end
+
+        # Retrieve patch series commit names if commit is part of a patch series on lore / patch.msgid.link
+        #
+        # @return [Array<String>] List of commit subjects in the patch series
+        def patch_series()
+            return @patch_series if @patch_series != nil
+            @patch_series = []
+
+            lore_links().each do |url|
+                html = nil
+                begin
+                    stdout, stderr, status = Open3.capture3("curl", "-sL", "-A", "kernel-work/1.0", url)
+                    next unless status.success?
+                    html = stdout
+                rescue
+                    next
+                end
+
+                @patch_series = self.class.parse_series_html(html)
+                break unless @patch_series.empty?
+            end
+
+            @patch_series
         end
 
         # String representation of the commit

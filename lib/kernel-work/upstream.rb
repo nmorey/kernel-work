@@ -779,6 +779,14 @@ module KernelWork
                 end
             end
 
+            series = commit.patch_series()
+            if !series.empty?
+                log(:INFO, "Patch is part of a series:")
+                series.each do |series_commit_name|
+                    log(:INFO, "  #{series_commit_name}")
+                end
+            end
+
             while rep != "y"
                 rep = confirm(opts, "pick commit '#{desc}' up",
                               false, ["y", "n", "?", "r"])
