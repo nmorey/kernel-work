@@ -773,7 +773,8 @@ module KernelWork
                     end
                     if is_fixes_sha_in_house?(f_sha, inHouse, suse_commit_ids)
                         log(:INFO, "Patch fixes backported #{f_desc}")
-                    else
+                    elsif suse_commit_ids != nil
+                        # Only show unbackported if we listed commt_ids
                         log(:WARNING, "Patch fixes unbackported #{f_desc}")
                     end
                 end
