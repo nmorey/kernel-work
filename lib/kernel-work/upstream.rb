@@ -872,7 +872,7 @@ module KernelWork
                 end
             end
 
-            raise SCPNotApplied.new()
+            raise SCPNotApplied.new() if rep != "y"
 
             begin
                 _cherry_pick_one(opts, commit)
