@@ -316,6 +316,14 @@ module KernelWork
 
         end
 
+        def build_commit(opts, commit)
+            subset = _find_build_subset(commit)
+            log(:INFO, "building subtree '#{subset}'...")
+            build_opts = opts.dup
+            build_opts[:build_subset] = subset
+            return build(build_opts)
+       end
+
         # Get mainline tag containing the commit
         # @param commit [Commit] Commit object
         # @return [String] Tag name
@@ -928,5 +936,49 @@ module KernelWork
                 end
             end
        end
+
+        # Find build subset based on modified files
+        # @param commit [Commit] Commit to identify changed in
+        def _find_build_subset(commit)
+            begin
+                files_raw = runGit("diff-tree --no-commit-id --name-only -r #{commit.f_sha}")
+                files = files_raw.split("\n").map(&:strip).reject(&:empty?)
+            rescue => e
+                raise PatchSubsetNotFoundError.new()  if files.empty?
+            end
+
+            raise PatchSubsetNotFoundError.new()  if files.empty?
+            dirs = files.map { |f|
+                if f =~ /^include\//
+                    nil
+                else
+                    f = File.dirname(f) while ! File.exist?("#{@path}/#{f}/Makefile")
+                    f
+                end
+            }.uniq.compact
+
+            merged_dirs = [ dirs[0] ]
+            dirs[1..-1].each do |dir|
+                matched = false
+                merged_dirs.each_with_index do  |mdir, idx|
+                    # dir is already in mdir skip
+                    if dir =~ /^#{mdir}\//
+                        matched = true
+                        break
+                    end
+                    if mdir =~ /^#{dir}\//
+                        # mdir is in dir, swap them
+                        merged_dirs[idx] = dir
+                        matched = true
+                        # Do not break here, we might be a higher level than other subdirs.
+                        # We'll replace them all and uniq! at the end
+                        next
+                    end
+                end
+                merged_dirs << dir if matched == false
+            end
+            merged_dirs.compact
+        end
+
     end
 end

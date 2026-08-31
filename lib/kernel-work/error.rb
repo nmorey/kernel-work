@@ -154,4 +154,8 @@ module KernelWork
             super("Saved filter '#{name}' not found in configuration")
         end
     end
+
+    # Exception thrown when the patch modified subset could not be found
+    class PatchSubsetNotFoundError < KernelWorkError
+    end
 end
