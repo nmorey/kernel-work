@@ -36,6 +36,14 @@ module KernelWork
         end
     end
 
+    # Exception when SCP is given a patch that is already applied.
+    class SCPAlreadyApplied < KernelWorkError
+    end
+
+    # Exception when the user decided to not apply a patch given to SCP
+    class SCPNotApplied < KernelWorkError
+    end
+
     # Exception raised when git-fixes cannot be fetched
     class GitFixesFetchError < KernelWorkError
     end

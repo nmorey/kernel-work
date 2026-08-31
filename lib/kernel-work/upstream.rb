@@ -632,6 +632,72 @@ module KernelWork
             return scp(opts)
         end
 
+        # Returns [status, unhandled_shas]
+        # Internal method to loop through multiple commits for SCP
+        #
+        # @param opts [Hash] Options hash
+        # @param commits [Array<Commit>] List of commits to backport
+        # @param block Optional per commit callback
+        # @return [void]
+        def _scp(opts, commits, &block)
+            inHouse = nil
+            suse_commit_ids = nil
+
+            while ! commits.empty?
+                commit = commits.first
+                begin
+                    log(:INFO, "# #{commits.length} commits left")
+
+                    # Lazily load inHouse and suse_commit_ids if commit has Fixes: tags
+                    fixes = commit.fixes_shas()
+                    # Do not bother with git fixes in CVE mode
+                    if !fixes.empty? &&  opts[:cve] != true
+                        if inHouse.nil?
+                            log(:INFO, "Commit has 'Fixes:' tag. Initializing local branch commit list...")
+                            begin
+                                inHouse = genBackportList(local_branch(), opts[:upstream_ref] || "origin/master", opts[:filter] || {})
+                            rescue
+                                inHouse = []
+                            end
+                        end
+                        if suse_commit_ids.nil?
+                            suse_commit_ids = @suse.gen_commit_id_list(opts)
+                        end
+                    end
+
+                    begin
+                        _scp_one(opts, commit, inHouse, suse_commit_ids)
+                        if block_given?
+                            yield(commit)
+                        end
+                    rescue SCPSkip, SCPAlreadyApplied, SCPNotApplied => e
+                        # For some reason, we did not apply the patch, but we
+                        # do not abort and keep going
+                         if block_given?
+                            yield(commit, e)
+                        end
+                    end
+
+                    # If successful pick, update the dynamic list
+                    if !inHouse.nil?
+                        inHouse << commit
+                    end
+                    if !suse_commit_ids.nil?
+                        suse_commit_ids[commit.sha] = true
+                    end
+
+                    commits.shift # Remove success from list
+
+                rescue SCPAbort => e
+                    log(:INFO, "Aborted")
+                     raise e
+                rescue Interrupt
+                    log(:INFO, "Interrupted")
+                    raise SCPAbort.new()
+                end
+            end
+        end
+
         ###########################################
         #### PRIVATE methods                   ####
         ###########################################
@@ -759,7 +825,7 @@ module KernelWork
 
             if @suse.is_applied?(commit)
                 log(:INFO, "Patch already applied in KERNEL_SOURCE_DIR: #{desc}")
-                return 0
+                raise SCPAlreadyApplied.new()
             end
 
             fixes = commit.fixes_shas()
@@ -806,12 +872,10 @@ module KernelWork
                 end
             end
 
-            return 0 if rep != "y"
+            raise SCPNotApplied.new()
 
             begin
                 _cherry_pick_one(opts, commit)
-            rescue SCPSkip
-                return 0
             end
 
             begin
@@ -824,58 +888,6 @@ module KernelWork
             _tune_last_patch(opts)
         end
 
-        # Returns [status, unhandled_shas]
-        # Internal method to loop through multiple commits for SCP
-        #
-        # @param opts [Hash] Options hash
-        # @param commits [Array<Commit>] List of commits to backport
-        # @return [void]
-        def _scp(opts, commits)
-            inHouse = nil
-            suse_commit_ids = nil
-
-            while ! commits.empty?
-                commit = commits.first
-                begin
-                    log(:INFO, "# #{commits.length} commits left")
-
-                    # Lazily load inHouse and suse_commit_ids if commit has Fixes: tags
-                    fixes = commit.fixes_shas()
-                    # Do not bother with git fixes in CVE mode
-                    if !fixes.empty? &&  opts[:cve] != true
-                        if inHouse.nil?
-                            log(:INFO, "Commit has 'Fixes:' tag. Initializing local branch commit list...")
-                            begin
-                                inHouse = genBackportList(local_branch(), opts[:upstream_ref] || "origin/master", opts[:filter] || {})
-                            rescue
-                                inHouse = []
-                            end
-                        end
-                        if suse_commit_ids.nil?
-                            suse_commit_ids = @suse.gen_commit_id_list(opts)
-                        end
-                    end
-
-                    _scp_one(opts, commit, inHouse, suse_commit_ids)
-
-                    # If successful pick, update the dynamic list
-                    if !inHouse.nil?
-                        inHouse << commit
-                    end
-                    if !suse_commit_ids.nil?
-                        suse_commit_ids[commit.sha] = true
-                    end
-
-                    commits.shift # Remove success from list
-                rescue SCPAbort => e
-                    log(:INFO, "Aborted")
-                     raise e
-                rescue Interrupt
-                    log(:INFO, "Interrupted")
-                    raise SCPAbort.new()
-                end
-            end
-        end
 
         def is_fixes_sha_in_house?(f_sha, inHouse, suse_commit_ids)
             # 1. Is it an ancestor of HEAD in LINUX_GIT?
