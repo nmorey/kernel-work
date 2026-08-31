@@ -164,10 +164,6 @@ module KernelWork
         # @param opts [Hash] The options hash
         # @raise [RuntimeError] If required options are missing
         def self.check_opts(opts)
-            case opts[:action]
-            when :build_subset
-                raise("Path to build is needed") if opts[:build_subset].to_s() == ""
-            end
 
             # Check and load filter options early
             Common.check_filter_opts(opts)
