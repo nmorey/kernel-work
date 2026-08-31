@@ -11,6 +11,8 @@ module KernelWork
         # @!attribute [r] git_repo
         #   @return [String] The git repository URL where the commit was introduced (ie maintainer tree)
         attr_reader :sha, :orig_tag, :git_repo
+        attr_accessor :data
+        attr_accessor :extra_desc
 
         # Initialize a new Commit object
         #
@@ -74,7 +76,7 @@ module KernelWork
         #
         # @return [String] Description string
         def desc()
-            "#{@sha[0..11]} (\"#{subject()}\")"
+            "#{@sha[0..11]} (\"#{subject()}\")" + (@extra_desc != nil ? " #{extra_desc}" : "")
         end
 
         # Check if the commit info is valid and present in tags or maintainer branches
