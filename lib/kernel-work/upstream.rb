@@ -65,7 +65,7 @@ module KernelWork
             opts[:skip_broken] = false
             opts[:old_kernel] = false
             opts[:oldconfig_full] = false
-            opts[:build_subset] = nil
+            opts[:build_subset] = []
             opts[:git_fixes_subtree] = KernelWork.config.upstream.git_fixes_subtree
             opts[:git_fixes_listonly] = false
             opts[:upstream_ref] = "origin/master"
@@ -115,11 +115,11 @@ module KernelWork
                     |val| opts[:file] = val }
             when :build
                 optsParser.on("-p", "--path <path>", String,
-                              "Path to subtree to build.") {
-                    |val| opts[:build_subset] = val}
+                              "Path to subtree to build. Can be specified multiple times.") {
+                    |val| opts[:build_subset] << val}
                 optsParser.on("-I", "--infiniband", String,
                               "Build infiniband subtree") {
-                    |val| opts[:build_subset] = "drivers/infiniband"}
+                    |val| opts[:build_subset] << "drivers/infiniband"}
                 optsParser.on("-v", "--verbose",
                               "Build with V=1") {
                     |val| opts[:build_verbose] = true}
@@ -508,7 +508,7 @@ module KernelWork
         # @return [Integer] Exit code
         def build(opts)
             buildTarget=""
-            if opts[:build_subset] != nil then
+            if opts[:build_subset].length != 0 then
                 sub=opts[:build_subset]
                 buildTarget=""
 
@@ -516,15 +516,9 @@ module KernelWork
                     ver=get_kernel_base()
                     opts[:old_kernel] = true if ver < KV.new(5,3)
                 end
-                if opts[:old_kernel] == true then
-                    # M= does not like trailing /
-                    sub=sub.gsub(/\/*$/, '')
-                    buildTarget="SUBDIRS=#{sub}"
-                else
-                    # Newer build system do require one and only one though
-                    sub=sub.gsub( /\/+$/, '') + '/'
-                    buildTarget="#{sub}"
-                end
+                # Newer build system do require one and only one though
+                sub=sub.map(){|s| s.gsub( /\/+$/, '') + '/'}
+                buildTarget="#{sub.join(" ")}"
             end
 
             # Auto run olddefconfig if necessary
