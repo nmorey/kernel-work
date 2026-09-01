@@ -17,6 +17,7 @@ require_relative 'kernel-work/upstream'
 require_relative 'kernel-work/suse'
 require_relative 'kernel-work/wenv'
 require_relative 'kernel-work/config_cli'
+require_relative 'kernel-work/cve'
 
 module KernelWork
   ACTION_CLASS = [ Suse, Upstream ]

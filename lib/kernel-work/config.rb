@@ -71,6 +71,13 @@ module KernelWork
                :no_sorted_series => true
             },
         ]
+      },
+      cve: {
+        bugzilla_url: "https://apibugzilla.suse.com",
+        bugzilla_user: "",
+        data_repo: "~/workspace/cve-data",
+        tracker_type: "local",
+        tracker_url: ""
       }
     }
 
@@ -123,6 +130,12 @@ module KernelWork
     # @return [RecursiveConfig]
     def suse
         RecursiveConfig.new(@settings[:suse])
+    end
+
+    # Access CVE specific configuration
+    # @return [RecursiveConfig]
+    def cve
+        RecursiveConfig.new(@settings[:cve] || {})
     end
 
     # Load configuration from YAML file and merge with defaults

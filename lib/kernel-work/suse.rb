@@ -5,6 +5,7 @@ module KernelWork
 
     # Class for handling SUSE kernel source directory operations
     class Suse < Common
+        attr_reader :upstream
 
         # List of available actions for Suse class
         ACTION_LIST = [
