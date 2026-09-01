@@ -334,6 +334,20 @@ module KernelWork
             end
         end
 
+        # Return the last kernel source commit that touched the patch matching
+        # a linux upstream sha
+        # @param sha [Commit, String] Commit or SHA
+        # @return [String] Kernel source SHA or nil
+        def get_suse_commit(sha)
+            sha = sha.sha if sha.is_a?(Commit)
+            begin
+                file = runGit("grep -l #{sha}", {})
+                sha = runGit("log -n1 --format='%H' -- #{file}")
+                return sha
+            rescue
+                return nil
+            end
+        end
 
         # Git command to list unmerged commits
         # @param opts [Hash] Options hash
