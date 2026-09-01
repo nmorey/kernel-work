@@ -262,22 +262,47 @@ module KernelWork
                     patchlist << c
                 end
 
-                begin
-                    @upstream._scp(scp_opts, patchlist) do |commit, error = nil|
-                        todo = commit.data
-                        bug_id = todo[:bug_id]
-                        sha = todo[:cve_data][:fix_sha]
-                        if error == nil
-                            @upstream.build_commit(opts, commit)
+                if patchlist.length == 0
+                    log(:INFO, "Nothing to apply")
+                    return
+                end
+                unpushed_commits = @suse.runGit(@suse._list_unpushed_cmd(opts)).
+                                       split("\n").map(){ |line| line.split.first }
+                unmerged_commits = @suse.runGit(@suse._list_unmerged_cmd(opts)).
+                                       split("\n").map(){ |line| line.split.first }
+                @upstream._scp(scp_opts, patchlist) do |commit, error = nil|
+                    todo = commit.data
+                    bug_id = todo[:bug_id]
+                    sha = todo[:cve_data][:fix_sha]
+                    newState = nil
+
+                    if error == nil
+                        @upstream.build_commit(opts, commit)
+                        newState = "Applied"
+                    elsif error.class == SCPAlreadyApplied
+                        # Check if it's applied locally, already pushed or even merged
+                        kSha = @suse.get_suse_commit(sha)
+                        raise KernelWorkError.new() if kSha == nil
+
+                        if unpushed_commits.index(kSha) != nil
+                            # Commit is unpushed, let's go normaly
+                            newState = "Applied"
+                        elsif unmerged_commits.index(kSha) != nil
+                            # Commit is pushed but unmerge. Mark as pushed
+                            newState = "Pushed"
+                        else
+                            # It's neither unpushed not unmerge. It's merged then !
+                            newState = "Merged"
                         end
-                        if error == nil || error.class == SCPAlreadyApplied
-                            begin
-                                todo[:cve_data][:branches][todo[:matched_branch_key]] = "Applied"
-                                tracker.write_bug(bug_id, todo[:cve_data])
-                                log(:INFO, "Successfully updated status of Bug ##{bug_id} to 'Applied'.")
-                            rescue => e
-                                log(:ERROR, "Failed to update tracker: #{e.message}")
-                            end
+                    end
+
+                    if newState != nil
+                        begin
+                            todo[:cve_data][:branches][todo[:matched_branch_key]] = newState
+                            tracker.write_bug(bug_id, todo[:cve_data])
+                            log(:INFO, "Successfully updated status of Bug ##{bug_id} to '#{newState}'.")
+                        rescue => e
+                            log(:ERROR, "Failed to update tracker: #{e.message}")
                         end
                     end
                 end
