@@ -333,17 +333,25 @@ module KernelWork
             end
         end
 
+
+        # Git command to list unmerged commits
+        # @param opts [Hash] Options hash
+        # @return [String] String to pass to git
+        def _list_unmerged_cmd(opts)
+            return "log --no-decorate  --format=oneline \"^#{KernelWork.config.suse.remote}/#{branch()}\" HEAD"
+        end
+
         # List unmerged commits
         # @param opts [Hash] Options hash
         # @return [void]
         def list_unmerged(opts)
-            runGitInteractive("log --no-decorate  --format=oneline \"^#{KernelWork.config.suse.remote}/#{branch()}\" HEAD")
+            runGitInteractive(_list_unmerged_cmd(opts))
         end
 
-        # List unpushed commits
+        # Git command to list unpushed commits
         # @param opts [Hash] Options hash
-        # @return [void]
-        def list_unpushed(opts)
+        # @return [String] String to pass to git
+        def _list_unpushed_cmd(opts)
             remoteRefs=" \"^#{KernelWork.config.suse.remote}/#{branch()}\""
             begin
                 runGit("rev-parse --verify --quiet #{KernelWork.config.suse.remote}/#{local_branch()}")
@@ -352,7 +360,14 @@ module KernelWork
                 log(:INFO, "Remote user branch does not exists. Checking against main branch only.")
                 # Remote user branch does not exists
             end
-            runGitInteractive("log --no-decorate  --format=oneline #{remoteRefs} HEAD")
+            return "log --no-decorate  --format=oneline #{remoteRefs} HEAD"
+        end
+
+        # List unpushed commits
+        # @param opts [Hash] Options hash
+        # @return [void]
+        def list_unpushed(opts)
+            runGitInteractive(_list_unpushed_cmd(opts))
         end
 
         #
