@@ -458,8 +458,11 @@ module KernelWork
                             allOK = false
                         when "Merged"
                             status_str = status_str.green()
-                        when "Applied", "Pushed"
+                        when "Applied"
                             status_str = status_str.brown()
+                            allOK = false
+                        when "Pushed"
+                            status_str = status_str.blue()
                             allOK = false
                         end
                         statuses_str += status_str
