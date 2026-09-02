@@ -8,7 +8,7 @@ module KernelWork
         STATE_MERGED     = "Merged"
         STATE_REASSIGNED = "Reassigned"
 
-        attr_reader :bug_id, :cve, :summary, :fix_sha, :distros, :branches
+        attr_reader :bug_id, :cve, :summary, :fix_sha, :distros, :branches, :tracker
 
         # Initialize a new CVE instance
         # @param attributes [Hash] The attributes hash (symbolized keys)
@@ -18,6 +18,7 @@ module KernelWork
             @summary = attributes[:summary]
             @fix_sha = attributes[:fix_sha]
             @distros = attributes[:distros] || []
+            @tracker = attributes[:tracker] || nil
 
             @branches = {}
             if attributes[:branches]
@@ -28,11 +29,13 @@ module KernelWork
         end
 
         # Create a CVE instance from a hash, or return the CVE instance if already one
+        # @param tracker [CveTracker] Tracker used to load the data
         # @param data [Hash, CVE] The source data
         # @return [CVE, nil]
-        def self.from_h(data)
+        def self.from_h(tracker, data)
             return nil if data.nil?
             return data if data.is_a?(CVE)
+            data[:tracker] = tracker
             new(data)
         end
 
@@ -81,6 +84,7 @@ module KernelWork
             when :fix_sha then @fix_sha
             when :distros then @distros
             when :branches then @branches
+            when :tracker then @tracker
             else
                 nil
             end

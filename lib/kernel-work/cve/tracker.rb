@@ -66,7 +66,7 @@ module KernelWork
                     begin
                         content = File.read(file_path)
                         data = JSON.parse(content, symbolize_names: true)
-                        cves << CVE.from_h(data)
+                        cves << CVE.from_h(self, data)
                     rescue => e
                         raise CorruptedJSONError.new()
                     end
@@ -80,7 +80,7 @@ module KernelWork
                 raise BugNotFoundError.new() if ! File.exist?(file_path)
                 begin
                     data = JSON.parse(File.read(file_path), symbolize_names: true)
-                    CVE.from_h(data)
+                    CVE.from_h(self, data)
                 rescue => e
                     raise CorruptedJSONError.new()
                 end
@@ -127,7 +127,7 @@ module KernelWork
                     response = Net::HTTP.get_response(uri)
                     if response.is_a?(Net::HTTPSuccess)
                         data = JSON.parse(response.body, symbolize_names: true)
-                        data.is_a?(Array) ? data.map { |h| CVE.from_h(h) } : []
+                        data.is_a?(Array) ? data.map { |h| CVE.from_h(self, h) } : []
                     else
                         raise RestError.new("read_all", response)
                     end
@@ -143,7 +143,7 @@ module KernelWork
                     response = Net::HTTP.get_response(uri)
                     if response.is_a?(Net::HTTPSuccess)
                         data = JSON.parse(response.body, symbolize_names: true)
-                        CVE.from_h(data)
+                        CVE.from_h(self, data)
                     elsif response.code == "404"
                         raise BugNotFoundError.new()
                     else
