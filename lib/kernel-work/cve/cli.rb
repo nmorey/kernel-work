@@ -33,7 +33,7 @@ module KernelWork
                 :fetch,
                 :apply,
                 :push,
-                :status,
+                :status, :ls,
                 :refresh,
             ]
 
@@ -384,6 +384,7 @@ module KernelWork
 
                 return 0
             end
+            alias_method :ls, :status
 
             private
 
