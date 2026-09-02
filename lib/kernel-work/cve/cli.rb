@@ -421,7 +421,8 @@ module KernelWork
 
                 # Determine the maximum width for the first column "CVE (Bug ID)"
                 cve_col_header = "CVE BugID"
-                max_cve_width = [cve_col_header.length, matching_cves.map { |item| "#{item[:cve]} bsc##{item[:bug_id]}".length }.max || 0].max + 3
+                max_cve_width = [cve_col_header.length, matching_cves.map { |item|
+                                     "#{item[:cve]} bsc##{item[:bug_id]}".length }.max || 0].max + 3
 
                 # Determine width for each distro column
                 distro_widths = {}
@@ -444,12 +445,27 @@ module KernelWork
                 # Print each CVE row
                 matching_cves.each do |item|
                     cve_bug_str = "#{item[:cve]} bsc##{item[:bug_id]}"
-                    print sprintf("%-#{max_cve_width}s", cve_bug_str)
+                    cve_bug_str = sprintf("%-#{max_cve_width}s", cve_bug_str)
+                    allOK = true
+                    statuses_str = ""
+
                     distros_list.each do |distro|
-                        status_str = item[:branches][distro] || ""
-                        print sprintf("%-#{distro_widths[distro]}s", status_str)
+                        status = item[:branches][distro] || ""
+                        status_str = sprintf("%-#{distro_widths[distro]}s", status)
+                        case status
+                        when "ToDo"
+                            status_str = status_str.red()
+                            allOK = false
+                        when "Merged"
+                            status_str = status_str.green()
+                        when "Applied", "Pushed"
+                            status_str = status_str.brown()
+                            allOK = false
+                        end
+                        statuses_str += status_str
                     end
-                    puts ""
+                    cve_bug_str = cve_bug_str.green() if allOK == true
+                    puts "#{cve_bug_str}#{statuses_str}"
                 end
 
                 return 0
