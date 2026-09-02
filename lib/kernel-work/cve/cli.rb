@@ -77,6 +77,7 @@ module KernelWork
                 @upstream = upstream || @suse.upstream
                 config = KernelWork.config.cve.to_h
                 @tracker = CveTracker.create(config, self)
+                @bugzilla = CveCLI::BugzillaClient.new(config)
 
             end
 
@@ -92,14 +93,6 @@ module KernelWork
 
                 bz_user = opts[:bugzilla_user] || config[:bugzilla_user]
                 if bz_user.nil? || bz_user.empty?
-                    begin
-                        bz_user = runGit("config user.email").strip
-                    rescue
-                        bz_user = nil
-                    end
-                end
-
-                if bz_user.nil? || bz_user.empty?
                     log(:ERROR, "Bugzilla user email is required. Please set it in config or pass via -u.")
                     return 1
                 end
@@ -111,10 +104,7 @@ module KernelWork
                 }
 
                 begin
-                    response = bugzilla_request("bug", params)
-                rescue => e
-                    log(:ERROR, "Failed to connect to Bugzilla: #{e.message}")
-                    return 1
+                    response = @bugzilla.request("bug", params)
                 end
 
                 bugs = response["bugs"] || []
@@ -155,7 +145,7 @@ module KernelWork
                     bug_id = bug["id"].to_s
                     log(:INFO, "Fetching comments for Bug ##{bug_id}...")
                     begin
-                        comments_response = bugzilla_request("bug/#{bug_id}/comment")
+                        comments_response = @bugzilla.request("bug/#{bug_id}/comment")
                         comments = comments_response["bugs"][bug_id]["comments"] || []
                         fix_info = parse_cve_comment(comments)
                         if fix_info
@@ -264,19 +254,10 @@ module KernelWork
                     return 1
                 end
 
-                log(:INFO, "Checking for unpushed commits in KERNEL_SOURCE_DIR...")
-                remote_branch_exists = false
-                begin
-                    @suse.runGit("rev-parse --verify --quiet #{KernelWork.config.suse.remote}/#{@suse.local_branch()}")
-                    remote_branch_exists = true
-                rescue
-                end
+                log(:INFO, "Checking for unmerged commits in KERNEL_SOURCE_DIR...")
 
-                remoteRefs = " \"^#{KernelWork.config.suse.remote}/#{@suse.branch()}\""
-                remoteRefs += " \"^#{KernelWork.config.suse.remote}/#{@suse.local_branch()}\"" if remote_branch_exists
-
-                unpushed_logs = @suse.runGit(@suse._list_unmerged_cmd(opts))
-                bug_ids_to_push = unpushed_logs.scan(/bsc#(\d+)/).flatten.uniq
+                unmerged_logs = @suse.runGit(@suse._list_unmerged_cmd(opts))
+                bug_ids_to_push = unmerged_logs.scan(/bsc#(\d+)/).flatten.uniq
 
                 if bug_ids_to_push.empty?
                     log(:INFO, "No bug references (bsc#ID) found in unpushed/unmerged commits.")
@@ -413,32 +394,6 @@ module KernelWork
                 return 0
             end
 
-            # Parse ~/.bugzillarc to find Bugzilla credentials
-            def self.read_bugzillarc
-                path = File.expand_path("~/.bugzillarc")
-                return {} unless File.exist?(path)
-
-                config = {}
-                current_section = nil
-
-                File.foreach(path) do |line|
-                    line = line.strip
-                    next if line.empty? || line.start_with?("#", ";")
-
-                    if line =~ /^\[(.*)\]$/
-                        current_section = $1
-                        config[current_section] = {}
-                    elsif line =~ /^([^=]+)=(.*)$/ && current_section
-                        key = $1.strip
-                        val = $2.strip
-                        val = val[1..-2] if val.start_with?('"') && val.end_with?('"')
-                        val = val[1..-2] if val.start_with?("'") && val.end_with?("'")
-                        config[current_section][key] = val
-                    end
-                end
-                config
-            end
-
             private
 
             # Find build subset based on modified files
@@ -449,32 +404,6 @@ module KernelWork
                     subsets[0]
                 else
                     nil
-                end
-            end
-
-            # Request wrapper to Bugzilla REST API
-            def bugzilla_request(path, params = {})
-                bz_config = self.class.read_bugzillarc["apibugzilla.suse.com"] || {}
-                api_key = bz_config["api_key"] || KernelWork.config.cve.bugzilla_api_key
-
-                bz_url = KernelWork.config.cve.bugzilla_url || "https://apibugzilla.suse.com"
-                url = URI.parse("#{bz_url}/rest/#{path}")
-
-                query_params = params.dup
-                query_params[:api_key] = api_key if api_key && !api_key.empty?
-                url.query = URI.encode_www_form(query_params) unless query_params.empty?
-
-                http = Net::HTTP.new(url.host, url.port)
-                http.use_ssl = true if url.scheme == 'https'
-
-                req = Net::HTTP::Get.new(url.request_uri)
-                req['Accept'] = 'application/json'
-
-                res = http.request(req)
-                if res.code == "200"
-                    JSON.parse(res.body)
-                else
-                    raise "Bugzilla request failed with code #{res.code}: #{res.body}"
                 end
             end
 

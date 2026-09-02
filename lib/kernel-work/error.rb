@@ -158,4 +158,12 @@ module KernelWork
     # Exception thrown when the patch modified subset could not be found
     class PatchSubsetNotFoundError < KernelWorkError
     end
+
+    class BugzillaError < KernelWorkError
+        # Initialize a new BugzillaError
+        # @param name [Net::HTTPResponse] Bugzilla request error
+        def initialize(res)
+            super("Bugzilla request failes with code #{res.code}: #{res.body}")
+        end
+    end
 end

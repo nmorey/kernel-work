@@ -34,6 +34,16 @@ module KernelWork
       @path = "."
       config = KernelWork.config.cve.to_h
       @tracker = KernelWork::CveCLI::CveTracker.create(config, self)
+      @bugzilla = CveCLI::BugzillaClient.new(config)
+
+      # Delegate bugzilla client request to our local mock proc
+      class << @bugzilla
+        attr_accessor :test_cve_inst
+        def request(path, params = {})
+          @test_cve_inst.bugzilla_request(path, params)
+        end
+      end
+      @bugzilla.test_cve_inst = self
     end
 
     def log(level, msg)
@@ -82,7 +92,7 @@ Tempfile.create('bugzillarc') do |temp|
   temp.flush
   $mock_bugzillarc_path = temp.path
 
-  parsed = KernelWork::CveCLI::CveAction.read_bugzillarc
+  parsed = KernelWork::CveCLI::BugzillaClient.read_bugzillarc
   expected_section = "apibugzilla.suse.com"
   
   if parsed[expected_section] && parsed[expected_section]["api_key"] == "MY_SECRET_API_KEY_12345"
