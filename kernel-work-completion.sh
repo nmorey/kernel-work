@@ -149,6 +149,38 @@ _kernel_work_extract_path(){
     esac;
 }
 
+_kernel_work_cve(){
+    _get_comp_words_by_ref cur
+    _get_comp_words_by_ref prev
+    _get_comp_words_by_ref words
+    _get_comp_words_by_ref cword
+
+    local cmd_word
+    for i in "${!words[@]}"; do
+        if [[ "${words[i]}" == "cve" ]]; then
+            cmd_word=$i
+            break
+        fi
+    done
+
+    local action_word=$((cmd_word + 1))
+
+    if [ $cword -eq $action_word ]; then
+        __gitcomp_nl "fetch apply push status"
+        return
+    fi
+
+    local action=${words[$action_word]}
+    local opt_list=$(_kernel_work_genoptlist kernel cve $action)
+    _kernel_work_filter_opts "$prev" kernel cve $action && return
+
+    case "$prev" in
+        *)
+            __gitcomp_nl "$opt_list"
+            ;;
+    esac
+}
+
 _kernel_work(){
     local direct_call=${1:-1}
     local cmd_word=$(expr $direct_call + 1)
