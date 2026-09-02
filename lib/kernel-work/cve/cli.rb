@@ -302,19 +302,14 @@ module KernelWork
                     return 0
                 end
 
-                matching_cves = []
-                cve_files.each do |cve_data|
-                    active = cve_data.active_branches
-                    active_branches = {}
-                    active.each { |k, v| active_branches[k.to_s] = v }
-
-                    unless active_branches.empty?
-                        matching_cves << {
-                            bug_id: cve_data.bug_id,
-                            cve: cve_data.cve,
-                            summary: cve_data.summary,
-                            branches: active_branches
-                        }
+                active_distros = Set.new
+                matching_cves = cve_files.select do |cve|
+                    active = cve.active_branches
+                    unless active.empty?
+                        active_distros.merge(active.keys.map(&:to_s))
+                        true
+                    else
+                        false
                     end
                 end
 
@@ -323,23 +318,17 @@ module KernelWork
                     return 0
                 end
 
-                # Collect union of all active branch keys across matching CVEs
-                active_distros = Set.new
-                matching_cves.each do |item|
-                    active_distros.merge(item[:branches].keys)
-                end
                 distros_list = active_distros.to_a.sort
 
                 # Determine the maximum width for the first column "CVE (Bug ID)"
                 cve_col_header = "CVE BugID"
-                max_cve_width = [cve_col_header.length, matching_cves.map { |item|
-                                     "#{item[:cve]} bsc##{item[:bug_id]}".length }.max || 0].max + 3
+                max_cve_width = [cve_col_header.length, matching_cves.map { |cve|
+                                     "#{cve.cve} bsc##{cve.bug_id}".length }.max || 0].max + 3
 
                 # Determine width for each distro column
                 distro_widths = {}
                 distros_list.each do |distro|
-                    max_status_len = matching_cves.map { |item| (item[:branches][distro] || "").length }.max || 0
-                    distro_widths[distro] = [distro.length, max_status_len].max + 3
+                    distro_widths[distro] = [distro.length, CVE::MAX_STATE_LEN].max + 3
                 end
 
                 # Print header
@@ -354,20 +343,17 @@ module KernelWork
                 puts "-" * separator_len
 
                 # Print each CVE row
-                matching_cves.each do |item|
-                    cve_bug_str = "#{item[:cve]} bsc##{item[:bug_id]}"
+                matching_cves.each do |cve|
+                    cve_bug_str = "#{cve.cve} bsc##{cve.bug_id}"
                     cve_bug_str = sprintf("%-#{max_cve_width}s", cve_bug_str)
-                    allOK = true
                     statuses_str = ""
 
                     distros_list.each do |distro|
-                        status = item[:branches][distro] || ""
+                        status = cve.get_status(distro) || ""
                         status_str = sprintf("%-#{distro_widths[distro]}s", status)
-                        status_str = CVE.colour(status, status_str)
-                        allOK = false if status != CVE::STATE_MERGED && !status.to_s.strip.empty?
-                        statuses_str += status_str
+                        statuses_str += CVE.colour(status, status_str)
                     end
-                    cve_bug_str = cve_bug_str.green() if allOK == true
+                    cve_bug_str = cve_bug_str.green if cve.all_ok?
                     puts "#{cve_bug_str}#{statuses_str}"
                 end
 
