@@ -39,5 +39,9 @@ module KernelWork
                 super("REST request #{query} failed with code #{res.code}: #{res.body}")
             end
         end
+
+        # Exception when REST query are triggered but URL is not configured
+        class RestURLNotSetError < CveCLIError
+        end
     end
 end

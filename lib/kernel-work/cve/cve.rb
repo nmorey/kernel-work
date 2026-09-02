@@ -1,4 +1,5 @@
 module KernelWork
+
     # Represents a CVE bug being tracked in the system
     class CVE < Common
         # Define CVE workflow state constants
@@ -61,7 +62,7 @@ module KernelWork
         # Retrieve the status of a specific branch
         # @param branch [String, Symbol] The branch name
         # @return [String, nil]
-        def status_for(branch)
+        def get_status(branch)
             @branches[branch.to_sym]
         end
 
@@ -69,8 +70,10 @@ module KernelWork
         # @param branch [String, Symbol] The branch name
         # @param status [String] The new status value
         # @return [String]
-        def update_status(branch, status)
+        def set_status(branch, status)
             @branches[branch.to_sym] = status
+            @tracker.write_bug(@bug_id, self)
+            log(:INFO, "Successfully updated status of Bug ##{@bug_id} to '#{status}'.")
         end
 
         # Hash-like reader compatibility method

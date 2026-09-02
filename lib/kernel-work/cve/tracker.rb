@@ -114,14 +114,13 @@ module KernelWork
                 @url = config[:tracker_url]
                 @logger = logger
                 if @url.nil? || @url.empty?
-                    @logger&.log(:WARNING, "REST tracker initialized with empty tracker_url config!")
-                else
-                    @url = @url.chomp('/')
+                    raise RestURLNotSetError.new()
                 end
+
+                @url = @url.chomp('/')
             end
 
             def read_all
-                return [] if @url.nil? || @url.empty?
                 begin
                     uri = URI("#{@url}/cves")
                     response = Net::HTTP.get_response(uri)
@@ -137,7 +136,6 @@ module KernelWork
             end
 
             def read_bug(bug_id)
-                return nil if @url.nil? || @url.empty?
                 begin
                     uri = URI("#{@url}/cves/#{bug_id}")
                     response = Net::HTTP.get_response(uri)
@@ -149,13 +147,14 @@ module KernelWork
                     else
                         raise RestError.new("read_bug(#{bug_id})", response)
                     end
+                rescue BugNotFoundError => e
+                    raise e
                 rescue => e
                     raise RestError.new("read_bug(#{bug_id})", response)
                 end
             end
 
             def write_bug(bug_id, data)
-                return if @url.nil? || @url.empty?
                 begin
                     uri = URI("#{@url}/cves/#{bug_id}")
                     http = Net::HTTP.new(uri.host, uri.port)
@@ -175,7 +174,6 @@ module KernelWork
             end
 
             def delete_all
-                return if @url.nil? || @url.empty?
                 begin
                     uri = URI("#{@url}/cves")
                     http = Net::HTTP.new(uri.host, uri.port)
@@ -193,7 +191,6 @@ module KernelWork
             end
 
             def delete_bug(bug_id)
-                return if @url.nil? || @url.empty?
                 begin
                     uri = URI("#{@url}/cves/#{bug_id}")
                     http = Net::HTTP.new(uri.host, uri.port)

@@ -526,8 +526,12 @@ begin
   test_8b_passed = (bug_data && bug_data[:cve] == "CVE-2026-99999")
 
   # Test read_bug (404)
-  missing_bug = rest_tracker.read_bug("99999")
-  test_8c_passed = (missing_bug.nil?)
+  begin
+    rest_tracker.read_bug("99999")
+    test_8c_passed = false
+  rescue KernelWork::CveCLI::BugNotFoundError
+    test_8c_passed = true
+  end
 
   # Test write_bug
   rest_tracker.write_bug("12345", { bug_id: "12345", cve: "CVE-2026-99999" })
@@ -625,9 +629,20 @@ Dir.mktmpdir('cve-data-drop') do |dir_path|
   test_cve.fetch({})
 
   # Verify bug 12345 still exists
-  has_bug1 = !tracker.read_bug("12345").nil?
+  has_bug1 = false
+  begin
+    tracker.read_bug("12345")
+    has_bug1 = true
+  rescue KernelWork::CveCLI::BugNotFoundError
+  end
+
   # Verify bug 12346 was dropped
-  has_bug2 = !tracker.read_bug("12346").nil?
+  has_bug2 = false
+  begin
+    tracker.read_bug("12346")
+    has_bug2 = true
+  rescue KernelWork::CveCLI::BugNotFoundError
+  end
 
   if has_bug1 && !has_bug2
     puts "Test Case 9 (Drop Reassigned Bugs from Cache) Passed"
@@ -645,6 +660,11 @@ end
 
 # --- Test Case 10: CVE Class Model Methods ---
 begin
+  mock_tracker = Object.new
+  def mock_tracker.write_bug(bug_id, data)
+    # No-op
+  end
+
   cve_obj = KernelWork::CVE.new(
     bug_id: "98765",
     cve: "CVE-2026-12345",
@@ -657,21 +677,22 @@ begin
       "SLE15-SP7": KernelWork::CVE::STATE_TODO,
       "SLE15-SP6": KernelWork::CVE::STATE_REASSIGNED,
       "SLE15-SP5": ""
-    }
+    },
+    tracker: mock_tracker
   )
 
   test_10_passed = true
 
-  # Test status_for
-  if cve_obj.status_for("SLE15-SP7") != KernelWork::CVE::STATE_TODO
-    puts "  10a (status_for) FAILED"
+  # Test get_status
+  if cve_obj.get_status("SLE15-SP7") != KernelWork::CVE::STATE_TODO
+    puts "  10a (get_status) FAILED"
     test_10_passed = false
   end
 
-  # Test update_status
-  cve_obj.update_status("SLE15-SP7", KernelWork::CVE::STATE_APPLIED)
-  if cve_obj.status_for("SLE15-SP7") != KernelWork::CVE::STATE_APPLIED
-    puts "  10b (update_status) FAILED"
+  # Test set_status
+  cve_obj.set_status("SLE15-SP7", KernelWork::CVE::STATE_APPLIED)
+  if cve_obj.get_status("SLE15-SP7") != KernelWork::CVE::STATE_APPLIED
+    puts "  10b (set_status) FAILED"
     test_10_passed = false
   end
 
@@ -688,7 +709,7 @@ begin
     test_10_passed = false
   end
 
-  cve_obj.update_status("SLE15-SP7", KernelWork::CVE::STATE_MERGED)
+  cve_obj.set_status("SLE15-SP7", KernelWork::CVE::STATE_MERGED)
   if !cve_obj.all_ok?
     puts "  10e (all_ok? positive) FAILED"
     test_10_passed = false
