@@ -471,17 +471,6 @@ module KernelWork
                 return 0
             end
 
-            # Convert 0-based column index to spreadsheet column letter (A, B, ..., Z, AA, AB, ...)
-            def self.col_index_to_letter(index)
-                letter = ""
-                temp = index
-                while temp >= 0
-                    letter = ((temp % 26) + 65).chr + letter
-                    temp = (temp / 26) - 1
-                end
-                letter
-            end
-
             # Parse ~/.bugzillarc to find Bugzilla credentials
             def self.read_bugzillarc
                 path = File.expand_path("~/.bugzillarc")
