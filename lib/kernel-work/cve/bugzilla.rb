@@ -41,7 +41,7 @@ module KernelWork
                 if res.code == "200"
                     JSON.parse(res.body)
                 else
-                    raise KernelWork::BugzillaError.new(res)
+                    raise BugzillaError.new(res)
                 end
             end
 
