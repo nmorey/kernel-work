@@ -40,6 +40,45 @@ module KernelWork
             self.class.validate_state!(state)
         end
 
+        # Colour a string (or state string) based on the CVE workflow state
+        # @param state [String, Symbol] The workflow state value
+        # @param text [String, nil] Optional text to colour (defaults to state)
+        # @return [String] The coloured string
+        def self.colour(state, text = nil)
+            text = (text || state).to_s
+            norm_state = begin
+                validate_state!(state)
+            rescue CveCLI::InvalidCveStateError
+                state.to_s
+            end
+
+            case norm_state
+            when STATE_TODO
+                text.red
+            when STATE_MERGED
+                text.green
+            when STATE_APPLIED
+                text.brown
+            when STATE_PUSHED
+                text.blue
+            else
+                text
+            end
+        end
+
+        class << self
+            alias_method :color, :colour
+        end
+
+        # Colour a string (or state string) based on the CVE workflow state
+        # @param state [String, Symbol] The workflow state value
+        # @param text [String, nil] Optional text to colour (defaults to state)
+        # @return [String] The coloured string
+        def colour(state, text = nil)
+            self.class.colour(state, text)
+        end
+        alias_method :color, :colour
+
         # Initialize a new CVE instance
         # @param attributes [Hash] The attributes hash (symbolized keys)
         # @raise [CveCLI::InvalidCveStateError] If any branch state is unknown

@@ -728,6 +728,25 @@ begin
     test_10_passed = false
   end
 
+  # Test normalization in set_status
+  cve_obj.set_status("SLE15-SP7", "applied")
+  if cve_obj.get_status("SLE15-SP7") != KernelWork::CVE::STATE_APPLIED
+    puts "  10h (status normalization in set_status) FAILED"
+    test_10_passed = false
+  end
+
+  # Test colour helper
+  if KernelWork::CVE.colour(KernelWork::CVE::STATE_TODO) != "ToDo".red ||
+     KernelWork::CVE.colour(KernelWork::CVE::STATE_MERGED) != "Merged".green ||
+     KernelWork::CVE.colour(KernelWork::CVE::STATE_APPLIED) != "Applied".brown ||
+     KernelWork::CVE.colour(KernelWork::CVE::STATE_PUSHED) != "Pushed".blue ||
+     KernelWork::CVE.colour(KernelWork::CVE::STATE_TODO, "Custom") != "Custom".red ||
+     cve_obj.colour(KernelWork::CVE::STATE_MERGED, "Custom") != "Custom".green ||
+     cve_obj.color(KernelWork::CVE::STATE_APPLIED, "Custom") != "Custom".brown
+    puts "  10i (colour methods) FAILED"
+    test_10_passed = false
+  end
+
   if test_10_passed
     puts "Test Case 10 (CVE Model Class Methods) Passed"
   else

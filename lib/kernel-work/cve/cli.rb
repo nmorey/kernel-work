@@ -363,19 +363,8 @@ module KernelWork
                     distros_list.each do |distro|
                         status = item[:branches][distro] || ""
                         status_str = sprintf("%-#{distro_widths[distro]}s", status)
-                        case status
-                        when CVE::STATE_TODO
-                            status_str = status_str.red()
-                            allOK = false
-                        when CVE::STATE_MERGED
-                            status_str = status_str.green()
-                        when CVE::STATE_APPLIED
-                            status_str = status_str.brown()
-                            allOK = false
-                        when CVE::STATE_PUSHED
-                            status_str = status_str.blue()
-                            allOK = false
-                        end
+                        status_str = CVE.colour(status, status_str)
+                        allOK = false if status != CVE::STATE_MERGED && !status.to_s.strip.empty?
                         statuses_str += status_str
                     end
                     cve_bug_str = cve_bug_str.green() if allOK == true
