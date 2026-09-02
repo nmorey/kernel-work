@@ -68,7 +68,7 @@ module KernelWork
                         data = JSON.parse(content, symbolize_names: true)
                         cves << CVE.from_h(data)
                     rescue => e
-                        @logger&.log(:WARNING, "Failed to parse JSON file #{file_path}: #{e.message}")
+                        raise CorruptedJSONError.new()
                     end
                 end
                 cves
@@ -77,13 +77,12 @@ module KernelWork
             def read_bug(bug_id)
                 ensure_dir
                 file_path = File.join(@cves_path, "#{bug_id}.json")
-                return nil unless File.exist?(file_path)
+                raise BugNotFoundError.new() if ! File.exist?(file_path)
                 begin
                     data = JSON.parse(File.read(file_path), symbolize_names: true)
                     CVE.from_h(data)
                 rescue => e
-                    @logger&.log(:WARNING, "Failed to parse JSON file #{file_path}: #{e.message}")
-                    nil
+                    raise CorruptedJSONError.new()
                 end
             end
 
@@ -130,12 +129,10 @@ module KernelWork
                         data = JSON.parse(response.body, symbolize_names: true)
                         data.is_a?(Array) ? data.map { |h| CVE.from_h(h) } : []
                     else
-                        @logger&.log(:WARNING, "REST tracker read_all failed: #{response.code} #{response.message}")
-                        []
+                        raise RestError.new("read_all", response)
                     end
                 rescue => e
-                    @logger&.log(:WARNING, "REST tracker read_all failed: #{e.message}")
-                    []
+                    raise RestError.new("read_all", response)
                 end
             end
 
@@ -148,14 +145,12 @@ module KernelWork
                         data = JSON.parse(response.body, symbolize_names: true)
                         CVE.from_h(data)
                     elsif response.code == "404"
-                        nil
+                        raise BugNotFoundError.new()
                     else
-                        @logger&.log(:WARNING, "REST tracker read_bug(#{bug_id}) failed: #{response.code} #{response.message}")
-                        nil
+                        raise RestError.new("read_bug(#{bug_id})", response)
                     end
                 rescue => e
-                    @logger&.log(:WARNING, "REST tracker read_bug(#{bug_id}) failed: #{e.message}")
-                    nil
+                    raise RestError.new("read_bug(#{bug_id})", response)
                 end
             end
 
@@ -172,10 +167,10 @@ module KernelWork
                     request.body = JSON.pretty_generate(cve_hash)
                     response = http.request(request)
                     unless response.is_a?(Net::HTTPSuccess)
-                        @logger&.log(:WARNING, "REST tracker write_bug(#{bug_id}) failed: #{response.code} #{response.message}")
+                        raise RestError.new("write_bug(#{bug_id})", response)
                     end
                 rescue => e
-                    @logger&.log(:WARNING, "REST tracker write_bug(#{bug_id}) failed: #{e.message}")
+                    raise RestError.new("write_bug(#{bug_id})", response)
                 end
             end
 
@@ -190,10 +185,10 @@ module KernelWork
                     request = Net::HTTP::Delete.new(uri.path)
                     response = http.request(request)
                     unless response.is_a?(Net::HTTPSuccess)
-                        @logger&.log(:WARNING, "REST tracker delete_all failed: #{response.code} #{response.message}")
+                        raise RestError.new("delete_all})", response)
                     end
                 rescue => e
-                    @logger&.log(:WARNING, "REST tracker delete_all failed: #{e.message}")
+                    raise RestError.new("delete_all})", response)
                 end
             end
 
@@ -208,10 +203,10 @@ module KernelWork
                     request = Net::HTTP::Delete.new(uri.path)
                     response = http.request(request)
                     unless response.is_a?(Net::HTTPSuccess)
-                        @logger&.log(:WARNING, "REST tracker delete_bug(#{bug_id}) failed: #{response.code} #{response.message}")
+                        raise RestError.new("delete_bug(#{bug_id})", response)
                     end
                 rescue => e
-                    @logger&.log(:WARNING, "REST tracker delete_bug(#{bug_id}) failed: #{e.message}")
+                    raise RestError.new("delete_bug(#{bug_id})", response)
                 end
             end
         end
