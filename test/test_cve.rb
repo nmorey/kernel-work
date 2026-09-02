@@ -736,6 +736,71 @@ begin
 end
 
 
+# --- Test Case 11: VALID_STATES and InvalidCveStateError Validation ---
+begin
+  test_11_passed = true
+
+  # 1. Check VALID_STATES dynamically contains all STATE_* constants
+  expected_states = [
+    KernelWork::CVE::STATE_TODO,
+    KernelWork::CVE::STATE_APPLIED,
+    KernelWork::CVE::STATE_PUSHED,
+    KernelWork::CVE::STATE_MERGED,
+    KernelWork::CVE::STATE_REASSIGNED
+  ]
+
+  if KernelWork::CVE::VALID_STATES.sort != expected_states.sort
+    puts "  11a (VALID_STATES dynamic content) FAILED: Got #{KernelWork::CVE::VALID_STATES.inspect}"
+    test_11_passed = false
+  end
+
+  # 2. Test validate_state! normalization and error
+  if KernelWork::CVE.validate_state!("  todo  ") != KernelWork::CVE::STATE_TODO ||
+     KernelWork::CVE.validate_state!(:merged) != KernelWork::CVE::STATE_MERGED ||
+     KernelWork::CVE.validate_state!("") != "" ||
+     KernelWork::CVE.validate_state!(nil) != ""
+    puts "  11b (validate_state! normalization) FAILED"
+    test_11_passed = false
+  end
+
+  begin
+    KernelWork::CVE.validate_state!("InvalidState")
+    puts "  11c (validate_state! unknown error expected) FAILED"
+    test_11_passed = false
+  rescue KernelWork::CveCLI::InvalidCveStateError => e
+    # Expected
+  end
+
+  # 3. Test constructor validation
+  begin
+    KernelWork::CVE.new(
+      bug_id: "123",
+      branches: { "SLE15-SP7": "BogusState" }
+    )
+    puts "  11d (CVE.new unknown state error expected) FAILED"
+    test_11_passed = false
+  rescue KernelWork::CveCLI::InvalidCveStateError
+    # Expected
+  end
+
+  # 4. Test set_status validation
+  cve_test = KernelWork::CVE.new(bug_id: "123")
+  begin
+    cve_test.set_status("SLE15-SP7", "UnknownState")
+    puts "  11e (set_status unknown state error expected) FAILED"
+    test_11_passed = false
+  rescue KernelWork::CveCLI::InvalidCveStateError
+    # Expected
+  end
+
+  if test_11_passed
+    puts "Test Case 11 (VALID_STATES & State Validation) Passed"
+  else
+    failures += 1
+  end
+end
+
+
 # --- Test Output ---
 if failures == 0
   puts "All CVE tests passed successfully!"

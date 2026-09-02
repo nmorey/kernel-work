@@ -13,10 +13,36 @@ module KernelWork
         # The Reassigned workflow state for a CVE bug.
         STATE_REASSIGNED = "Reassigned"
 
+        # List of all valid workflow states dynamically retrieved from STATE_* constants.
+        VALID_STATES = constants.grep(/^STATE_/).map { |c| const_get(c) }.freeze
+
         attr_reader :bug_id, :cve, :summary, :fix_sha, :distros, :branches, :tracker
+
+        # Validate that a state is a recognized workflow state and return its canonical form
+        # @param state [String, Symbol, nil] The state value to validate
+        # @return [String] The normalized state string
+        # @raise [CveCLI::InvalidCveStateError] If the state is unknown
+        def self.validate_state!(state)
+            state_str = state.to_s.strip
+            return "" if state_str.empty?
+
+            canonical = VALID_STATES.find { |s| s.casecmp?(state_str) }
+            return canonical if canonical
+
+            raise CveCLI::InvalidCveStateError.new(state)
+        end
+
+        # Validate that a state is a recognized workflow state and return its canonical form
+        # @param state [String, Symbol, nil] The state value to validate
+        # @return [String] The normalized state string
+        # @raise [CveCLI::InvalidCveStateError] If the state is unknown
+        def validate_state!(state)
+            self.class.validate_state!(state)
+        end
 
         # Initialize a new CVE instance
         # @param attributes [Hash] The attributes hash (symbolized keys)
+        # @raise [CveCLI::InvalidCveStateError] If any branch state is unknown
         def initialize(attributes = {})
             @bug_id = attributes[:bug_id].to_s
             @cve = attributes[:cve]
@@ -28,7 +54,7 @@ module KernelWork
             @branches = {}
             if attributes[:branches]
                 attributes[:branches].each do |k, v|
-                    @branches[k.to_sym] = v
+                    @branches[k.to_sym] = self.class.validate_state!(v)
                 end
             end
         end
@@ -72,12 +98,15 @@ module KernelWork
 
         # Update the status of a specific branch
         # @param branch [String, Symbol] The branch name
-        # @param status [String] The new status value
+        # @param status [String, Symbol] The new status value
+        # @raise [CveCLI::InvalidCveStateError] If the state is unknown
         # @return [String]
         def set_status(branch, status)
-            @branches[branch.to_sym] = status
-            @tracker.write_bug(@bug_id, self)
-            log(:INFO, "Successfully updated status of Bug ##{@bug_id} to '#{status}'.")
+            norm_status = self.class.validate_state!(status)
+            @branches[branch.to_sym] = norm_status
+            @tracker.write_bug(@bug_id, self) if @tracker
+            log(:INFO, "Successfully updated status of Bug ##{@bug_id} to '#{norm_status}'.")
+            norm_status
         end
 
         # Hash-like reader compatibility method

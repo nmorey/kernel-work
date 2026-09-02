@@ -43,5 +43,14 @@ module KernelWork
         # Exception when REST query are triggered but URL is not configured
         class RestURLNotSetError < CveCLIError
         end
+
+        # Exception raised when a CVE branch state is invalid
+        class InvalidCveStateError < CveCLIError
+            # Initialize a new InvalidCveStateError
+            # @param state [String] The invalid state value
+            def initialize(state)
+                super("Invalid CVE state '#{state}'")
+            end
+        end
     end
 end
