@@ -633,6 +633,78 @@ Dir.mktmpdir('cve-data-drop') do |dir_path|
 end
 
 
+# --- Test Case 10: CVE Class Model Methods ---
+begin
+  cve_obj = KernelWork::CVE.new(
+    bug_id: "98765",
+    cve: "CVE-2026-12345",
+    summary: "Test CVE model behavior",
+    fix_sha: "abcd1234efgh",
+    distros: [
+      { branch: "SLE15-SP7", sha: "abcd1234efgh" }
+    ],
+    branches: {
+      "SLE15-SP7": KernelWork::CVE::STATE_TODO,
+      "SLE15-SP6": KernelWork::CVE::STATE_REASSIGNED,
+      "SLE15-SP5": ""
+    }
+  )
+
+  test_10_passed = true
+
+  # Test status_for
+  if cve_obj.status_for("SLE15-SP7") != KernelWork::CVE::STATE_TODO
+    puts "  10a (status_for) FAILED"
+    test_10_passed = false
+  end
+
+  # Test update_status
+  cve_obj.update_status("SLE15-SP7", KernelWork::CVE::STATE_APPLIED)
+  if cve_obj.status_for("SLE15-SP7") != KernelWork::CVE::STATE_APPLIED
+    puts "  10b (update_status) FAILED"
+    test_10_passed = false
+  end
+
+  # Test active_branches
+  active_br = cve_obj.active_branches
+  if active_br.keys != [:"SLE15-SP7"] || active_br[:"SLE15-SP7"] != KernelWork::CVE::STATE_APPLIED
+    puts "  10c (active_branches) FAILED: Got #{active_br.inspect}"
+    test_10_passed = false
+  end
+
+  # Test all_ok?
+  if cve_obj.all_ok?
+    puts "  10d (all_ok? negative) FAILED"
+    test_10_passed = false
+  end
+
+  cve_obj.update_status("SLE15-SP7", KernelWork::CVE::STATE_MERGED)
+  if !cve_obj.all_ok?
+    puts "  10e (all_ok? positive) FAILED"
+    test_10_passed = false
+  end
+
+  # Test hash compatibility reader []
+  if cve_obj[:bug_id] != "98765" || cve_obj[:cve] != "CVE-2026-12345"
+    puts "  10f (hash reader compatibility) FAILED"
+    test_10_passed = false
+  end
+
+  # Test serialization
+  h = cve_obj.to_h
+  if h[:bug_id] != "98765" || h[:branches][:"SLE15-SP7"] != KernelWork::CVE::STATE_MERGED
+    puts "  10g (serialization to_h) FAILED"
+    test_10_passed = false
+  end
+
+  if test_10_passed
+    puts "Test Case 10 (CVE Model Class Methods) Passed"
+  else
+    failures += 1
+  end
+end
+
+
 # --- Test Output ---
 if failures == 0
   puts "All CVE tests passed successfully!"

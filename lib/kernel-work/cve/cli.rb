@@ -160,26 +160,26 @@ module KernelWork
                         fix_info = parse_cve_comment(comments)
                         if fix_info
                             # Prepare/merge with existing local data
-                            existing_data = @tracker.read_bug(bug_id) || {}
-                            branches = existing_data[:branches] || {}
+                            existing_data = @tracker.read_bug(bug_id)
+                            branches = existing_data ? existing_data.branches : {}
 
                             # Merge in target branches from parsed distros
                             (fix_info[:distros] || []).each do |distro|
                                 branch_name = distro[:branch]
                                 if branches[branch_name.to_sym].nil? || branches[branch_name.to_sym].empty?
-                                    branches[branch_name.to_sym] = "ToDo"
+                                    branches[branch_name.to_sym] = CVE::STATE_TODO
                                 end
                             end
 
                             # Construct consolidated bug data
-                            bug_data = {
+                            bug_data = CVE.new(
                                 bug_id: bug_id,
                                 cve: fix_info[:cve],
                                 summary: bug["summary"],
                                 fix_sha: fix_info[:mainstream_sha],
                                 distros: fix_info[:distros],
                                 branches: branches
-                            }
+                            )
 
                             @tracker.write_bug(bug_id, bug_data)
                             updates_count += 1
@@ -246,7 +246,7 @@ module KernelWork
 
                     if error == nil
                         @upstream.build_commit(opts, commit)
-                        newState = "Applied"
+                        newState = CVE::STATE_APPLIED
                     elsif error.class == SCPAlreadyApplied
                         newState = cve_calc_new_state(commit, unpushed_commits, unmerged_commits)
                     end
@@ -289,7 +289,7 @@ module KernelWork
 
                 return 0 if bug_ids_to_push.empty?
 
-                log(:INFO, "Updating status from 'Applied' to 'Pushed' in tracker...")
+                log(:INFO, "Updating status from '#{CVE::STATE_APPLIED}' to '#{CVE::STATE_PUSHED}' in tracker...")
 
                 updates_count = 0
                 bug_ids_to_push.each do |bug_id|
@@ -299,24 +299,24 @@ module KernelWork
                         next
                     end
 
-                    branches = cve_data[:branches] || {}
+                    branches = cve_data.branches
                     matched_branch_key = branches.keys.find { |k| k.to_s == current_br}
                     next if matched_branch_key.nil?
 
-                    status = branches[matched_branch_key].to_s.strip
-                    if status == "Applied"
-                        cve_data[:branches][matched_branch_key] = "Pushed"
+                    status = cve_data.status_for(matched_branch_key).to_s.strip
+                    if status == CVE::STATE_APPLIED
+                        cve_data.update_status(matched_branch_key, CVE::STATE_PUSHED)
                         begin
                             @tracker.write_bug(bug_id, cve_data)
                             updates_count += 1
-                            log(:INFO, "Updated Bug ##{bug_id} status to 'Pushed'...")
+                            log(:INFO, "Updated Bug ##{bug_id} status to '#{CVE::STATE_PUSHED}'...")
                         rescue => e
-                            log(:ERROR, "Failed to update Bug ##{bug_id} status to 'Pushed': #{e.message}")
+                            log(:ERROR, "Failed to update Bug ##{bug_id} status to '#{CVE::STATE_PUSHED}': #{e.message}")
                         end
                     end
                 end
 
-                log(:INFO, "Updated #{updates_count} bug(s) status to 'Pushed'.")
+                log(:INFO, "Updated #{updates_count} bug(s) status to '#{CVE::STATE_PUSHED}'.")
                 return 0
             end
 
@@ -332,21 +332,15 @@ module KernelWork
 
                 matching_cves = []
                 cve_files.each do |cve_data|
-                    branches = cve_data[:branches] || {}
+                    active = cve_data.active_branches
                     active_branches = {}
-
-                    branches.each do |br, status_val|
-                        status_str = status_val.to_s.strip
-                        if !status_str.empty? && status_str.downcase != "reassigned"
-                            active_branches[br.to_s] = status_str
-                        end
-                    end
+                    active.each { |k, v| active_branches[k.to_s] = v }
 
                     unless active_branches.empty?
                         matching_cves << {
-                            bug_id: cve_data[:bug_id],
-                            cve: cve_data[:cve],
-                            summary: cve_data[:summary],
+                            bug_id: cve_data.bug_id,
+                            cve: cve_data.cve,
+                            summary: cve_data.summary,
                             branches: active_branches
                         }
                     end
@@ -398,15 +392,15 @@ module KernelWork
                         status = item[:branches][distro] || ""
                         status_str = sprintf("%-#{distro_widths[distro]}s", status)
                         case status
-                        when "ToDo"
+                        when CVE::STATE_TODO
                             status_str = status_str.red()
                             allOK = false
-                        when "Merged"
+                        when CVE::STATE_MERGED
                             status_str = status_str.green()
-                        when "Applied"
+                        when CVE::STATE_APPLIED
                             status_str = status_str.brown()
                             allOK = false
-                        when "Pushed"
+                        when CVE::STATE_PUSHED
                             status_str = status_str.blue()
                             allOK = false
                         end
@@ -523,17 +517,17 @@ module KernelWork
             def gen_cve_list(opts, current_br, cve_datas)
                 todo_bugs = []
                 cve_datas.each do |cve_data|
-                    branches = cve_data[:branches] || {}
+                    branches = cve_data.branches
                     matched_branch_key = branches.keys.find { |k| k.to_s == current_br}
                     next if matched_branch_key.nil?
 
-                    status = branches[matched_branch_key].to_s.strip
+                    status = cve_data.status_for(matched_branch_key).to_s.strip
 
-                    if status == "ToDo"
+                    if status == CVE::STATE_TODO
                         # We may not need to apply it, but we need to refresh the status
                         todo_bugs << {
-                            bug_id: cve_data[:bug_id].to_s,
-                            cve: cve_data[:cve],
+                            bug_id: cve_data.bug_id,
+                            cve: cve_data.cve,
                             cve_data: cve_data,
                             matched_branch_key: matched_branch_key
                         }
@@ -547,7 +541,7 @@ module KernelWork
                 cve_list.each do |todo|
                     bug_id = todo[:bug_id]
                     cve = todo[:cve]
-                    sha = todo[:cve_data][:fix_sha]
+                    sha = todo[:cve_data].fix_sha
 
                     if sha.nil? || sha.empty?
                         log(:ERROR, "Unable to find Fix SHA for Bug ##{bug_id} on branch #{current_br}. Skipping.")
@@ -569,20 +563,20 @@ module KernelWork
 
                 if unpushed_commits.index(kSha) != nil
                     # Commit is unpushed, let's go normaly
-                    newState = "Applied"
+                    newState = CVE::STATE_APPLIED
                 elsif unmerged_commits.index(kSha) != nil
                     # Commit is pushed but unmerge. Mark as pushed
-                    newState = "Pushed"
+                    newState = CVE::STATE_PUSHED
                 else
                     # It's neither unpushed not unmerge. It's merged then !
-                    newState = "Merged"
+                    newState = CVE::STATE_MERGED
                 end
                 return newState
             end
 
             def cve_set_new_state(cve_data, branch, newState)
-                bug_id = cve_data[:bug_id].to_s
-                cve_data[:branches][branch] = newState
+                bug_id = cve_data.bug_id
+                cve_data.update_status(branch, newState)
                 @tracker.write_bug(bug_id, cve_data)
                 log(:INFO, "Successfully updated status of Bug ##{bug_id} to '#{newState}'.")
            end

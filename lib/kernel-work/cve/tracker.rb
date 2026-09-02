@@ -65,7 +65,8 @@ module KernelWork
                 Dir.glob(File.join(@cves_path, "*.json")).each do |file_path|
                     begin
                         content = File.read(file_path)
-                        cves << JSON.parse(content, symbolize_names: true)
+                        data = JSON.parse(content, symbolize_names: true)
+                        cves << CVE.from_h(data)
                     rescue => e
                         @logger&.log(:WARNING, "Failed to parse JSON file #{file_path}: #{e.message}")
                     end
@@ -78,7 +79,8 @@ module KernelWork
                 file_path = File.join(@cves_path, "#{bug_id}.json")
                 return nil unless File.exist?(file_path)
                 begin
-                    JSON.parse(File.read(file_path), symbolize_names: true)
+                    data = JSON.parse(File.read(file_path), symbolize_names: true)
+                    CVE.from_h(data)
                 rescue => e
                     @logger&.log(:WARNING, "Failed to parse JSON file #{file_path}: #{e.message}")
                     nil
@@ -88,7 +90,8 @@ module KernelWork
             def write_bug(bug_id, data)
                 ensure_dir
                 file_path = File.join(@cves_path, "#{bug_id}.json")
-                File.write(file_path, JSON.pretty_generate(data))
+                cve_hash = data.is_a?(CVE) ? data.to_h : data
+                File.write(file_path, JSON.pretty_generate(cve_hash))
             end
 
             def delete_all
@@ -124,7 +127,8 @@ module KernelWork
                     uri = URI("#{@url}/cves")
                     response = Net::HTTP.get_response(uri)
                     if response.is_a?(Net::HTTPSuccess)
-                        JSON.parse(response.body, symbolize_names: true)
+                        data = JSON.parse(response.body, symbolize_names: true)
+                        data.is_a?(Array) ? data.map { |h| CVE.from_h(h) } : []
                     else
                         @logger&.log(:WARNING, "REST tracker read_all failed: #{response.code} #{response.message}")
                         []
@@ -141,7 +145,8 @@ module KernelWork
                     uri = URI("#{@url}/cves/#{bug_id}")
                     response = Net::HTTP.get_response(uri)
                     if response.is_a?(Net::HTTPSuccess)
-                        JSON.parse(response.body, symbolize_names: true)
+                        data = JSON.parse(response.body, symbolize_names: true)
+                        CVE.from_h(data)
                     elsif response.code == "404"
                         nil
                     else
@@ -163,7 +168,8 @@ module KernelWork
                         http.use_ssl = true
                     end
                     request = Net::HTTP::Put.new(uri.path, { 'Content-Type' => 'application/json' })
-                    request.body = JSON.pretty_generate(data)
+                    cve_hash = data.is_a?(CVE) ? data.to_h : data
+                    request.body = JSON.pretty_generate(cve_hash)
                     response = http.request(request)
                     unless response.is_a?(Net::HTTPSuccess)
                         @logger&.log(:WARNING, "REST tracker write_bug(#{bug_id}) failed: #{response.code} #{response.message}")
