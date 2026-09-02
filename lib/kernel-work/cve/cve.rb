@@ -16,6 +16,9 @@ module KernelWork
         # List of all valid workflow states dynamically retrieved from STATE_* constants.
         VALID_STATES = constants.grep(/^STATE_/).map { |c| const_get(c) }.freeze
 
+        # Maximum string length among all valid workflow states.
+        MAX_STATE_LEN = VALID_STATES.map(&:length).max
+
         attr_reader :bug_id, :cve, :summary, :fix_sha, :distros, :branches, :tracker
 
         # Validate that a state is a recognized workflow state and return its canonical form

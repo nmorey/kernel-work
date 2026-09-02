@@ -773,6 +773,11 @@ begin
     test_11_passed = false
   end
 
+  if KernelWork::CVE::MAX_STATE_LEN != "Reassigned".length
+    puts "  11a2 (MAX_STATE_LEN) FAILED: Got #{KernelWork::CVE::MAX_STATE_LEN.inspect}"
+    test_11_passed = false
+  end
+
   # 2. Test validate_state! normalization and error
   if KernelWork::CVE.validate_state!("  todo  ") != KernelWork::CVE::STATE_TODO ||
      KernelWork::CVE.validate_state!(:merged) != KernelWork::CVE::STATE_MERGED ||
