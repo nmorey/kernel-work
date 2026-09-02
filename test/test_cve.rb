@@ -703,15 +703,15 @@ begin
     test_10_passed = false
   end
 
-  # Test all_ok?
-  if cve_obj.all_ok?
-    puts "  10d (all_ok? negative) FAILED"
+  # Test all_merged?
+  if cve_obj.all_merged?
+    puts "  10d (all_merged? negative) FAILED"
     test_10_passed = false
   end
 
   cve_obj.set_status("SLE15-SP7", KernelWork::CVE::STATE_MERGED)
-  if !cve_obj.all_ok?
-    puts "  10e (all_ok? positive) FAILED"
+  if !cve_obj.all_merged?
+    puts "  10e (all_merged? positive) FAILED"
     test_10_passed = false
   end
 

@@ -353,7 +353,7 @@ module KernelWork
                         status_str = sprintf("%-#{distro_widths[distro]}s", status)
                         statuses_str += CVE.colour(status, status_str)
                     end
-                    cve_bug_str = cve_bug_str.green if cve.all_ok?
+                    cve_bug_str = CVE.colour(CVE::STATE_MERGED, cve_bug_str) if cve.all_merged?
                     puts "#{cve_bug_str}#{statuses_str}"
                 end
 

@@ -179,7 +179,7 @@ module KernelWork
 
         # Check if all active branches are merged (or fully resolved)
         # @return [Boolean]
-        def all_ok?
+        def all_merged?
             active = active_branches
             return false if active.empty?
             active.values.all? { |status| status == STATE_MERGED }
