@@ -316,13 +316,17 @@ module KernelWork
 
         end
 
+        # Build the kernel at a specific commit, only building the relevant subset of files changed by that commit.
+        # @param opts [Hash] Options hash for the build
+        # @param commit [Commit, String] Commit object or SHA representing the commit to build
+        # @return [Integer] Exit code or result of build
         def build_commit(opts, commit)
             subset = _find_build_subset(commit)
             log(:INFO, "building subtree '#{subset}'...")
             build_opts = opts.dup
             build_opts[:build_subset] = subset
             return build(build_opts)
-       end
+        end
 
         # Get mainline tag containing the commit
         # @param commit [Commit] Commit object
@@ -926,6 +930,10 @@ module KernelWork
             false
         end
 
+        # Save unhandled SCP commits back to a file if requested.
+        # @param opts [Hash] Options hash containing :file.
+        # @param commits [Array<Commit>] List of commits to save.
+        # @return [void]
         def _save_scp_commits(opts, commits)
             if opts[:file]
                 File.open(opts[:file], 'w') do |f|

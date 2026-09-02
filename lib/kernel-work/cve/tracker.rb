@@ -9,6 +9,11 @@ module KernelWork
     module CveCLI
         # Base CVE Tracker interface
         class CveTracker
+            # Factory method to create a CVE tracker based on config.
+            # @param config [Hash] Configuration options including :tracker_type.
+            # @param logger [Object, nil] Optional logger instance.
+            # @return [CveTracker] Instance of a tracker subclass.
+            # @raise [RuntimeError] If tracker type is unknown.
             def self.create(config, logger = nil)
                 type = config[:tracker_type] || "local"
                 case type.to_s.downcase
@@ -42,6 +47,7 @@ module KernelWork
             end
         end
 
+        # Local CVE Tracker that stores bug info in JSON files.
         class CveLocalTracker < CveTracker
             attr_reader :repo_path, :cves_path
 
@@ -55,10 +61,15 @@ module KernelWork
                 @logger = logger
             end
 
+            # Ensure the directory for storing CVE JSON files exists.
+            # @return [void]
             def ensure_dir
                 FileUtils.mkdir_p(@cves_path) unless File.directory?(@cves_path)
             end
 
+            # Read all CVE bugs stored in the local repository.
+            # @return [Array<CVE>] All CVE instances.
+            # @raise [CorruptedJSONError] If any file contains corrupted JSON.
             def read_all
                 ensure_dir
                 cves = []
@@ -86,6 +97,10 @@ module KernelWork
                 end
             end
 
+            # Write bug tracking data to local repository file.
+            # @param bug_id [String] The Bugzilla bug ID.
+            # @param data [CVE, Hash] The CVE instance or raw data hash.
+            # @return [void]
             def write_bug(bug_id, data)
                 ensure_dir
                 file_path = File.join(@cves_path, "#{bug_id}.json")
@@ -93,6 +108,8 @@ module KernelWork
                 File.write(file_path, JSON.pretty_generate(cve_hash))
             end
 
+            # Delete all CVE files and directory from local repository.
+            # @return [void]
             def delete_all
                 if File.directory?(@cves_path)
                     FileUtils.rm_rf(@cves_path)
@@ -100,6 +117,9 @@ module KernelWork
                 ensure_dir
             end
 
+            # Delete a specific bug's local file.
+            # @param bug_id [String] The Bugzilla bug ID.
+            # @return [void]
             def delete_bug(bug_id)
                 ensure_dir
                 file_path = File.join(@cves_path, "#{bug_id}.json")
@@ -109,6 +129,7 @@ module KernelWork
             end
         end
 
+        # REST CVE Tracker that synchronizes CVE bugs with a remote HTTP API server.
         class CveRestTracker < CveTracker
             def initialize(config, logger = nil)
                 @url = config[:tracker_url]
@@ -120,6 +141,9 @@ module KernelWork
                 @url = @url.chomp('/')
             end
 
+            # Read all CVE bugs from the REST API.
+            # @return [Array<CVE>] All CVE instances.
+            # @raise [RestError] If the HTTP request fails.
             def read_all
                 begin
                     uri = URI("#{@url}/cves")
@@ -135,6 +159,11 @@ module KernelWork
                 end
             end
 
+            # Read a specific CVE bug from the REST API.
+            # @param bug_id [String] The Bugzilla bug ID.
+            # @return [CVE] The parsed CVE object.
+            # @raise [BugNotFoundError] If the API server returns a 404.
+            # @raise [RestError] If any other HTTP error occurs.
             def read_bug(bug_id)
                 begin
                     uri = URI("#{@url}/cves/#{bug_id}")
@@ -154,6 +183,11 @@ module KernelWork
                 end
             end
 
+            # Write or update CVE bug tracking data via the REST API.
+            # @param bug_id [String] The Bugzilla bug ID.
+            # @param data [CVE, Hash] The CVE instance or raw data hash.
+            # @return [void]
+            # @raise [RestError] If the REST write request fails.
             def write_bug(bug_id, data)
                 begin
                     uri = URI("#{@url}/cves/#{bug_id}")
@@ -173,6 +207,9 @@ module KernelWork
                 end
             end
 
+            # Delete all CVE data from the REST server database.
+            # @return [void]
+            # @raise [RestError] If the delete request fails.
             def delete_all
                 begin
                     uri = URI("#{@url}/cves")
@@ -190,6 +227,10 @@ module KernelWork
                 end
             end
 
+            # Delete a specific CVE bug from the REST server database.
+            # @param bug_id [String] The Bugzilla bug ID.
+            # @return [void]
+            # @raise [RestError] If the delete request fails.
             def delete_bug(bug_id)
                 begin
                     uri = URI("#{@url}/cves/#{bug_id}")

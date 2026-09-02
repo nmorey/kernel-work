@@ -19,6 +19,8 @@ end
 module KernelWork
     # Register WorkEnvs as a subcommand under 'env' if available
     if defined?(WorkEnvs)
+        # Reference to the WorkEnvs module representing the work environment.
+        # @return [Module] the WorkEnvs module alias
         Env = WorkEnvs
 
         # Define top-level command aliases dynamically expanded by CLIClassTool

@@ -2,11 +2,15 @@ module KernelWork
 
     # Represents a CVE bug being tracked in the system
     class CVE < Common
-        # Define CVE workflow state constants
+        # The ToDo workflow state for a CVE bug.
         STATE_TODO       = "ToDo"
+        # The Applied workflow state for a CVE bug.
         STATE_APPLIED    = "Applied"
+        # The Pushed workflow state for a CVE bug.
         STATE_PUSHED     = "Pushed"
+        # The Merged workflow state for a CVE bug.
         STATE_MERGED     = "Merged"
+        # The Reassigned workflow state for a CVE bug.
         STATE_REASSIGNED = "Reassigned"
 
         attr_reader :bug_id, :cve, :summary, :fix_sha, :distros, :branches, :tracker

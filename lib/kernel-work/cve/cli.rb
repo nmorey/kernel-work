@@ -8,12 +8,19 @@ require 'fileutils'
 module KernelWork
     # Module exposing CVE commands nested under 'cve'
     module CveCLI
+        # Short description of the CVE CLI subcommand.
         CLI_DESCRIPTION = "Manage CVE fixes and tracking"
+        # CLI command name registered for autodiscovery.
         CLI_COMMAND_NAME = "cve"
+        # Help banner title for CVE commands.
         CLI_HELP_EXPAND = "*** CVE commands ***"
 
         class CveCLIError < KernelWork::KernelWorkError; end
+
+        # Base action class for CVE CLI commands.
         class Action < KernelWork::Common
+            # Retrieve the parent module namespace.
+            # @return [Module] The CveCLI module namespace.
             def parent_module
                 KernelWork::CveCLI
             end
@@ -21,6 +28,7 @@ module KernelWork
 
         # CVE Action class providing fetch, apply, and push subcommands nested under cve
         class CveAction < Action
+            # List of supported actions.
             ACTION_LIST = [
                 :fetch,
                 :apply,
@@ -29,6 +37,7 @@ module KernelWork
                 :refresh,
             ]
 
+            # Brief help description for each action.
             ACTION_HELP = {
                 :fetch => "Fetch my CVE bugs from Bugzilla and populate Google Sheet or Local file",
                 :apply => "Apply the missing CVE fixes to the current branch",
@@ -63,6 +72,9 @@ module KernelWork
                 end
             end
 
+            # Validate options before running an action.
+            # @param opts [Hash] The options hash.
+            # @return [void]
             def self.check_opts(opts)
             end
 
@@ -244,6 +256,9 @@ module KernelWork
                 return 0
             end
 
+            # Refresh CVE status for the current branch.
+            # @param opts [Hash] Options hash.
+            # @return [void]
             def refresh(opts)
                 all_cves = @tracker.read_all
 
@@ -419,6 +434,10 @@ module KernelWork
                 nil
             end
 
+            # Generate a list of CVE tracking bugs that apply to the current branch.
+            # @param opts [Hash] Options hash.
+            # @param cve_datas [Array<CVE>] All CVE data records.
+            # @return [Array<CVE>] List of relevant CVE bugs.
             def gen_cve_list(opts, cve_datas)
                 bugs = []
                 cve_datas.each do |cve_data|
@@ -429,6 +448,11 @@ module KernelWork
                 return bugs
             end
 
+            # Map active CVE bugs needing backports to a list of Commit objects.
+            # @param opts [Hash] Options hash.
+            # @param cve_datas [Array<CVE>] CVE data records.
+            # @return [Array<Commit>] List of target commits to patch.
+            # @raise [ShaNotCommitError] If any CVE is missing its fix SHA.
             def cves_to_patch_list(opts, cve_datas)
                 patchlist = []
                 cve_datas.each do |cve|
@@ -470,6 +494,7 @@ module KernelWork
             end
         end
 
+        # Action classes exposed by the CveCLI module.
         ACTION_CLASS = [ CveAction ]
         extend CLIClassTool::Utils
     end
