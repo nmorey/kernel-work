@@ -1,6 +1,6 @@
 module KernelWork
     # Represents a CVE bug being tracked in the system
-    class CVE
+    class CVE < Common
         # Define CVE workflow state constants
         STATE_TODO       = "ToDo"
         STATE_APPLIED    = "Applied"
