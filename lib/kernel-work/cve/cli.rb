@@ -75,6 +75,9 @@ module KernelWork
 
                 @suse = suse || Suse.new(upstream)
                 @upstream = upstream || @suse.upstream
+                config = KernelWork.config.cve.to_h
+                @tracker = CveTracker.create(config, self)
+
             end
 
             # Get current branch
@@ -86,7 +89,6 @@ module KernelWork
             # Fetch action
             def fetch(opts)
                 config = KernelWork.config.cve.to_h
-                tracker = CveTracker.create(config, self)
 
                 bz_user = opts[:bugzilla_user] || config[:bugzilla_user]
                 if bz_user.nil? || bz_user.empty?
@@ -125,12 +127,12 @@ module KernelWork
                 # Identify and drop reassigned/resolved bugs from local cache
                 fetched_ids = filtered_bugs.map { |bug| bug["id"].to_s }
                 begin
-                    local_bugs = tracker.read_all
+                    local_bugs = @tracker.read_all
                     local_ids = local_bugs.map { |bug| bug[:bug_id].to_s }
                     orphaned_ids = local_ids - fetched_ids
                     unless orphaned_ids.empty?
                         log(:INFO, "Dropping #{orphaned_ids.length} reassigned/resolved bug(s) from cache: #{orphaned_ids.join(', ')}")
-                        orphaned_ids.each { |bug_id| tracker.delete_bug(bug_id) }
+                        orphaned_ids.each { |bug_id| @tracker.delete_bug(bug_id) }
                     end
                 rescue => e
                     log(:WARNING, "Failed to clean up reassigned/resolved CVEs from cache: #{e.message}")
@@ -145,7 +147,7 @@ module KernelWork
 
                 if opts[:force]
                     log(:INFO, "Force option specified. Clearing tracking data...")
-                    tracker.delete_all
+                    @tracker.delete_all
                 end
 
                 updates_count = 0
@@ -158,7 +160,7 @@ module KernelWork
                         fix_info = parse_cve_comment(comments)
                         if fix_info
                             # Prepare/merge with existing local data
-                            existing_data = tracker.read_bug(bug_id) || {}
+                            existing_data = @tracker.read_bug(bug_id) || {}
                             branches = existing_data[:branches] || {}
 
                             # Merge in target branches from parsed distros
@@ -179,7 +181,7 @@ module KernelWork
                                 branches: branches
                             }
 
-                            tracker.write_bug(bug_id, bug_data)
+                            @tracker.write_bug(bug_id, bug_data)
                             updates_count += 1
                             log(:INFO, "Found CVE fix info for #{fix_info[:cve]} (Bug ##{bug_id})")
                         else
@@ -208,68 +210,34 @@ module KernelWork
                     return 1
                 end
 
-                log(:INFO, "Current branch is: #{current_br}")
-
-                log(:INFO, "Connecting to CVE tracker...")
-                tracker = CveTracker.create(config, self)
-                cve_files = tracker.read_all
+                cve_files = @tracker.read_all
 
                 if cve_files.empty?
                     log(:INFO, "No CVE tracking data found.")
                     return 0
                 end
 
-                todo_bugs = []
-                cve_files.each do |cve_data|
-                    branches = cve_data[:branches] || {}
-                    matched_branch_key = branches.keys.find { |k| k.to_s == current_br}
-                    next if matched_branch_key.nil?
-
-                    status = branches[matched_branch_key].to_s.strip
-                    if status == "ToDo"
-                        todo_bugs << {
-                            bug_id: cve_data[:bug_id].to_s,
-                            cve: cve_data[:cve],
-                            cve_data: cve_data,
-                            matched_branch_key: matched_branch_key
-                        }
-                    end
-                end
-
+                todo_bugs = gen_cve_list(opts, current_br, cve_files)
                 if todo_bugs.empty?
                     log(:INFO, "No CVE fixes to apply in 'To do' status for branch '#{current_br}'.")
                     return 0
                 end
 
-                log(:INFO, "Found #{todo_bugs.length} CVE fix(es) to apply for branch '#{current_br}'")
-
-                patchlist = []
-                scp_opts = opts.dup
-                scp_opts[:cve] = true
-
-                todo_bugs.each do |todo|
-                    bug_id = todo[:bug_id]
-                    cve = todo[:cve]
-                    sha = todo[:cve_data][:fix_sha]
-
-                    if sha.nil? || sha.empty?
-                        log(:ERROR, "Unable to find Fix SHA for Bug ##{bug_id} on branch #{current_br}. Skipping.")
-                        next
-                    end
-                    c = Commit.new(sha)
-                    c.data = todo
-                    c.extra_desc = "#{cve} bsc##{bug_id}"
-                    patchlist << c
-                end
-
+                patchlist = cve_list_to_patch_list(opts, todo_bugs)
                 if patchlist.length == 0
                     log(:INFO, "Nothing to apply")
                     return
                 end
+
+                # Cache unpushed/unmerged commits to figure out the state
                 unpushed_commits = @suse.runGit(@suse._list_unpushed_cmd(opts)).
                                        split("\n").map(){ |line| line.split.first }
                 unmerged_commits = @suse.runGit(@suse._list_unmerged_cmd(opts)).
                                        split("\n").map(){ |line| line.split.first }
+
+                scp_opts = opts.dup
+                scp_opts[:cve] = true
+
                 @upstream._scp(scp_opts, patchlist) do |commit, error = nil|
                     todo = commit.data
                     bug_id = todo[:bug_id]
@@ -280,31 +248,10 @@ module KernelWork
                         @upstream.build_commit(opts, commit)
                         newState = "Applied"
                     elsif error.class == SCPAlreadyApplied
-                        # Check if it's applied locally, already pushed or even merged
-                        kSha = @suse.get_suse_commit(sha)
-                        raise KernelWorkError.new() if kSha == nil
-
-                        if unpushed_commits.index(kSha) != nil
-                            # Commit is unpushed, let's go normaly
-                            newState = "Applied"
-                        elsif unmerged_commits.index(kSha) != nil
-                            # Commit is pushed but unmerge. Mark as pushed
-                            newState = "Pushed"
-                        else
-                            # It's neither unpushed not unmerge. It's merged then !
-                            newState = "Merged"
-                        end
+                        newState = cve_calc_new_state(commit, unpushed_commits, unmerged_commits)
                     end
 
-                    if newState != nil
-                        begin
-                            todo[:cve_data][:branches][todo[:matched_branch_key]] = newState
-                            tracker.write_bug(bug_id, todo[:cve_data])
-                            log(:INFO, "Successfully updated status of Bug ##{bug_id} to '#{newState}'.")
-                        rescue => e
-                            log(:ERROR, "Failed to update tracker: #{e.message}")
-                        end
-                    end
+                    cve_set_new_state(todo[:cve_data], todo[:matched_branch_key], newState) if newState != nil
                 end
             end
 
@@ -343,11 +290,10 @@ module KernelWork
                 return 0 if bug_ids_to_push.empty?
 
                 log(:INFO, "Updating status from 'Applied' to 'Pushed' in tracker...")
-                tracker = CveTracker.create(config, self)
 
                 updates_count = 0
                 bug_ids_to_push.each do |bug_id|
-                    cve_data = tracker.read_bug(bug_id)
+                    cve_data = @tracker.read_bug(bug_id)
                     if ! cve_data then
                         log(:WARNING, "Bug ##{bug_id} tracking JSON file not found or failed to load.")
                         next
@@ -361,7 +307,7 @@ module KernelWork
                     if status == "Applied"
                         cve_data[:branches][matched_branch_key] = "Pushed"
                         begin
-                            tracker.write_bug(bug_id, cve_data)
+                            @tracker.write_bug(bug_id, cve_data)
                             updates_count += 1
                             log(:INFO, "Updated Bug ##{bug_id} status to 'Pushed'...")
                         rescue => e
@@ -377,8 +323,7 @@ module KernelWork
             # Status action
             def status(opts)
                 config = KernelWork.config.cve.to_h
-                tracker = CveTracker.create(config, self)
-                cve_files = tracker.read_all
+                cve_files = @tracker.read_all
 
                 if cve_files.empty?
                     log(:INFO, "No CVE tracking data found.")
@@ -575,6 +520,72 @@ module KernelWork
                 nil
             end
 
+            def gen_cve_list(opts, current_br, cve_datas)
+                todo_bugs = []
+                cve_datas.each do |cve_data|
+                    branches = cve_data[:branches] || {}
+                    matched_branch_key = branches.keys.find { |k| k.to_s == current_br}
+                    next if matched_branch_key.nil?
+
+                    status = branches[matched_branch_key].to_s.strip
+
+                    if status == "ToDo"
+                        # We may not need to apply it, but we need to refresh the status
+                        todo_bugs << {
+                            bug_id: cve_data[:bug_id].to_s,
+                            cve: cve_data[:cve],
+                            cve_data: cve_data,
+                            matched_branch_key: matched_branch_key
+                        }
+                    end
+                end
+                return todo_bugs
+            end
+
+            def cve_list_to_patch_list(opts, cve_list)
+                patchlist = []
+                cve_list.each do |todo|
+                    bug_id = todo[:bug_id]
+                    cve = todo[:cve]
+                    sha = todo[:cve_data][:fix_sha]
+
+                    if sha.nil? || sha.empty?
+                        log(:ERROR, "Unable to find Fix SHA for Bug ##{bug_id} on branch #{current_br}. Skipping.")
+                        next
+                    end
+                    c = Commit.new(sha)
+                    c.data = todo
+                    c.extra_desc = "#{cve} bsc##{bug_id}"
+                    patchlist << c
+                end
+                return patchlist
+            end
+
+            def cve_calc_new_state(commit, unpushed_commits, unmerged_commits)
+                newState = nil
+                # Check if it's applied locally, already pushed or even merged
+                kSha = @suse.get_suse_commit(commit.sha)
+                raise KernelWorkError.new() if kSha == nil
+
+                if unpushed_commits.index(kSha) != nil
+                    # Commit is unpushed, let's go normaly
+                    newState = "Applied"
+                elsif unmerged_commits.index(kSha) != nil
+                    # Commit is pushed but unmerge. Mark as pushed
+                    newState = "Pushed"
+                else
+                    # It's neither unpushed not unmerge. It's merged then !
+                    newState = "Merged"
+                end
+                return newState
+            end
+
+            def cve_set_new_state(cve_data, branch, newState)
+                bug_id = cve_data[:bug_id].to_s
+                cve_data[:branches][branch] = newState
+                @tracker.write_bug(bug_id, cve_data)
+                log(:INFO, "Successfully updated status of Bug ##{bug_id} to '#{newState}'.")
+           end
         end
 
         ACTION_CLASS = [ CveAction ]
