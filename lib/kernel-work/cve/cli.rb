@@ -260,7 +260,13 @@ module KernelWork
             # @param opts [Hash] Options hash.
             # @return [void]
             def refresh(opts)
-                all_cves = @tracker.read_all
+                all_cves = @tracker.read_all.select {|cve|
+                     cve.get_status(branch()) != nil}
+
+                # Return now if there are no CVEs
+                # It avoids warnings/errs on dev branches that have
+                # no upstream to compare tro but would have no CVE either
+                return 0 if all_cves.length == 0
 
                 # Cache unpushed/unmerged commits to figure out the state
                 unpushed_commits = @suse.runGit(@suse._list_unpushed_cmd(opts)).
