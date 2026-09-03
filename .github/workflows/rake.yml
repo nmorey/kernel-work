@@ -1,0 +1,51 @@
+name: Ruby Gem
+
+on:
+  push:
+    branches:
+      - "*"
+    tags:
+      - v*
+  pull_request:
+    branches:
+      - "*"
+
+jobs:
+  # Job 1: Dynamically determine active Ruby versions
+  setup-matrix:
+    name: Determine Ruby Versions
+    runs-on: ubuntu-latest
+    outputs:
+      ruby-versions: ${{ steps.set-versions.outputs.versions }}
+    steps:
+      - id: set-versions
+        run: |
+          # Fetch the official active Ruby versions list and format as a JSON array
+          VERSIONS=$(curl -s https://cache.ruby-lang.org/pub/misc/ci_versions/cruby.json | jq -c '.')
+          echo "versions=${VERSIONS}" >> "$GITHUB_OUTPUT"
+
+  # Job 2: Build against the retrieved versions
+  build:
+    name: Build (Ruby ${{ matrix.ruby-version }})
+    needs: setup-matrix
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        ruby-version: ${{ fromJSON(needs.setup-matrix.outputs.ruby-versions) }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-tags: 1
+        fetch-depth: 0
+    - name: Set up Ruby ${{ matrix.ruby-version }}
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: ${{ matrix.ruby-version }}
+        bundler-cache: true
+    - name: Run tests
+      run: |
+        bundle exec rake
