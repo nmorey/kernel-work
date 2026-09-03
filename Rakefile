@@ -32,6 +32,5 @@ task :test do
   sh "ruby test/test_gen_backport_list.rb"
   sh "ruby test/test_cve.rb"
 end
-end
 
 task :default => [:check_whitespace, :test, :yard]
