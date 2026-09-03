@@ -4,12 +4,25 @@ module KernelWork
         class CveCLIError < KernelWorkError
         end
 
-        # Exception raised when bugzill request fails
+        # Exception raised when bugzilla request fails
         class BugzillaError < CveCLIError
             # Initialize a new BugzillaError
-            # @param res [Net::HTTPResponse] Bugzilla request error
-            def initialize(res)
-                super("Bugzilla request failed with code #{res.code}: #{res.body}")
+            # @param res_or_msg [Net::HTTPResponse, String] Bugzilla request error or message
+            def initialize(res_or_msg)
+                if res_or_msg.is_a?(Net::HTTPResponse)
+                    super("Bugzilla request failed with code #{res_or_msg.code}: #{res_or_msg.body}")
+                else
+                    super(res_or_msg.to_s)
+                end
+            end
+        end
+
+        # Exception raised when Bugzilla request times out
+        class BugzillaTimeoutError < BugzillaError
+            # Initialize a new BugzillaTimeoutError
+            # @param timeout [Integer, Float] The timeout duration in seconds
+            def initialize(timeout)
+                super("Bugzilla request timed out after #{timeout} seconds")
             end
         end
 

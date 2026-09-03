@@ -117,9 +117,7 @@ module KernelWork
                     assigned_to: bz_user
                 }
 
-                begin
-                    response = @bugzilla.request("bug", params)
-                end
+                response = @bugzilla.request("bug", params)
 
                 bugs = response["bugs"] || []
                 resolved_statuses = ["RESOLVED", "VERIFIED", "CLOSED"]

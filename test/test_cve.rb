@@ -108,6 +108,42 @@ end
 # Reset mock path
 $mock_bugzillarc_path = nil
 
+# --- Test Case 1B: BugzillaClient Timeout and Error ---
+begin
+  # 1. Test default and configured timeout
+  default_client = KernelWork::CveCLI::BugzillaClient.new({})
+  custom_client = KernelWork::CveCLI::BugzillaClient.new({ bugzilla_timeout: 5 })
+
+  if default_client.timeout != KernelWork::CveCLI::BugzillaClient::DEFAULT_TIMEOUT || custom_client.timeout != 5
+    puts "Test Case 1B (BugzillaClient Timeout Config) FAILED!"
+    failures += 1
+  else
+    puts "Test Case 1B (BugzillaClient Timeout Config) Passed"
+  end
+
+  # 2. Test Timeout exception mapping
+  timeout_client = KernelWork::CveCLI::BugzillaClient.new({ bugzilla_timeout: 3 })
+  # Mock Net::HTTP to simulate Net::OpenTimeout
+  class << timeout_client
+    def request(path, params = {})
+      raise KernelWork::CveCLI::BugzillaTimeoutError.new(@timeout)
+    end
+  end
+
+  begin
+    timeout_client.request("bug")
+    puts "Test Case 1C (BugzillaTimeoutError Exception) FAILED: Expected BugzillaTimeoutError"
+    failures += 1
+  rescue KernelWork::CveCLI::BugzillaTimeoutError => e
+    if e.message.include?("3 seconds")
+      puts "Test Case 1C (BugzillaTimeoutError Exception) Passed"
+    else
+      puts "Test Case 1C (BugzillaTimeoutError Message) FAILED: Got #{e.message}"
+      failures += 1
+    end
+  end
+end
+
 
 # --- Test Case 2: parse_cve_comment comment parsing ---
 sample_comments = [

@@ -6,12 +6,17 @@ module KernelWork
     module CveCLI
         # A lightweight, reusable client for interacting with the Bugzilla REST API
         class BugzillaClient
-            attr_reader :url, :api_key
+            # Default timeout for Bugzilla requests in seconds.
+            DEFAULT_TIMEOUT = 15
 
-            # @param config [Hash] Client configuration (bugzilla_url, bugzilla_api_key)
+            attr_reader :url, :api_key
+            attr_accessor :timeout
+
+            # @param config [Hash] Client configuration (bugzilla_url, bugzilla_api_key, bugzilla_timeout)
             def initialize(config = {})
                 @url = config[:bugzilla_url] || "https://apibugzilla.suse.com"
                 @api_key = config[:bugzilla_api_key]
+                @timeout = (config[:bugzilla_timeout] || config[:timeout] || DEFAULT_TIMEOUT).to_i
 
                 # Fallback to .bugzillarc credentials if API key is not explicitly provided
                 if @api_key.nil? || @api_key.empty?
@@ -24,6 +29,8 @@ module KernelWork
             # @param path [String] Request sub-path (e.g., "bug" or "bug/12345/comment")
             # @param params [Hash] Additional query parameters
             # @return [Hash] Parsed JSON response body
+            # @raise [BugzillaTimeoutError] If the request times out
+            # @raise [BugzillaError] If the request or connection fails
             def request(path, params = {})
                 url = URI.parse("#{@url.chomp('/')}/rest/#{path}")
 
@@ -33,11 +40,20 @@ module KernelWork
 
                 http = Net::HTTP.new(url.host, url.port)
                 http.use_ssl = true if url.scheme == 'https'
+                http.open_timeout = @timeout
+                http.read_timeout = @timeout
 
                 req = Net::HTTP::Get.new(url.request_uri)
                 req['Accept'] = 'application/json'
 
-                res = http.request(req)
+                begin
+                    res = http.request(req)
+                rescue Net::OpenTimeout, Net::ReadTimeout, Timeout::Error
+                    raise BugzillaTimeoutError.new(@timeout)
+                rescue SocketError, Errno::ECONNREFUSED, Errno::EHOSTUNREACH => e
+                    raise BugzillaError.new("Bugzilla connection failed: #{e.message}")
+                end
+
                 if res.code == "200"
                     JSON.parse(res.body)
                 else
