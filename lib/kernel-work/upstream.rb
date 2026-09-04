@@ -766,7 +766,11 @@ module KernelWork
                     runGitInteractive("cherry-pick --abort")
                     raise(e)
                 end
-                runGitInteractive("diff")
+                begin
+                    runGitInteractive("diff")
+                rescue
+                    # Do not crash if diff was interrupted
+                end
                 log( :INFO, "Entering subshell to fix conflicts. Exit when done")
                 runSystem("PS1_WARNING='SCP FIX' bash", false)
                 rep = confirm(opts, "continue with scp [y(es), n(o), s(kip)]?", true, ["y", "n", "s"])
