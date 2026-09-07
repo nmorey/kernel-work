@@ -81,23 +81,25 @@ module KernelWork
             # Initialize a CveAction object, linking suse and upstream instances
             def initialize(upstream = nil, suse = nil)
                 @path = KernelWork.config.kernel_source_dir
-                begin
-                    set_branches()
-                rescue UnknownBranch
-                    @branch = nil
-                end
-
-                @suse = suse || Suse.new(upstream)
-                @upstream = upstream || @suse.upstream
                 config = KernelWork.config.cve.to_h
                 @tracker = CveTracker.create(config, self)
                 @bugzilla = CveCLI::BugzillaClient.new(config)
-
+                @suse = suse
+                @upstream = upstream
             end
 
+            def initialize_repo()
+                if @suse == nil
+                    @suse = Suse.new(@upstream)
+                end
+                if @upstream == nil
+                    @upstream = @suse.upstream
+                end
+                @branch = @suse.branch()
+            end
             # Get current branch
             def branch
-                raise KernelWork::UnknownBranch.new(@path) if @branch == nil
+                initialize_repo() if @branch == nil
                 @branch
             end
 
@@ -200,6 +202,7 @@ module KernelWork
 
             # Apply action
             def apply(opts)
+                initialize_repo()
                 config = KernelWork.config.cve.to_h
                 cve_files = @tracker.read_all
                 if cve_files.empty?
@@ -234,6 +237,7 @@ module KernelWork
 
             # Push action
             def push(opts)
+                initialize_repo()
                 config = KernelWork.config.cve.to_h
                 current_br = branch()
 
@@ -258,6 +262,7 @@ module KernelWork
             # @param opts [Hash] Options hash.
             # @return [void]
             def refresh(opts)
+                initialize_repo()
                 all_cves = @tracker.read_all.select {|cve|
                      cve.get_status(branch()) != nil}
 
