@@ -120,7 +120,7 @@ module KernelWork
             @branch_infos = branches.find { |b| b[:name] == @branch }
 
             if @branch_infos == nil then
-                log(:WARNING, "Branch '#{@branch}' not in supported list")
+                log(:WARNING, "Branch '#{@branch}' not in supported list") if @branch != nil
                 @branch_infos = {}
             else
                 @patch_path = @branch_infos[:patch_path] if @branch_infos[:patch_path] != nil
