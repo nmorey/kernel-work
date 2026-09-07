@@ -102,14 +102,14 @@ module KernelWork
         # @param upstream [Upstream, nil] Upstream object
         def initialize(upstream = nil)
             @path=KernelWork.config.kernel_source_dir
-           begin
-               set_branches()
-           rescue UnknownBranch
-               @branch = nil
-           end
+            begin
+                set_branches()
+            rescue UnknownBranch
+                @branch = nil
+            end
 
-           @upstream = upstream
-           @upstream = Upstream.new(self) if @upstream == nil
+            @upstream = upstream
+            @upstream = Upstream.new(self) if @upstream == nil
 
             @patch_path = "patches.suse"
 
