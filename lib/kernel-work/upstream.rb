@@ -648,14 +648,14 @@ module KernelWork
             while ! commits.empty?
                 commit = commits.first
                 begin
-                    log(:INFO, "# #{commits.length} commits left")
+                    log(:INFO, "# #{commits.length} commits left".grey())
 
                     # Lazily load inHouse and suse_commit_ids if commit has Fixes: tags
                     fixes = commit.fixes_shas()
                     # Do not bother with git fixes in CVE mode
                     if !fixes.empty? &&  opts[:cve] != true
                         if inHouse.nil?
-                            log(:INFO, "Commit has 'Fixes:' tag. Initializing local branch commit list...")
+                            log(:INFO, "# Initializing local branch commit list...".grey())
                             begin
                                 inHouse = genBackportList(local_branch(), opts[:upstream_ref] || "origin/master", opts[:filter] || {})
                             rescue
@@ -683,7 +683,7 @@ module KernelWork
                         e.series.each { |s| s.data ||= commit.data }
                         new_commits = (e.series + commits).uniq
                         commits.replace(new_commits)
-                        log(:INFO, "Queued series (#{e.series.length} patches). #{commits.length} commits now in queue.")
+                        log(:INFO, "# Queued series (#{e.series.length} patches). #{commits.length} commits now in queue.")
                         next
                     end
 
@@ -698,10 +698,10 @@ module KernelWork
                     commits.shift # Remove success from list
 
                 rescue SCPAbort => e
-                    log(:INFO, "Aborted")
+                    log(:WARNING, "Aborted")
                      raise e
                 rescue Interrupt
-                    log(:INFO, "Interrupted")
+                    log(:WARNING, "Interrupted")
                     raise SCPAbort.new()
                 end
             end
@@ -834,7 +834,7 @@ module KernelWork
             raise ShaNotCommitError.new() if !commit.is_a?(KernelWork::Commit)
 
             begin
-                desc=commit.desc()
+                desc=commit.desc().blue()
             rescue ShaNotFoundError => e
                 log(:ERROR, "'#{commit.sha}' does not seems to be a valid  SHA in this repo")
                 raise e
@@ -845,9 +845,10 @@ module KernelWork
                 raise SCPAlreadyApplied.new()
             end
 
+            log(:INFO, "Looking at #{desc.bold()}")
             fixes = commit.fixes_shas()
             if !fixes.empty?
-                log(:INFO, "Patch fixes")
+                log(:INFO, "Patch fixes:")
                 fixes.each do |f_sha|
                     fixes_commit = KernelWork::Commit.new(f_sha)
                     begin
@@ -868,12 +869,14 @@ module KernelWork
             if !series.empty?
                 log(:INFO, "Patch is part of a series:")
                 series.each do |series_commit|
-                    log(:INFO, "  #{series_commit.desc}")
+                    str = series_commit.desc
+                    str = series_commit.desc.blue().bold() if commit.sha == series_commit.sha
+                    log(:INFO, "  #{str}")
                 end
             end
 
             confirm_choices = ["y", "n", "?", "r"]
-            confirm_msg = "pick commit '#{desc}' up"
+            confirm_msg = "pick commit '#{desc.bold()}' up"
             usage = [ "[y]es", "[n]o", "[?]show", "[r]ef set and apply" ]
             if series.length > 1
                 confirm_choices << "a"

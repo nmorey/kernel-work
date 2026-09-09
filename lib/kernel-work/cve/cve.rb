@@ -57,7 +57,7 @@ module KernelWork
 
             case norm_state
             when STATE_TODO
-                text.red
+                text.red.bold
             when STATE_MERGED
                 text.green
             when STATE_APPLIED
