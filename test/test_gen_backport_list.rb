@@ -287,6 +287,19 @@ else
   failures += 1
 end
 
+# Test Case 12C: Commit#eql? and Commit#hash deduplication in Array#uniq
+c_dup1 = KernelWork::Commit.new("02c5f9dc2efd823e061954d564ce00bacd1bebeb", :subject => "Subject A")
+c_dup2 = KernelWork::Commit.new("02c5f9dc2efd823e061954d564ce00bacd1bebeb", :subject => "Subject B")
+c_other = KernelWork::Commit.new("6d0c8b70739162985175cf3980c5ce60cbb919a3", :subject => "Subject C")
+if c_dup1.eql?(c_dup2) &&
+   c_dup1.hash == c_dup2.hash &&
+   [c_dup1, c_dup2, c_other].uniq == [c_dup1, c_other]
+  puts "Test Case 12C Passed"
+else
+  puts "Test Case 12C FAILED!"
+  failures += 1
+end
+
 # Test Case 13: Commit#patch_series resolution, debug logging, omission of unmerged, and cross-attachment caching
 if File.exist?(fixture_path)
   html_fixture = File.read(fixture_path)

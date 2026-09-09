@@ -299,6 +299,21 @@ module KernelWork
             end
         end
 
+        # Equality check for Hash and Array#uniq
+        #
+        # @param other [Object] Another object
+        # @return [Boolean] True if equal
+        def eql?(other)
+            self == other
+        end
+
+        # Hash code based on commit SHA
+        #
+        # @return [Integer] Hash code
+        def hash
+            @sha.hash
+        end
+
         private
 
         # Determine the git target ref (e.g. origin/master, master, maintainer branch) containing this commit
