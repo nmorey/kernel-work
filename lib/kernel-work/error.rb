@@ -44,6 +44,20 @@ module KernelWork
     class SCPNotApplied < KernelWorkError
     end
 
+    # Exception raised when the user requests to queue the whole patch series instead of a single commit
+    class SCPQueueSeries < KernelWorkError
+        # List of commits in the patch series
+        # @return [Array<Commit>]
+        attr_reader :series
+
+        # Initialize a new SCPQueueSeries exception
+        # @param series [Array<Commit>] The patch series commits
+        def initialize(series)
+            super("Queuing patch series")
+            @series = series
+        end
+    end
+
     # Exception raised when git-fixes cannot be fetched
     class GitFixesFetchError < KernelWorkError
     end
