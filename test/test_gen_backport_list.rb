@@ -377,6 +377,92 @@ if File.exist?(fixture_path)
   end
 end
 
+# Test Case 14: SCPQueueSeries raised on 'a' and processed by _scp
+module KernelWork
+  class ScpTestCommit < Commit
+    def fixes_shas; []; end
+    def desc; "#{@sha[0..11]} (\"#{@subject}\")"; end
+  end
+
+  class ScpQueueTestUpstream < TestUpstream
+    attr_accessor :processed_commits, :confirm_responses, :allowed_reps_seen
+
+    def initialize
+      super
+      @processed_commits = []
+      @confirm_responses = []
+      @allowed_reps_seen = []
+      @suse = Object.new
+      def @suse.is_applied?(c); false; end
+      def @suse.extract_single_patch(opts, c); true; end
+    end
+
+    def confirm(opts, msg, ignore_default, allowed_reps)
+      @allowed_reps_seen << allowed_reps
+      @confirm_responses.shift || "y"
+    end
+
+    def _cherry_pick_one(opts, commit)
+      @processed_commits << commit
+    end
+
+    def _tune_last_patch(opts)
+      # no-op
+    end
+
+    def log(level, msg)
+      # suppress test noise
+    end
+
+    public :_scp_one
+  end
+end
+
+c1 = KernelWork::ScpTestCommit.new("1111111111111111111111111111111111111111", :subject => "Patch 1")
+c2 = KernelWork::ScpTestCommit.new("2222222222222222222222222222222222222222", :subject => "Patch 2")
+c3 = KernelWork::ScpTestCommit.new("3333333333333333333333333333333333333333", :subject => "Patch 3")
+series = [c1, c2, c3]
+c1.series = series
+c2.series = series
+c3.series = series
+
+c_extra = KernelWork::ScpTestCommit.new("4444444444444444444444444444444444444444", :subject => "Extra patch")
+c_extra.series = []
+
+upstream = KernelWork::ScpQueueTestUpstream.new
+
+# 1. Test _scp_one directly when user selects 'a'
+upstream.confirm_responses = ["a"]
+raised = false
+t14_ok_exception = false
+begin
+  upstream._scp_one({}, c2)
+rescue KernelWork::SCPQueueSeries => e
+  raised = true
+  t14_ok_exception = (e.series == series)
+end
+
+# 2. Test _scp queue restructuring on 'a'
+upstream.confirm_responses = ["a", "y", "y", "y", "y"]
+queue = [c2, c_extra]
+upstream._scp({}, queue)
+
+t14_ok = raised &&
+         t14_ok_exception &&
+         upstream.allowed_reps_seen.first.include?("a") &&
+         upstream.processed_commits.map(&:sha) == [c1.sha, c2.sha, c3.sha, c_extra.sha] &&
+         queue.empty?
+
+if t14_ok
+  puts "Test Case 14 Passed"
+else
+  puts "Test Case 14 FAILED!"
+  puts "  Raised SCPQueueSeries: #{raised}"
+  puts "  Processed commits: #{upstream.processed_commits.map(&:sha)}"
+  puts "  Expected commits:  #{[c1.sha, c2.sha, c3.sha, c_extra.sha]}"
+  failures += 1
+end
+
 if failures == 0
   puts "All tests passed successfully!"
   exit 0

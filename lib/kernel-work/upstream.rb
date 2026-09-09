@@ -678,6 +678,13 @@ module KernelWork
                          if block_given?
                             yield(commit, e)
                         end
+                    rescue SCPQueueSeries => e
+                        commits.shift
+                        e.series.each { |s| s.data ||= commit.data }
+                        new_commits = (e.series + commits).uniq
+                        commits.replace(new_commits)
+                        log(:INFO, "Queued series (#{e.series.length} patches). #{commits.length} commits now in queue.")
+                        next
                     end
 
                     # If successful pick, update the dynamic list
@@ -818,6 +825,7 @@ module KernelWork
         # @raise [SCPSkip] If skipped
         # @raise [ShaNotCommitError] If commit is not a Commit object
         # @raise [PatchExtractionError] If patch extraction fails
+        # @raise [SCPQueueSeries] If user chooses to queue the entire patch series
         def _scp_one(opts, commit, inHouse = nil, suse_commit_ids = nil)
             rep="t"
             raise ShaNotCommitError.new() if !commit.is_a?(KernelWork::Commit)
@@ -860,9 +868,16 @@ module KernelWork
                 end
             end
 
+            confirm_choices = ["y", "n", "?", "r"]
+            confirm_msg = "pick commit '#{desc}' up"
+            if series.length > 1
+                confirm_choices << "a"
+                confirm_msg += " (a=queue series)"
+            end
+
             while rep != "y"
-                rep = confirm(opts, "pick commit '#{desc}' up",
-                              false, ["y", "n", "?", "r"])
+                rep = confirm(opts, confirm_msg,
+                              false, confirm_choices)
                 case rep
                 when "n"
                     break
@@ -875,6 +890,8 @@ module KernelWork
                         opts[:ref] = ref
                     end
                     rep = "y"
+                when "a"
+                    raise SCPQueueSeries.new(series)
                 end
             end
 
