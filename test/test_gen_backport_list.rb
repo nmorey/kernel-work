@@ -37,6 +37,34 @@ module KernelWork
       ""
     end
   end
+
+  class TestSeriesCommit < Commit
+    attr_accessor :git_mocks, :git_calls, :debug_logs
+
+    def initialize(sha, opts = {})
+      super(sha, opts)
+      @git_mocks = {}
+      @git_calls = []
+      @debug_logs = []
+    end
+
+    def lore_links
+      ["https://patch.msgid.link/20260713-restrack-uaf-fix-resub-v2-1-bbe8bb270d51@nvidia.com"]
+    end
+
+    def log(level, msg)
+      @debug_logs << msg if level == :DEBUG
+      super(level, msg) rescue nil
+    end
+
+    def runGit(cmd, opts = {}, fatal = true)
+      @git_calls << cmd
+      @git_mocks.each do |pattern, response|
+        return response if cmd.include?(pattern)
+      end
+      ""
+    end
+  end
 end
 
 test = KernelWork::TestUpstream.new
@@ -195,7 +223,7 @@ end
 fixture_path = File.join(File.dirname(__FILE__), "fixtures", "patch_series.html")
 if File.exist?(fixture_path)
   html_content = File.read(fixture_path)
-  series_commits = KernelWork::Commit.parse_series_html(html_content)
+  series_entries = KernelWork::Commit.parse_series_html(html_content)
   expected_series = [
     "RDMA/core: Add rdma_restrack_begin/abort/commit_del() operations",
     "RDMA/core: Fix use after free in ib_query_qp()",
@@ -206,12 +234,17 @@ if File.exist?(fixture_path)
     "RDMA/core: Fix potential use after free in uverbs_free_dmah()",
     "RDMA/core: Fix potential use after free in ib_dealloc_pd_user()"
   ]
-  if series_commits == expected_series
+  if series_entries.is_a?(Array) &&
+     series_entries.length == 8 &&
+     series_entries.map { |e| e[:subject] } == expected_series &&
+     series_entries.map { |e| e[:idx] } == (1..8).to_a &&
+     series_entries[0][:msgid] == "20260713-restrack-uaf-fix-resub-v2-1-bbe8bb270d51@nvidia.com" &&
+     series_entries[1][:msgid] == "20260713-restrack-uaf-fix-resub-v2-2-bbe8bb270d51@nvidia.com"
     puts "Test Case 11 Passed"
   else
     puts "Test Case 11 FAILED!"
-    puts "  Expected: #{expected_series}"
-    puts "  Got:      #{series_commits}"
+    puts "  Expected subjects: #{expected_series}"
+    puts "  Got:               #{series_entries}"
     failures += 1
   end
 end
@@ -223,19 +256,22 @@ if c_default.sha == "0123456789ab" &&
    c_default.instance_variable_get(:@subject).nil? &&
    c_default.instance_variable_get(:@patch_id).nil? &&
    c_default.extra_desc.nil? &&
-   c_default.data.nil?
+   c_default.data.nil? &&
+   c_default.series.nil?
   puts "Test Case 12A Passed"
 else
   puts "Test Case 12A FAILED!"
   failures += 1
 end
 
+dummy_series = [c_default]
 c_custom = KernelWork::Commit.new("abcdef012345",
   :subject => "Test subject line",
   :patch_id => "patch-id-789",
   :path => "/custom/repo/path",
   :extra_desc => "extra notes",
-  :data => { :ticket => 1234 }
+  :data => { :ticket => 1234 },
+  :series => dummy_series
 )
 if c_custom.sha == "abcdef012345" &&
    c_custom.path == "/custom/repo/path" &&
@@ -243,11 +279,89 @@ if c_custom.sha == "abcdef012345" &&
    c_custom.patch_id == "patch-id-789" &&
    c_custom.extra_desc == "extra notes" &&
    c_custom.data == { :ticket => 1234 } &&
+   c_custom.series == dummy_series &&
    c_custom.desc == 'abcdef012345 ("Test subject line") extra notes'
   puts "Test Case 12B Passed"
 else
   puts "Test Case 12B FAILED!"
   failures += 1
+end
+
+# Test Case 13: Commit#patch_series resolution, debug logging, omission of unmerged, and cross-attachment caching
+if File.exist?(fixture_path)
+  html_fixture = File.read(fixture_path)
+  # Hook Open3.capture3 to supply fixture HTML
+  module Open3
+    class << self
+      alias_method :orig_capture3_t13, :capture3
+      attr_accessor :t13_html
+      def capture3(*cmd)
+        if cmd.first == "curl"
+          status = Struct.new(:success?).new(true)
+          return [@t13_html, "", status]
+        end
+        orig_capture3_t13(*cmd)
+      end
+    end
+  end
+  Open3.t13_html = html_fixture
+
+  test_c1 = KernelWork::TestSeriesCommit.new("8d186210677c0322db886973bcec9aa4d21b51cd",
+    :subject => "RDMA/core: Add rdma_restrack_begin/abort/commit_del() operations",
+    :path => "/mock/linux"
+  )
+
+  # Mock responses for resolving sibling patches:
+  # Patch 2: Found by MsgID
+  test_c1.git_mocks["20260713-restrack-uaf-fix-resub-v2-2-bbe8bb270d51@nvidia.com"] = "709ba0e5311bd034eb4d9c1c00cc4e1109d6dc3e\n"
+  # Patch 3: MsgID fails, found by exact subject
+  test_c1.git_mocks["RDMA/core: Fix potential use after free in ib_destroy_cq_user()"] = "3481bec4dfc4aee24ffea5a547ee95b70b67d9d5\n"
+  # Patch 4: MsgID & Subject fail, found in neighborhood scan
+  test_c1.git_mocks["--format=\"%H %s\" -n 50"] = "88244ecc71cc0b3ed200f5ef7ddea6686adfd730 rdma/core: fix potential use after free in ib_destroy_srq_user()\n"
+  # Patches 5, 6, 7, 8 will fail to resolve (unmerged/unfound)
+
+  resolved_series = test_c1.patch_series()
+
+  # Restore Open3.capture3
+  Open3.singleton_class.send(:alias_method, :capture3, :orig_capture3_t13)
+
+  t13_ok = true
+  # 1. resolved_series must have 4 commits (patch 1 self, patch 2 msgid, patch 3 subject, patch 4 neighborhood)
+  #    patches 5-8 must be omitted
+  t13_ok &&= (resolved_series.length == 4)
+  t13_ok &&= resolved_series.all? { |c| c.is_a?(KernelWork::Commit) }
+  t13_ok &&= (resolved_series[0] == test_c1)
+  t13_ok &&= (resolved_series[1].sha == "709ba0e5311bd034eb4d9c1c00cc4e1109d6dc3e")
+  t13_ok &&= (resolved_series[2].sha == "3481bec4dfc4aee24ffea5a547ee95b70b67d9d5")
+  t13_ok &&= (resolved_series[3].sha == "88244ecc71cc0b3ed200f5ef7ddea6686adfd730")
+
+  # 2. Path should be forwarded
+  t13_ok &&= resolved_series.all? { |c| c.path == "/mock/linux" }
+
+  # 3. Debug logs emitted for unmerged patches (5, 6, 7, 8)
+  t13_ok &&= (test_c1.debug_logs.length == 4)
+  t13_ok &&= test_c1.debug_logs.any? { |m| m.include?("5/8") }
+
+  # 4. Cross-attachment caching: all member commits should have @series populated
+  t13_ok &&= (test_c1.series.object_id == resolved_series.object_id)
+  t13_ok &&= (resolved_series[1].series.object_id == resolved_series.object_id)
+  t13_ok &&= (resolved_series[2].series.object_id == resolved_series.object_id)
+
+  # 5. Subsequent call to patch_series uses cache without re-running Git
+  call_count_before = test_c1.git_calls.length
+  cached_result = test_c1.patch_series()
+  t13_ok &&= (test_c1.git_calls.length == call_count_before)
+  t13_ok &&= (cached_result.object_id == resolved_series.object_id)
+
+  if t13_ok
+    puts "Test Case 13 Passed"
+  else
+    puts "Test Case 13 FAILED!"
+    puts "  Resolved count: #{resolved_series.length} (expected 4)"
+    puts "  Resolved SHAs:  #{resolved_series.map(&:sha)}"
+    puts "  Debug logs:     #{test_c1.debug_logs}"
+    failures += 1
+  end
 end
 
 if failures == 0

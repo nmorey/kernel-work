@@ -855,8 +855,8 @@ module KernelWork
             series = commit.patch_series()
             if !series.empty?
                 log(:INFO, "Patch is part of a series:")
-                series.each do |series_commit_name|
-                    log(:INFO, "  #{series_commit_name}")
+                series.each do |series_commit|
+                    log(:INFO, "  #{series_commit.desc}")
                 end
             end
 
