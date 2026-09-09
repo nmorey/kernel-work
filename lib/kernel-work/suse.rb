@@ -598,7 +598,9 @@ module KernelWork
                 log(:ERROR, "File '#{pname}' already exists in KERNEL_SOURCE_DIR")
 
                 # If user has not specified a name, try to prompt him for one
-                rep= confirm(opts, "set a custom filename", true, ["y", "n"])
+                rep= confirm(opts, "set a custom filename",
+                             ignore_default: true,
+                             allowed_reps: ["y", "n"])
                 if rep == "n" then
                     raise SCPAbort.new("User aborted filename selection")
                 end
@@ -611,7 +613,9 @@ module KernelWork
                         raise SCPAbort.new("User aborted filename selection")
                     end
                     nName.strip!
-                    rep = confirm(opts, "keep the filename '#{nName}'", true, ["y", "n", "A" ])
+                    rep = confirm(opts, "keep the filename '#{nName}'",
+                                  ignore_default: true,
+                                  allowed_reps: ["y", "n", "A" ])
                     if rep == "A" then
                         raise SCPAbort.new("User aborted filename selection")
                     end
@@ -742,7 +746,10 @@ module KernelWork
                 log(:INFO, "No auto-sorted patch series on this branch")
                 log(:INFO, "Please insert it yourself.")
                 runSystem("PS1_WARNING='SERIES INSERT' bash", false)
-                rep = confirm(opts, "continue with scp [y(es), n(o), s(kip)]?", true, ["y", "n", "s"])
+                rep = confirm(opts, "continue with scp",
+                              ignore_default: true,
+                              allowed_reps: ["y", "n", "s"],
+                              usage: "[y]es/[n]o/[s]kip")
                 case rep
                 when "n"
                     raise(SCPAbort)

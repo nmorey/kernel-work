@@ -780,7 +780,10 @@ module KernelWork
                 end
                 log( :INFO, "Entering subshell to fix conflicts. Exit when done")
                 runSystem("PS1_WARNING='SCP FIX' bash", false)
-                rep = confirm(opts, "continue with scp [y(es), n(o), s(kip)]?", true, ["y", "n", "s"])
+                rep = confirm(opts, "continue with scp",
+                              ignore_default: true,
+                              allowed_reps: ["y", "n", "s"],
+                              usage: "[y]es/[n]o/[s]kip")
                 case rep
                 when "n"
                     runGitInteractive("cherry-pick --abort")
@@ -844,6 +847,7 @@ module KernelWork
 
             fixes = commit.fixes_shas()
             if !fixes.empty?
+                log(:INFO, "Patch fixes")
                 fixes.each do |f_sha|
                     fixes_commit = KernelWork::Commit.new(f_sha)
                     begin
@@ -852,10 +856,10 @@ module KernelWork
                         f_desc = f_sha
                     end
                     if is_fixes_sha_in_house?(f_sha, inHouse, suse_commit_ids)
-                        log(:INFO, "Patch fixes backported #{f_desc}")
+                        log(:INFO, "  backported #{f_desc}")
                     elsif suse_commit_ids != nil
                         # Only show unbackported if we listed commt_ids
-                        log(:WARNING, "Patch fixes unbackported #{f_desc}")
+                        log(:WARNING, "  unbackported #{f_desc}")
                     end
                 end
             end
@@ -870,14 +874,17 @@ module KernelWork
 
             confirm_choices = ["y", "n", "?", "r"]
             confirm_msg = "pick commit '#{desc}' up"
+            usage = [ "[y]es", "[n]o", "[?]show", "[r]ef set and apply" ]
             if series.length > 1
                 confirm_choices << "a"
-                confirm_msg += " (a=queue series)"
+                usage << "[a]pply series"
             end
 
             while rep != "y"
                 rep = confirm(opts, confirm_msg,
-                              false, confirm_choices)
+                              ignore_default: false,
+                              allowed_reps: confirm_choices,
+                              usage: usage)
                 case rep
                 when "n"
                     break

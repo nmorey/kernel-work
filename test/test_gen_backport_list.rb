@@ -397,8 +397,14 @@ module KernelWork
       def @suse.extract_single_patch(opts, c); true; end
     end
 
-    def confirm(opts, msg, ignore_default, allowed_reps)
-      @allowed_reps_seen << allowed_reps
+    # Prompt the user for confirmation (mocked)
+    #
+    # @param opts [Hash] Options hash
+    # @param msg [String] Confirmation message
+    # @param confirm_opts [Hash] Optional confirmation options
+    # @return [String] User response
+    def confirm(opts, msg, confirm_opts = {})
+      @allowed_reps_seen << confirm_opts[:allowed_reps]
       @confirm_responses.shift || "y"
     end
 

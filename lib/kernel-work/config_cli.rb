@@ -139,7 +139,9 @@ module KernelWork
 
                     if cfg[:filters][name.to_sym] != nil then
 
-                        rep= confirm(opts, "update the existing #{name} filter", true, ["y", "n"])
+                        rep= confirm(opts, "update the existing #{name} filter",
+                                     ignore_default: true,
+                                     allowed_reps: ["y", "n"])
                         if rep == "n" then
                             raise SCPAbort.new("User aborted filter update")
                         end
