@@ -231,6 +231,19 @@ kernel scp -f <file-containing-SHAs>
 kernel scp -C -c <upstream-SHA1>
 ```
 
+#### Interactive Prompt & Series Queuing
+Before cherry-picking each commit, `kernel scp` displays commit metadata, checks whether the patch fixes backported or unbackported commits, and queries public-inbox archives to determine if the commit is part of an upstream patch series. It then presents an interactive confirmation prompt:
+
+```text
+Do you wish to pick commit '<sha> ("<subject>")' up (a=queue series) ? (y/n/?/r/a):
+```
+
+* **`y` (yes):** Proceed with cherry-picking and extracting the current commit.
+* **`n` (no):** Skip the current commit and move to the next commit in the queue.
+* **`?` (show):** Launch `git show <sha>` interactively to inspect the commit diff and log message.
+* **`r` (ref):** Prompt for a bug or CVE tracking reference (e.g. `bsc#1234567`) to attach to the extracted SUSE patch.
+* **`a` (all in series):** Available when the patch is part of a multi-patch series. Dequeues the current commit and prepends all sibling patches in the series in proper sequence into the work queue (deduplicating against already queued entries). Patches in the series that are already applied in the tree are automatically detected and skipped.
+
 #### Subshell Conflict Resolution
 If a git cherry-pick fails with merge conflicts in your upstream `LINUX_GIT` repository:
 1. `kernel-work` pauses and prints a warning.
