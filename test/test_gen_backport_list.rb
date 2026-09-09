@@ -26,8 +26,8 @@ module KernelWork
   class TestCommit < Commit
     attr_writer :commit_message
 
-    def initialize(sha)
-      super(sha)
+    def initialize(sha, opts = {})
+      super(sha, opts)
     end
 
     def runGit(cmd, opts = {}, raise_error = true)
@@ -214,6 +214,40 @@ if File.exist?(fixture_path)
     puts "  Got:      #{series_commits}"
     failures += 1
   end
+end
+
+# Test Case 12: Commit#initialize with options hash
+c_default = KernelWork::Commit.new("0123456789ab")
+if c_default.sha == "0123456789ab" &&
+   c_default.path == KernelWork.config.linux_git &&
+   c_default.instance_variable_get(:@subject).nil? &&
+   c_default.instance_variable_get(:@patch_id).nil? &&
+   c_default.extra_desc.nil? &&
+   c_default.data.nil?
+  puts "Test Case 12A Passed"
+else
+  puts "Test Case 12A FAILED!"
+  failures += 1
+end
+
+c_custom = KernelWork::Commit.new("abcdef012345",
+  :subject => "Test subject line",
+  :patch_id => "patch-id-789",
+  :path => "/custom/repo/path",
+  :extra_desc => "extra notes",
+  :data => { :ticket => 1234 }
+)
+if c_custom.sha == "abcdef012345" &&
+   c_custom.path == "/custom/repo/path" &&
+   c_custom.subject == "Test subject line" &&
+   c_custom.patch_id == "patch-id-789" &&
+   c_custom.extra_desc == "extra notes" &&
+   c_custom.data == { :ticket => 1234 } &&
+   c_custom.desc == 'abcdef012345 ("Test subject line") extra notes'
+  puts "Test Case 12B Passed"
+else
+  puts "Test Case 12B FAILED!"
+  failures += 1
 end
 
 if failures == 0

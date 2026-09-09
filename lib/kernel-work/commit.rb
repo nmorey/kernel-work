@@ -10,20 +10,29 @@ module KernelWork
         #   @return [String] The original tag that introduced the commit
         # @!attribute [r] git_repo
         #   @return [String] The git repository URL where the commit was introduced (ie maintainer tree)
-        attr_reader :sha, :orig_tag, :git_repo
+        # @!attribute [r] path
+        #   @return [String] The git repository path
+        attr_reader :sha, :orig_tag, :git_repo, :path
         attr_accessor :data
         attr_accessor :extra_desc
 
         # Initialize a new Commit object
         #
         # @param sha [String] The commit SHA
-        # @param subject [String, nil] The commit subject (optional)
-        # @param patch_id [String, nil] The patch ID (optional)
-        def initialize(sha, subject = nil, patch_id = nil)
-            @path=KernelWork.config.linux_git
+        # @param opts [Hash] Options hash
+        # @option opts [String, nil] :subject The commit subject (optional)
+        # @option opts [String, nil] :patch_id The patch ID (optional)
+        # @option opts [String, nil] :path The git repository path (defaults to KernelWork.config.linux_git)
+        # @option opts [String, nil] :extra_desc Additional description text (optional)
+        # @option opts [Object, nil] :data Associated arbitrary data or CVE object (optional)
+        def initialize(sha, opts = {})
+            opts ||= {}
+            @path = opts[:path] || KernelWork.config.linux_git
             @sha = sha
-            @subject = subject
-            @patch_id = patch_id
+            @subject = opts[:subject]
+            @patch_id = opts[:patch_id]
+            @extra_desc = opts[:extra_desc]
+            @data = opts[:data]
         end
 
         # Retrieve the subject of the commit

@@ -403,7 +403,7 @@ module KernelWork
                 name = x.gsub(/^[0-9a-f]* (.*)$/, '\1')
                 patch_id = run("git format-patch -n1 #{sha} --stdout | git patch-id | awk '{ print $1}'").chomp()
 
-                Commit.new(sha, name, patch_id)
+                Commit.new(sha, :subject => name, :patch_id => patch_id)
             }
             log(:INFO, "Checking patches in #{ahead} ^#{trailing} (#{nPatches}/#{nPatches})")
             return list
@@ -483,7 +483,7 @@ module KernelWork
                     l = l.strip
                     next if l.empty?
                     if l =~ /^([0-9a-f]+)\s+#(.*)$/
-                        Commit.new($1, $2)
+                        Commit.new($1, :subject => $2)
                     else
                         Commit.new(l.split(/\s+/).first)
                     end
@@ -737,7 +737,7 @@ module KernelWork
                     cur_sha=$1
                     cur_subject=$2
                 when /^[	 ]+Considered for ([^ ]+)/
-                    commit = Commit.new(cur_sha, cur_subject) if pre == false && $1 == branch()
+                    commit = Commit.new(cur_sha, :subject => cur_subject) if pre == false && $1 == branch()
                 when /^$/
                     cur_sha=nil
                     cur_subject=nil

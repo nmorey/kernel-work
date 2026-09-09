@@ -88,6 +88,9 @@ module KernelWork
                 @upstream = upstream
             end
 
+            # Initialize Suse and Upstream repositories and determine the current branch
+            #
+            # @return [String] The branch name
             def initialize_repo()
                 if @suse == nil
                     @suse = Suse.new(@upstream)
