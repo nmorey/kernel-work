@@ -147,7 +147,7 @@ module KernelWork
             norm_status = self.class.validate_state!(status)
             @branches[branch.to_sym] = norm_status
             @tracker.write_bug(@bug_id, self) if @tracker
-            log(:INFO, "Successfully updated status of Bug ##{@bug_id} to '#{norm_status}'.")
+            log(:INFO, "Successfully updated status of Bug ##{@bug_id} to '#{colour(norm_status)}'.")
             norm_status
         end
 
