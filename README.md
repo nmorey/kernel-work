@@ -7,10 +7,12 @@
 ## Table of Contents
 
 - [Architecture & Dependencies](#architecture--dependencies)
+  - [cli_class_tool Gem Dependency](#cli_class_tool-gem-dependency)
   - [workEnv Integration](#workenv-integration)
 - [System Requirements & Setup](#system-requirements--setup)
   - [Required Git Repositories](#required-git-repositories)
   - [Environment Variables](#environment-variables)
+  - [Recommended Setup: Bare Clones & `git worktree` with `workEnv`](#recommended-setup-bare-clones--git-worktree-with-workenv)
   - [Branch Naming Convention](#branch-naming-convention)
   - [Configuration File (`config.yml`)](#configuration-file-configyml)
 - [Daily Workflow for Regular Patches](#daily-workflow-for-regular-patches)
@@ -44,15 +46,48 @@
 * **SUSE Operations:** Executed on your local `kernel-source` package repository.
 * **CVE Operations:** Cross-repository and API-driven workflows centered around security bugs.
 
+### `cli_class_tool` Gem Dependency
+
+`kernel-work` and `workEnv` both depend on the **`cli_class_tool`** gem for action routing, option parsing, and logging. 
+
+* **Installation:** Install it via bundler or directly:
+  ```bash
+  gem install cli_class_tool
+  gem install workEnv
+  ```
+
 ### workEnv Integration
 
-The tool features native integration with `workEnv` (managed via the `WorkEnvs` module). 
+The tool features native integration with **`workEnv`** (managed via the `WorkEnvs` module).
 
-* **How it works:** When the tool starts, it checks if the `WORK_ENV_SCRIPTS_DIR` environment variable is defined. If so, it appends `#{ENV['WORK_ENV_SCRIPTS_DIR']}/lib` to the Ruby `$LOAD_PATH` and attempts to `require 'WorkEnvs'`.
-* **Exposed Subcommands:** If `workEnv` is loaded successfully, a nested subcommand `env` is registered under the `kernel` command, making environment management commands available directly:
-  * `kernel env switch` (alias: `kernel s`, `kernel sw`, `kernel switch`) — Switch work environments.
-  * `kernel env list` (alias: `kernel l`, `kernel list`) — List existing work environments.
-  * `kernel env create` (alias: `kernel cr`, `kernel create`) — Create a new work environment.
+#### Why use workEnv?
+For kernel development, **`workEnv` is used to create lightweight, isolated shell workspaces (functioning like "chroots") for different release branches**. Use simple, empty `dev` environments.
+
+Sourcing or switching into an environment spawns a clean, isolated Bash subshell that provides:
+* **Prompt Isolation:** A dedicated prefix in your terminal prompt (e.g., `(SLE15-SP6) [user@host pwd]$`) indicating your active workspace.
+* **Custom Environment Variables:** Isolated definitions for `$LINUX_GIT` and `$KERNEL_SOURCE_DIR` tailored to that specific branch.
+* **Independent Configurations:** Dedicated shell configurations sourced automatically on entry from `$XDG_CONFIG_HOME/workEnv/bashrcs/`.
+* **Zero Inter-Branch Pollution:** Clean context-switching between different kernel releases (e.g. `SLE15-SP6-LTSS`, `SLE15-SP7`, `SL-16.0`) in different tabs, with independent paths and variables.
+
+#### How it works
+When `kernel-work` starts, it checks if the `WORK_ENV_SCRIPTS_DIR` environment variable is defined. If so, it appends `#{ENV['WORK_ENV_SCRIPTS_DIR']}/lib` to the Ruby `$LOAD_PATH` and attempts to load `WorkEnvs`.
+
+#### Exposed Subcommands
+If `workEnv` is loaded successfully, the nested subcommand `env` is registered under the `kernel` command, making environment management commands available directly:
+* `kernel env create` (alias: `kernel cr`, `kernel create`) — Create a new empty development workspace.
+  * **Tip:** Creating a simple `dev` environment is as easy as running:
+    ```bash
+    kernel env create -n SLE15-SP6 -t dev
+    ```
+* `kernel env switch` (alias: `kernel s`, `kernel sw`, `kernel switch`) — Switch into your development workspace.
+  * **Tip:** This spawns an isolated Bash subshell. Type `exit` (or `Ctrl+D`) to exit the workspace and return to your parent shell.
+    ```bash
+    kernel env switch SLE15-SP6
+    ```
+* `kernel env list` (alias: `kernel l`, `kernel list`) — List existing development workspaces.
+  ```bash
+  kernel env list
+  ```
 
 ---
 
@@ -74,6 +109,70 @@ export LINUX_GIT="/path/to/your/linux-upstream-clone"
 export KERNEL_SOURCE_DIR="/path/to/your/suse-kernel-source-clone"
 ```
 *(Note: If you use custom env names, you can customize them in the config file using `linux_git_env_var` and `kernel_source_dir_env_var` keys).*
+
+### Recommended Setup: Bare Clones & `git worktree` with `workEnv`
+
+To avoid duplicating massive Git repository files (especially the upstream Linux history) and to speed up workspace creation, **it is highly recommended to maintain a single "bare" clone for each repository and deploy branch-specific checkouts in each `workEnv` using `git worktree`**.
+
+This enables you to have a single physical repository on your disk, but have different branches always checked out in their respective isolated `workEnv` folders.
+
+#### Step 1: Create Your Bare Clones
+Clone the repositories as "bare" (no working directory, purely the database) somewhere on your local storage:
+```bash
+# Clone upstream Linux as a bare repo
+git clone --bare git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git /work1/$(whoami)/git/linux.git
+
+# Clone SUSE kernel-source as a bare repo
+git clone --bare <suse-kernel-source-remote-url> /work1/$(whoami)/git/kernel-source.git
+```
+
+#### Step 2: Create Your workEnvs
+Create empty `dev` environments corresponding to the target releases you work on:
+```bash
+kernel env create -n SLE15-SP6 -t dev
+kernel env create -n SLE15-SP7 -t dev
+```
+
+#### Step 3: Deploy Worktrees inside each workEnv
+From your bare repository directories, use `git worktree` to check out target branches directly inside your `workEnv` folder. They will share the same physical database and object store, meaning creation is instantaneous and uses near-zero extra disk space:
+
+```bash
+# --- For the SLE15-SP6 Workspace ---
+cd /work1/$(whoami)/git/linux.git
+git worktree add /work1/$(whoami)/work-envs/SLE15-SP6/linux <SLE15-SP6-upstream-branch-or-tag>
+
+cd /work1/$(whoami)/git/kernel-source.git
+git worktree add /work1/$(whoami)/work-envs/SLE15-SP6/kernel-source <SLE15-SP6-suse-branch>
+
+# --- For the SLE15-SP7 Workspace ---
+cd /work1/$(whoami)/git/linux.git
+git worktree add /work1/$(whoami)/work-envs/SLE15-SP7/linux <SLE15-SP7-upstream-branch-or-tag>
+
+cd /work1/$(whoami)/git/kernel-source.git
+git worktree add /work1/$(whoami)/work-envs/SLE15-SP7/kernel-source <SLE15-SP7-suse-branch>
+```
+
+#### Step 4: Configure workEnv Auto-Variables
+You can configure `workEnv` to dynamically route your `$LINUX_GIT` and `$KERNEL_SOURCE_DIR` environment variables to point to the correct worktrees automatically upon entering the workspace.
+
+Create/edit the workspace-specific shell profile under your `workEnv` config directory:
+
+* For **`SLE15-SP6`** (`~/.config/workEnv/bashrcs/SLE15-SP6`):
+  ```bash
+  export LINUX_GIT="/work1/$(whoami)/work-envs/SLE15-SP6/linux"
+  export KERNEL_SOURCE_DIR="/work1/$(whoami)/work-envs/SLE15-SP6/kernel-source"
+  ```
+
+* For **`SLE15-SP7`** (`~/.config/workEnv/bashrcs/SLE15-SP7`):
+  ```bash
+  export LINUX_GIT="/work1/$(whoami)/work-envs/SLE15-SP7/linux"
+  export KERNEL_SOURCE_DIR="/work1/$(whoami)/work-envs/SLE15-SP7/kernel-source"
+  ```
+
+#### How it Behaves
+Now, whenever you run `kernel env switch SLE15-SP6` or `kernel sw SLE15-SP6`, the shell environment automatically points to the correct SLE15-SP6 directories, prompt, and branches. If you switch to another workspace (even in another tab), the variables automatically redirect to the SLE15-SP7 directories. 
+
+You maintain **only one single physical copy of the repository files on disk**, but all branches are checked out simultaneously without duplication!
 
 ### Branch Naming Convention
 
