@@ -469,6 +469,44 @@ else
   failures += 1
 end
 
+# Test Case 15: scp with opts[:build] invokes build_commit
+module KernelWork
+  class ScpBuildTestUpstream < ScpQueueTestUpstream
+    attr_accessor :built_commits
+
+    def initialize
+      super
+      @built_commits = []
+      def @suse.fill_targetPatch_ref(opts); end
+    end
+
+    def branch
+      "mock-branch"
+    end
+
+    def build_commit(opts, commit)
+      @built_commits << commit
+      0
+    end
+  end
+end
+
+build_upstream = KernelWork::ScpBuildTestUpstream.new
+build_upstream.confirm_responses = ["y"]
+c_build = KernelWork::ScpTestCommit.new("5555555555555555555555555555555555555555", :subject => "Build test")
+build_opts = { :commits => [c_build], :build => true }
+
+build_upstream.scp(build_opts)
+
+if build_upstream.built_commits.map(&:sha) == [c_build.sha]
+  puts "Test Case 15 Passed"
+else
+  puts "Test Case 15 FAILED!"
+  puts "  Expected built commits: #{[c_build.sha]}"
+  puts "  Got built commits:      #{build_upstream.built_commits.map(&:sha)}"
+  failures += 1
+end
+
 if failures == 0
   puts "All tests passed successfully!"
   exit 0

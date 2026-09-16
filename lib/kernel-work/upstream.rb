@@ -62,6 +62,7 @@ module KernelWork
             opts[:arch] = :x86_64
             opts[:j] = KernelWork.config.upstream.default_j_opt
             opts[:backport_apply] = false
+            opts[:build] = false
             opts[:skip_broken] = false
             opts[:old_kernel] = false
             opts[:oldconfig_full] = false
@@ -113,6 +114,8 @@ module KernelWork
                     |val| opts[:cve] = true }
                 optsParser.on("-f", "--file <FILE>", String, "File containing list of SHA1 to backport.") {
                     |val| opts[:file] = val }
+                optsParser.on("-B", "--build", "Build commit after applying.") {
+                    |val| opts[:build] = true }
             when :build
                 optsParser.on("-p", "--path <path>", String,
                               "Path to subtree to build. Can be specified multiple times.") {
@@ -497,7 +500,11 @@ module KernelWork
 
             commits = opts[:commits].dup
             begin
-                status, unhandled = _scp(opts, commits)
+                status, unhandled = _scp(opts, commits) do |commit, error = nil|
+                    if opts[:build] && error == nil
+                        build_commit(opts, commit)
+                    end
+                end
             rescue SCPAbort
                 # If we used a file and have unhandled patches, write them back
                 _save_scp_commits(opts, commits)
