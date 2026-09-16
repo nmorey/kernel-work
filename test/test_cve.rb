@@ -783,6 +783,41 @@ begin
     test_10_passed = false
   end
 
+  # Test copy method
+  copy_target = KernelWork::CVE.new
+  copy_target.copy(cve_obj)
+  if copy_target.bug_id != cve_obj.bug_id || copy_target.get_status("SLE15-SP7") != KernelWork::CVE::STATE_APPLIED
+    puts "  10j (copy method) FAILED"
+    test_10_passed = false
+  end
+
+  # Test reload & atomic read-modify-write in set_status
+  store = {
+    "98765" => KernelWork::CVE.new(
+      bug_id: "98765",
+      cve: "CVE-2026-12345",
+      branches: { "SLE15-SP7": KernelWork::CVE::STATE_TODO, "SLE15-SP6": KernelWork::CVE::STATE_TODO }
+    )
+  }
+  storage_tracker = Object.new
+  storage_tracker.define_singleton_method(:read_bug) { |id| store[id] }
+  storage_tracker.define_singleton_method(:write_bug) { |id, data| store[id] = data.is_a?(KernelWork::CVE) ? data : KernelWork::CVE.new(data) }
+
+  worker1_cve = KernelWork::CVE.from_h(storage_tracker, store["98765"].to_h)
+  worker2_cve = KernelWork::CVE.from_h(storage_tracker, store["98765"].to_h)
+
+  # Worker 1 updates SLE15-SP7
+  worker1_cve.set_status("SLE15-SP7", KernelWork::CVE::STATE_APPLIED)
+  # Worker 2 updates SLE15-SP6 without explicit reload call - set_status should auto-reload latest
+  worker2_cve.set_status("SLE15-SP6", KernelWork::CVE::STATE_MERGED)
+
+  final_bug = storage_tracker.read_bug("98765")
+  if final_bug.get_status("SLE15-SP7") != KernelWork::CVE::STATE_APPLIED ||
+     final_bug.get_status("SLE15-SP6") != KernelWork::CVE::STATE_MERGED
+    puts "  10k (atomic read-modify-write / reload in set_status) FAILED: Got #{final_bug.branches.inspect}"
+    test_10_passed = false
+  end
+
   if test_10_passed
     puts "Test Case 10 (CVE Model Class Methods) Passed"
   else

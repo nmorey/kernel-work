@@ -83,22 +83,56 @@ module KernelWork
         alias_method :color, :colour
 
         # Initialize a new CVE instance
-        # @param attributes [Hash] The attributes hash (symbolized keys)
+        # @param attributes [Hash, CVE] The attributes hash or CVE instance
         # @raise [CveCLI::InvalidCveStateError] If any branch state is unknown
         def initialize(attributes = {})
-            @bug_id = attributes[:bug_id].to_s
-            @cve = attributes[:cve]
-            @summary = attributes[:summary]
-            @fix_sha = attributes[:fix_sha]
-            @distros = attributes[:distros] || []
-            @tracker = attributes[:tracker] || nil
-
+            @bug_id = ""
+            @cve = nil
+            @summary = nil
+            @fix_sha = nil
+            @distros = []
+            @tracker = nil
             @branches = {}
-            if attributes[:branches]
-                attributes[:branches].each do |k, v|
+            copy(attributes)
+        end
+
+        # Copy attributes into internal fields from a Hash or CVE instance
+        # @param attributes [Hash, CVE, nil] Attributes to copy
+        # @raise [CveCLI::InvalidCveStateError] If any branch state is unknown
+        # @return [CVE] self
+        def copy(attributes)
+            return self if attributes.nil?
+            attrs = attributes.is_a?(CVE) ? attributes.to_h : attributes
+            return self unless attrs.is_a?(Hash)
+
+            @bug_id = attrs[:bug_id].to_s if attrs.key?(:bug_id)
+            @cve = attrs[:cve] if attrs.key?(:cve)
+            @summary = attrs[:summary] if attrs.key?(:summary)
+            @fix_sha = attrs[:fix_sha] if attrs.key?(:fix_sha)
+            @distros = attrs[:distros] || [] if attrs.key?(:distros)
+            @tracker = attrs[:tracker] if attrs.key?(:tracker) && !attrs[:tracker].nil?
+
+            if attrs.key?(:branches) && attrs[:branches]
+                @branches = {}
+                attrs[:branches].each do |k, v|
                     @branches[k.to_sym] = self.class.validate_state!(v)
                 end
             end
+            self
+        end
+
+        # Reload bug data from the tracker if available
+        # @return [CVE] self
+        def reload
+            return self unless @tracker && @tracker.respond_to?(:read_bug)
+
+            begin
+                latest = @tracker.read_bug(@bug_id)
+                copy(latest) if latest
+            rescue CveCLI::BugNotFoundError
+                # Bug not found in tracker yet, retain current in-memory state
+            end
+            self
         end
 
         # Create a CVE instance from a hash, or return the CVE instance if already one
@@ -145,6 +179,7 @@ module KernelWork
         # @return [String]
         def set_status(branch, status)
             norm_status = self.class.validate_state!(status)
+            reload
             @branches[branch.to_sym] = norm_status
             @tracker.write_bug(@bug_id, self) if @tracker
             log(:INFO, "Successfully updated status of Bug ##{@bug_id} to '#{colour(norm_status)}'.")
