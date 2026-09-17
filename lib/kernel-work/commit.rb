@@ -48,7 +48,7 @@ module KernelWork
             return @subject if @subject != nil
 
             begin
-                desc=runGit("log -n1  --format=oneline --no-decorate #{@sha}")
+                desc=runGit("log -n1  --format=oneline --no-decorate #{@sha} 2>/dev/null")
                 desc =~ /^[0-9a-f]+\s+(.*)$/
                 @subject = $1
             rescue
@@ -65,7 +65,8 @@ module KernelWork
             return @patch_id if @patch_id != nil
 
             begin
-                @patch_id = runGit("format-patch -n1 #{@sha} --stdout | git patch-id | awk '{ print $1}'").chomp()
+                @patch_id = runGit("format-patch -n1 #{@sha} --stdout 2> /dev/null | " +
+                                   "git patch-id | awk '{ print $1}'").chomp()
             rescue
                 raise ShaNotFoundError.new(@sha)
             end
