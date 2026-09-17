@@ -860,8 +860,8 @@ module KernelWork
                     fixes_commit = KernelWork::Commit.new(f_sha)
                     begin
                         f_desc = fixes_commit.desc()
-                    rescue
-                        f_desc = f_sha
+                    rescue ShaNotFoundError
+                        f_desc = f_sha + " (not found linux repo)"
                     end
                     if is_fixes_sha_in_house?(f_sha, inHouse, suse_commit_ids)
                         log(:INFO, "  backported #{f_desc}")
