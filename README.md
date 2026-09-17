@@ -199,7 +199,7 @@ You maintain **only one single physical copy of the repository files on disk**, 
 * **Default Location:** `~/.config/kernel-work/config.yml` (respects `$XDG_CONFIG_HOME` if set).
 * **Generating Defaults:** To generate a template config containing standard SUSE branches, upstream configurations, compiler rules, and CVE tracking defaults, run:
   ```bash
-  kernel --force-config # Or kernel -f
+  kernel config -f show
   ```
 * **Alternate Config Path:** Specify an alternate config file on any command run with:
   ```bash
