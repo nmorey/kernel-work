@@ -95,6 +95,11 @@ module KernelWork
                 bug
             end
 
+            # Read a bug from its bugzilla id
+            # @param bug_id [String] Bugzilla id
+            # @return [CVE] CVE/Bug data
+            # @raise [BugNotFoundError] If the bug could not be found
+            # @raise [CorruptedJSONError] If any file contains corrupted JSON.
             def read_bug(bug_id)
                 ensure_dir
                 file_path = File.join(@cves_path, "#{bug_id}.json")
