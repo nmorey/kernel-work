@@ -111,6 +111,8 @@ export KERNEL_SOURCE_DIR="/path/to/your/suse-kernel-source-clone"
 ```
 *(Note: If you use custom env names, you can customize them in the config file using `linux_git_env_var` and `kernel_source_dir_env_var` keys).*
 
+The tool sometimes spawns subshell setting PS1_WARNING with some infos about why the subshell was started.
+
 ### Recommended Setup: Bare Clones & `git worktree` with `workEnv`
 
 To avoid duplicating massive Git repository files (especially the upstream Linux history) and to speed up workspace creation, **it is highly recommended to maintain a single "bare" clone for each repository and deploy branch-specific checkouts in each `workEnv` using `git worktree`**.
