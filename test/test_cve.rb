@@ -1051,52 +1051,71 @@ begin
   end
 
   # 4. Test CveAction#status with hyperlinks enabled vs disabled
-  test_cve_inst = KernelWork::TestCve.new
-  orig_stdout = $stdout
-  orig_config_hyperlinks = KernelWork.config.settings[:hyperlinks]
-  begin
-    String.class_variable_set(:@@is_a_tty, true)
+  Dir.mktmpdir("test_cve_hyperlinks") do |dir_path|
+    test_cfg = KernelWork.config.cve.to_h.merge({
+      tracker_type: "local",
+      data_repo: dir_path
+    })
+    test_cve_inst = KernelWork::TestCve.new
+    tracker = KernelWork::CveCLI::CveTracker.create(test_cfg, test_cve_inst)
+    test_cve_inst.instance_variable_set(:@tracker, tracker)
+    tracker.write_bug("12345", {
+      bug_id: "12345",
+      cve: "CVE-2026-00001",
+      summary: "First bug description",
+      branches: { "SLE15-SP7": "ToDo" }
+    })
 
-    # 4a. Enabled (default config + TTY)
-    $stdout = StringIO.new
-    test_cve_inst.status({})
-    output_enabled = $stdout.string
-    unless output_enabled.include?("\e]8;;https://bugzilla.suse.com/show_bug.cgi?id=")
-      puts "  12i (status output contains hyperlinks when enabled) FAILED"
-      test_12_passed = false
-    end
+    orig_stdout = $stdout
+    orig_config_hyperlinks = KernelWork.config.settings[:hyperlinks]
+    begin
+      String.class_variable_set(:@@is_a_tty, true)
 
-    # 4b. Disabled via opts[:hyperlinks] = false
-    $stdout = StringIO.new
-    test_cve_inst.status({ hyperlinks: false })
-    output_opts_disabled = $stdout.string
-    if output_opts_disabled.include?("\e]8;;")
-      puts "  12j (status output contains no hyperlinks when opts[:hyperlinks] = false) FAILED"
-      test_12_passed = false
-    end
+      # 4a. Enabled (default config + TTY)
+      $stdout = StringIO.new
+      test_cve_inst.status({})
+      output_enabled = $stdout.string
+      $stdout = orig_stdout
+      unless output_enabled.include?("\e]8;;https://bugzilla.suse.com/show_bug.cgi?id=")
+        puts "  12i (status output contains hyperlinks when enabled) FAILED"
+        test_12_passed = false
+      end
 
-    # 4c. Disabled via global config
-    KernelWork.config.settings[:hyperlinks] = false
-    $stdout = StringIO.new
-    test_cve_inst.status({})
-    output_cfg_disabled = $stdout.string
-    if output_cfg_disabled.include?("\e]8;;")
-      puts "  12k (status output contains no hyperlinks when config.hyperlinks is false) FAILED"
-      test_12_passed = false
-    end
+      # 4b. Disabled via opts[:hyperlinks] = false
+      $stdout = StringIO.new
+      test_cve_inst.status({ hyperlinks: false })
+      output_opts_disabled = $stdout.string
+      $stdout = orig_stdout
+      if output_opts_disabled.include?("\e]8;;")
+        puts "  12j (status output contains no hyperlinks when opts[:hyperlinks] = false) FAILED"
+        test_12_passed = false
+      end
 
-    # 4d. opts[:hyperlinks] = true overrides global config false
-    $stdout = StringIO.new
-    test_cve_inst.status({ hyperlinks: true })
-    output_override = $stdout.string
-    unless output_override.include?("\e]8;;https://bugzilla.suse.com/show_bug.cgi?id=")
-      puts "  12l (status output overrides config.hyperlinks when opts[:hyperlinks] = true) FAILED"
-      test_12_passed = false
+      # 4c. Disabled via global config
+      KernelWork.config.settings[:hyperlinks] = false
+      $stdout = StringIO.new
+      test_cve_inst.status({})
+      output_cfg_disabled = $stdout.string
+      $stdout = orig_stdout
+      if output_cfg_disabled.include?("\e]8;;")
+        puts "  12k (status output contains no hyperlinks when config.hyperlinks is false) FAILED"
+        test_12_passed = false
+      end
+
+      # 4d. opts[:hyperlinks] = true overrides global config false
+      $stdout = StringIO.new
+      test_cve_inst.status({ hyperlinks: true })
+      output_override = $stdout.string
+      $stdout = orig_stdout
+      unless output_override.include?("\e]8;;https://bugzilla.suse.com/show_bug.cgi?id=")
+        puts "  12l (status output overrides config.hyperlinks when opts[:hyperlinks] = true) FAILED"
+        test_12_passed = false
+      end
+    ensure
+      $stdout = orig_stdout
+      String.class_variable_set(:@@is_a_tty, orig_tty)
+      KernelWork.config.settings[:hyperlinks] = orig_config_hyperlinks
     end
-  ensure
-    $stdout = orig_stdout
-    String.class_variable_set(:@@is_a_tty, orig_tty)
-    KernelWork.config.settings[:hyperlinks] = orig_config_hyperlinks
   end
 
   if test_12_passed
