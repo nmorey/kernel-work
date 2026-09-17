@@ -32,6 +32,7 @@ module KernelWork
             ACTION_LIST = [
                 :fetch,
                 :apply,
+                :blacklist,
                 :push,
                 :status, :ls,
                 :refresh,
@@ -42,6 +43,7 @@ module KernelWork
             ACTION_HELP = {
                 :fetch => "Fetch my CVE bugs from Bugzilla and populate local cache",
                 :apply => "Apply the missing CVE fixes to the current branch",
+                :blacklist => "Blacklist a specific CVE on the current branch",
                 :push  => "Push applied commits and set their status to Pushed",
                 :status => "Show the status of active CVEs",
                 :refresh => "Refresh CVE status for the current branch",
@@ -91,13 +93,30 @@ module KernelWork
                         |val| opts[:comment] = val}
                     optsParser.on("-y", "--yes", "Apply reassignments automatically without confirmation.") {
                         |val| opts[:yn_default] = :yes}
+                when :blacklist
+                    optsParser.on("-b", "--bug <bugzilla id or CVE>", String,
+                                  "bsc#XXXX or XXXX or CVE-YYYY-NNNNN") {
+                        |val| opts[:bugzilla_id] = val}
+                    optsParser.on("-r", "--ref <ref>", String,
+                                  "Bugzilla comment, e.g. 1234567#c1 or a full URL") {
+                        |val| opts[:bugzilla_ref] = val}
                 end
+
             end
 
             # Validate options before running an action.
             # @param opts [Hash] The options hash.
             # @return [void]
             def self.check_opts(opts)
+                case opts[:action]
+                when :blacklist
+                    if opts[:bugzilla_id].to_s == ""
+                        raise MissingArgumentError.new("bugzilla id")
+                    end
+                    if opts[:bugzilla_ref].to_s == ""
+                        raise MissingArgumentError.new("bugzilla reference comment")
+                    end
+                end
             end
 
             # Initialize a CveAction object, linking suse and upstream instances
@@ -282,6 +301,25 @@ module KernelWork
                     end
                     cve.set_status(branch(), newState) if newState != nil
                 end
+            end
+
+            # Blacklist a specific CVE on the current branch.
+            #
+            # @param opts [Hash] Options hash containing :bugzilla_id and :bugzilla_ref.
+            # @return [void]
+            def blacklist(opts)
+                initialize_repo()
+                config = KernelWork.config.cve.to_h
+                bzId = opts[:bugzilla_id].gsub(/^bsc#/, '') # strip eventual bsc prefix
+                cve = nil
+                if bzId =~ /^CVE-/ then
+                    cve = @tracker.read_cve(bzId)
+                else
+                    cve = @tracker.read_bug(bzId)
+                end
+                bzId = cve.bug_id
+                @suse.runSystem("./scripts/cve_tools/blacklist-cve add #{cve.cve} #{branch()} '#{opts[:bugzilla_ref]}'")
+                cve.set_status(branch(), CVE::STATE_BLACKLISTED)
             end
 
             # Push action

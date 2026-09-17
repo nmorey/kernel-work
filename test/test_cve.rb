@@ -1631,6 +1631,133 @@ Dir.mktmpdir('cve-data-fetch-incremental') do |dir_path|
 end
 
 
+# --- Test Case 16: kernel cve blacklist command ---
+Dir.mktmpdir("test_cve_blacklist") do |tmpdir|
+  test_16_passed = true
+
+  # 1. Test option validation via CveAction.check_opts
+  begin
+    KernelWork::CveCLI::CveAction.check_opts({ action: :blacklist, bugzilla_id: "", bugzilla_ref: "bsc#12345#c1" })
+    puts "  16a (check_opts missing bugzilla_id did not raise error) FAILED"
+    test_16_passed = false
+  rescue KernelWork::MissingArgumentError => e
+    unless e.message.include?("bugzilla id")
+      puts "  16a (unexpected error message: #{e.message}) FAILED"
+      test_16_passed = false
+    end
+  end
+
+  begin
+    KernelWork::CveCLI::CveAction.check_opts({ action: :blacklist, bugzilla_id: "12345", bugzilla_ref: "" })
+    puts "  16b (check_opts missing bugzilla_ref did not raise error) FAILED"
+    test_16_passed = false
+  rescue KernelWork::MissingArgumentError => e
+    unless e.message.include?("bugzilla reference comment")
+      puts "  16b (unexpected error message: #{e.message}) FAILED"
+      test_16_passed = false
+    end
+  end
+
+  # Setup temporary tracker
+  test_cfg = {
+    tracker_type: "local",
+    data_repo: tmpdir
+  }
+  tracker = KernelWork::CveCLI::CveTracker.create(test_cfg)
+
+  # Seed a bug in the tracker
+  tracker.write_bug("12345", {
+    bug_id: "12345",
+    cve: "CVE-2026-99999",
+    summary: "Vulnerability in network driver",
+    branches: { "SLE15-SP7": "ToDo", "SLE15-SP6": "ToDo" }
+  })
+
+  # Mock Suse object to intercept runSystem and branch
+  mock_suse = Object.new
+  executed_commands = []
+  mock_suse.define_singleton_method(:branch) { "SLE15-SP7" }
+  mock_suse.define_singleton_method(:runSystem) do |cmd, raise_err = true|
+    executed_commands << cmd
+    true
+  end
+  mock_suse.define_singleton_method(:upstream) { nil }
+
+  test_cve = KernelWork::TestCve.new
+  test_cve.instance_variable_set(:@tracker, tracker)
+  test_cve.instance_variable_set(:@suse, mock_suse)
+  test_cve.instance_variable_set(:@branch, "SLE15-SP7")
+
+  # 2. Blacklist using Bugzilla ID with bsc# prefix
+  test_cve.blacklist({ bugzilla_id: "bsc#12345", bugzilla_ref: "bsc#12345#c1" })
+
+  expected_cmd = "./scripts/cve_tools/blacklist-cve add CVE-2026-99999 SLE15-SP7 'bsc#12345#c1'"
+  unless executed_commands.last == expected_cmd
+    puts "  16c (expected command '#{expected_cmd}', got: '#{executed_commands.last}') FAILED"
+    test_16_passed = false
+  end
+
+  bug_after_1 = tracker.read_bug("12345")
+  unless bug_after_1 && bug_after_1[:branches] && bug_after_1[:branches][:"SLE15-SP7"] == "Blacklisted"
+    puts "  16d (status was not set to Blacklisted for SLE15-SP7: #{bug_after_1.inspect}) FAILED"
+    test_16_passed = false
+  end
+
+  # SLE15-SP6 should remain unchanged as ToDo
+  unless bug_after_1[:branches][:"SLE15-SP6"] == "ToDo"
+    puts "  16e (other branch status was modified unexpectedly: #{bug_after_1.inspect}) FAILED"
+    test_16_passed = false
+  end
+
+  # 3. Blacklist using CVE ID directly for another branch
+  mock_suse.define_singleton_method(:branch) { "SLE15-SP6" }
+  test_cve.instance_variable_set(:@branch, "SLE15-SP6")
+
+  test_cve.blacklist({ bugzilla_id: "CVE-2026-99999", bugzilla_ref: "https://bugzilla.suse.com/show_bug.cgi?id=12345#c2" })
+
+  expected_cmd_2 = "./scripts/cve_tools/blacklist-cve add CVE-2026-99999 SLE15-SP6 'https://bugzilla.suse.com/show_bug.cgi?id=12345#c2'"
+  unless executed_commands.last == expected_cmd_2
+    puts "  16f (expected command '#{expected_cmd_2}', got: '#{executed_commands.last}') FAILED"
+    test_16_passed = false
+  end
+
+  bug_after_2 = tracker.read_bug("12345")
+  unless bug_after_2 && bug_after_2[:branches] && bug_after_2[:branches][:"SLE15-SP6"] == "Blacklisted"
+    puts "  16g (status was not set to Blacklisted for SLE15-SP6: #{bug_after_2.inspect}) FAILED"
+    test_16_passed = false
+  end
+
+  # 4. Error handling: non-existent bug
+  begin
+    test_cve.blacklist({ bugzilla_id: "99999", bugzilla_ref: "some_ref" })
+    puts "  16h (non-existent bugzilla id did not raise BugNotFoundError) FAILED"
+    test_16_passed = false
+  rescue KernelWork::CveCLI::BugNotFoundError
+    # Expected
+  rescue => e
+    puts "  16h (unexpected error type: #{e.class}) FAILED"
+    test_16_passed = false
+  end
+
+  begin
+    test_cve.blacklist({ bugzilla_id: "CVE-2026-00000", bugzilla_ref: "some_ref" })
+    puts "  16i (non-existent CVE id did not raise BugNotFoundError) FAILED"
+    test_16_passed = false
+  rescue KernelWork::CveCLI::BugNotFoundError
+    # Expected
+  rescue => e
+    puts "  16i (unexpected error type: #{e.class}) FAILED"
+    test_16_passed = false
+  end
+
+  if test_16_passed
+    puts "Test Case 16 (kernel cve blacklist) Passed"
+  else
+    failures += 1
+  end
+end
+
+
 # --- Test Output ---
 if failures == 0
   puts "All CVE tests passed successfully!"

@@ -29,9 +29,10 @@
   - [2. Fetch CVE Bugs (`kernel cve fetch`)](#2-fetch-cve-bugs-kernel-cve-fetch)
   - [3. List CVE Status (`kernel cve ls`)](#3-list-cve-status-kernel-cve-ls)
   - [4. Apply CVE Fixes (`kernel cve apply`)](#4-apply-cve-fixes-kernel-cve-apply)
-  - [5. Push and Sync (`kernel cve push`)](#5-push-and-sync-kernel-cve-push)
-  - [6. Manual Status Refreshes (`kernel cve refresh`)](#6-manual-status-refreshes-kernel-cve-refresh)
-  - [7. Reassign Completed CVEs (`kernel cve reassign`)](#7-reassign-completed-cves-kernel-cve-reassign)
+  - [5. Blacklist CVE Fixes (`kernel cve blacklist`)](#5-blacklist-cve-fixes-kernel-cve-blacklist)
+  - [6. Push and Sync (`kernel cve push`)](#6-push-and-sync-kernel-cve-push)
+  - [7. Manual Status Refreshes (`kernel cve refresh`)](#7-manual-status-refreshes-kernel-cve-refresh)
+  - [8. Reassign Completed CVEs (`kernel cve reassign`)](#8-reassign-completed-cves-kernel-cve-reassign)
 - [Other Key Utilities & Commands](#other-helpful-utilities--commands)
   - [Configuration & Filter Management](#configuration--filter-management)
   - [SUSE kernel-source Specific Commands](#suse-kernel-source-specific-commands)
@@ -385,7 +386,20 @@ kernel cve apply [-y] [-a <arch>] [-j <jobs>]
 * After applying, it builds the affected subsystem (using `-a` and `-j` for parallel compiler execution) to ensure no compilation issues were introduced.
 * If a patch is applied successfully, its status in the tracker is updated to `APPLIED`.
 
-### 5. Push and Sync (`kernel cve push`)
+### 5. Blacklist CVE Fixes (`kernel cve blacklist`)
+Blacklist a specific CVE on the current branch using the kernel-source `blacklist-cve` tool and record its status:
+```bash
+kernel cve blacklist -b <bugzilla-id-or-cve> -r <bugzilla-ref>
+```
+* **Options:**
+  * `-b`, `--bug <bugzilla id>` — Bugzilla bug ID (e.g. `12345` or `bsc#12345`) or CVE ID (e.g. `CVE-2026-99999`).
+  * `-r`, `--ref <ref>` — Bugzilla reference or comment URL explaining the blacklisting (e.g. `bsc#12345#c1` or a Bugzilla URL). Both arguments are mandatory.
+* **What it does:**
+  * Resolves the bug in your local tracker database by either Bugzilla ID or CVE ID.
+  * Runs the kernel-source helper `./scripts/cve_tools/blacklist-cve add <CVE> <branch> '<ref>'`.
+  * Sets the CVE branch status to `BLACKLISTED` in the local tracker database.
+
+### 6. Push and Sync (`kernel cve push`)
 Once you are confident with your local CVE fixes, push them to the SUSE remote and synchronize state:
 ```bash
 kernel cve push [-f]
@@ -394,13 +408,13 @@ kernel cve push [-f]
 * Pushes the current branch to your configured SUSE git remote.
 * Runs a status refresh to update all successfully pushed CVE tracker statuses from `APPLIED` to `PUSHED` (or `MERGED` if applicable).
 
-### 6. Manual Status Refreshes (`kernel cve refresh`)
+### 7. Manual Status Refreshes (`kernel cve refresh`)
 To manually force-recalculate the status of CVEs on the current branch based on current git logs (checking what's applied locally, unpushed, pushed, or merged):
 ```bash
 kernel cve refresh
 ```
 
-### 7. Reassign Completed CVEs (`kernel cve reassign`)
+### 8. Reassign Completed CVEs (`kernel cve reassign`)
 Once all target branches for a CVE are fully merged, reassign the bug back to the security team and remove it from local tracking:
 ```bash
 kernel cve reassign [-d] [--no-fetch] [-a <assignee>] [-m <comment>] [-u <user>] [-y]
