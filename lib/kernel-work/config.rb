@@ -78,7 +78,9 @@ module KernelWork
         bugzilla_user: "",
         data_repo: "~/workspace/cve-data",
         tracker_type: "local",
-        tracker_url: ""
+        tracker_url: "",
+        reassign_to: "kernel-security-sentinel@lists.suse.com",
+        reassign_comment: "Merged"
       }
     }
 
