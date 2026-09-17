@@ -76,6 +76,7 @@ module KernelWork
       cve: {
         bugzilla_url: "https://apibugzilla.suse.com",
         bugzilla_user: "",
+        bugzilla_min_query_delay: 0.5,
         data_repo: "~/workspace/cve-data",
         tracker_type: "local",
         tracker_url: "",

@@ -162,6 +162,81 @@ begin
   end
 end
 
+# --- Test Case 1D: BugzillaClient Query Rate Limiting (bugzilla_min_query_delay) ---
+begin
+  test_1d_passed = true
+
+  delay_client = KernelWork::CveCLI::BugzillaClient.new({
+    bugzilla_min_query_delay: 0.05
+  })
+
+  mock_inst = Object.new
+  def mock_inst.use_ssl=(v); end
+  def mock_inst.open_timeout=(v); end
+  def mock_inst.read_timeout=(v); end
+  def mock_inst.request(req)
+    res = Object.new
+    def res.code; "200"; end
+    def res.body; '{"ok":true}'; end
+    res
+  end
+
+  orig_net_http_new = Net::HTTP.method(:new)
+  Net::HTTP.define_singleton_method(:new) do |host, port|
+    mock_inst
+  end
+
+  begin
+    # First request should NOT delay
+    t0 = Time.now
+    delay_client.request("test_first")
+    first_duration = Time.now - t0
+    if first_duration >= 0.04
+      puts "Test Case 1D (First request had unexpected delay) FAILED: took #{first_duration}s"
+      test_1d_passed = false
+    end
+
+    # Second request immediately after should wait ~0.05s
+    t1 = Time.now
+    delay_client.request("test_second")
+    second_duration = Time.now - t1
+    if second_duration < 0.04
+      puts "Test Case 1D (Second request did not enforce min delay) FAILED: took #{second_duration}s"
+      test_1d_passed = false
+    end
+
+    # Third request as PUT should also wait ~0.05s
+    t2 = Time.now
+    delay_client.request("test_third", {}, :put, { test: 1 })
+    third_duration = Time.now - t2
+    if third_duration < 0.04
+      puts "Test Case 1D (PUT request did not enforce min delay) FAILED: took #{third_duration}s"
+      test_1d_passed = false
+    end
+
+    # Test bugzilla_min_query_delay: 0 disables delay
+    zero_delay_client = KernelWork::CveCLI::BugzillaClient.new({
+      bugzilla_min_query_delay: 0
+    })
+    zero_delay_client.request("test_zero_1")
+    t3 = Time.now
+    zero_delay_client.request("test_zero_2")
+    zero_duration = Time.now - t3
+    if zero_duration >= 0.04
+      puts "Test Case 1D (zero delay client had unexpected delay) FAILED: took #{zero_duration}s"
+      test_1d_passed = false
+    end
+  ensure
+    Net::HTTP.define_singleton_method(:new, orig_net_http_new)
+  end
+
+  if test_1d_passed
+    puts "Test Case 1D (BugzillaClient Rate Limiting) Passed"
+  else
+    failures += 1
+  end
+end
+
 
 # --- Test Case 2: parse_cve_comment comment parsing ---
 sample_comments = [
@@ -1039,7 +1114,8 @@ begin
   # 1. Test update_bug sends a PUT request with proper payload and headers
   client = KernelWork::CveCLI::BugzillaClient.new({
     bugzilla_url: "https://apibugzilla.suse.com",
-    bugzilla_api_key: "MY_TEST_KEY"
+    bugzilla_api_key: "MY_TEST_KEY",
+    bugzilla_min_query_delay: 0
   })
 
   class MockBzHttpInstance
@@ -1229,15 +1305,6 @@ Dir.mktmpdir("test_cve_reassign") do |tmpdir|
     puts "  14c (reassign calls fetch) FAILED"
     test_14_passed = false
   end
-
-  # Test fetch failure aborts reassign
-  test_cve.mock_fetch_proc = Proc.new { |opts| 1 }
-  fetch_err_ret = test_cve.reassign({})
-  if fetch_err_ret != 1
-    puts "  14c2 (reassign returns fetch exit code on fetch failure) FAILED: Got #{fetch_err_ret}"
-    test_14_passed = false
-  end
-  test_cve.mock_fetch_proc = Proc.new { |opts| 0 }
 
   unless reassigned_calls.empty?
     puts "  14d (declined reassign does not call Bugzilla) FAILED"

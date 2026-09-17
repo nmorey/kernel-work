@@ -12,11 +12,13 @@ module KernelWork
             attr_reader :url, :api_key
             attr_accessor :timeout
 
-            # @param config [Hash] Client configuration (bugzilla_url, bugzilla_api_key, bugzilla_timeout)
+            # @param config [Hash] Client configuration (bugzilla_url, bugzilla_api_key, bugzilla_timeout, bugzilla_min_query_delay)
             def initialize(config = {})
                 @url = config[:bugzilla_url] || "https://apibugzilla.suse.com"
                 @api_key = config[:bugzilla_api_key]
                 @timeout = (config[:bugzilla_timeout] || config[:timeout] || DEFAULT_TIMEOUT).to_i
+                @min_query_delay = (config[:bugzilla_min_query_delay] || 0.5).to_f
+                @last_query_time = Time.at(0)
 
                 # Fallback to .bugzillarc credentials if API key is not explicitly provided
                 if @api_key.nil? || @api_key.empty?
@@ -75,12 +77,14 @@ module KernelWork
                 req['Accept'] = 'application/json'
                 req['X-BUGZILLA-API-KEY'] = @api_key if @api_key && !@api_key.empty?
 
-                begin
-                    res = http.request(req)
-                rescue Net::OpenTimeout, Net::ReadTimeout, Timeout::Error
-                    raise BugzillaTimeoutError.new(@timeout)
-                rescue SocketError, Errno::ECONNREFUSED, Errno::EHOSTUNREACH => e
-                    raise BugzillaError.new("Bugzilla connection failed: #{e.message}")
+                res = with_query_delay do
+                    begin
+                        http.request(req)
+                    rescue Net::OpenTimeout, Net::ReadTimeout, Timeout::Error
+                        raise BugzillaTimeoutError.new(@timeout)
+                    rescue SocketError, Errno::ECONNREFUSED, Errno::EHOSTUNREACH => e
+                        raise BugzillaError.new("Bugzilla connection failed: #{e.message}")
+                    end
                 end
 
                 if res.code =~ /^20\d$/
@@ -98,6 +102,22 @@ module KernelWork
             # @raise [BugzillaError] If the request or connection fails
             def update_bug(bug_id, data)
                 request("bug/#{bug_id}", {}, :put, data)
+            end
+
+            private
+
+            # Execute a block subject to minimum query delay cooldown
+            #
+            # Sleeps for the remaining cooldown time if necessary, yields to the block,
+            # and updates the last query timestamp upon completion.
+            #
+            # @yield Block executing the network query
+            # @return [Object] Result of yielding to the block
+            def with_query_delay
+                sleep([0.0, @last_query_time + @min_query_delay - Time.now].max)
+                yield
+            ensure
+                @last_query_time = Time.now
             end
 
             # Parse ~/.bugzillarc to find Bugzilla credentials
