@@ -28,6 +28,9 @@ module KernelWork
   class TestCve < CveCLI::CveAction
     attr_accessor :mocked_git_files
     attr_accessor :bugzilla_mock_proc
+    attr_accessor :refresh_called
+    attr_accessor :fetch_called
+    attr_accessor :mock_fetch_proc
 
     def initialize
       # Skip standard parent initialization which triggers git branch commands
@@ -39,8 +42,8 @@ module KernelWork
       # Delegate bugzilla client request to our local mock proc
       class << @bugzilla
         attr_accessor :test_cve_inst
-        def request(path, params = {})
-          @test_cve_inst.bugzilla_request(path, params)
+        def request(path, params = {}, method = :get, body = nil)
+          @test_cve_inst.bugzilla_request(path, params, method, body)
         end
       end
       @bugzilla.test_cve_inst = self
@@ -50,10 +53,25 @@ module KernelWork
       # Suppress logging in tests
     end
 
+    # Mock refresh to avoid running git commands in test environment
+    def refresh(opts)
+      @refresh_called = true
+    end
+
+    # Track and optionally mock fetch
+    def fetch(opts)
+      @fetch_called = true
+      if @mock_fetch_proc
+        @mock_fetch_proc.call(opts)
+      else
+        super
+      end
+    end
+
     # Mock bugzilla_request for testing
-    def bugzilla_request(path, params = {})
+    def bugzilla_request(path, params = {}, method = :get, body = nil)
       if @bugzilla_mock_proc
-        @bugzilla_mock_proc.call(path, params)
+        @bugzilla_mock_proc.call(path, params, method, body)
       else
         {}
       end
@@ -1008,6 +1026,368 @@ begin
 
   if test_12_passed
     puts "Test Case 12 (Terminal Hyperlinks & String#hyperlink) Passed"
+  else
+    failures += 1
+  end
+end
+
+
+# --- Test Case 13: BugzillaClient PUT / update_bug ---
+begin
+  test_13_passed = true
+
+  # 1. Test update_bug sends a PUT request with proper payload and headers
+  client = KernelWork::CveCLI::BugzillaClient.new({
+    bugzilla_url: "https://apibugzilla.suse.com",
+    bugzilla_api_key: "MY_TEST_KEY"
+  })
+
+  class MockBzHttpInstance
+    attr_accessor :use_ssl, :open_timeout, :read_timeout
+    attr_reader :last_request
+    attr_accessor :response_code, :response_body
+
+    def initialize(host, port)
+      @host = host
+      @port = port
+      @response_code = "200"
+      @response_body = '{"bugs":[{"id":12345,"changes":{}}]}'
+    end
+
+    def request(req)
+      @last_request = req
+      mock_res = Object.new
+      code_str = @response_code
+      body_str = @response_body
+      mock_res.define_singleton_method(:code) { code_str }
+      mock_res.define_singleton_method(:body) { body_str }
+      mock_res
+    end
+  end
+
+  class << Net::HTTP
+    alias_method :orig_bz_new, :new
+    attr_accessor :mock_bz_instance
+
+    def new(host, port)
+      if @mock_bz_instance
+        @mock_bz_instance
+      else
+        orig_bz_new(host, port)
+      end
+    end
+  end
+
+  mock_bz = MockBzHttpInstance.new("apibugzilla.suse.com", 443)
+  Net::HTTP.mock_bz_instance = mock_bz
+
+  begin
+    res = client.update_bug("12345", {
+      assigned_to: "kernel-security-sentinel@lists.suse.com",
+      comment: {
+        body: "Merged",
+        is_private: true
+      }
+    })
+
+    req = mock_bz.last_request
+    unless req && req.is_a?(Net::HTTP::Put)
+      puts "  13a (update_bug executes Net::HTTP::Put) FAILED"
+      test_13_passed = false
+    end
+
+    if req && req['Content-Type'] != 'application/json'
+      puts "  13b (update_bug sets Content-Type to application/json) FAILED"
+      test_13_passed = false
+    end
+
+    if req && req['X-BUGZILLA-API-KEY'] != 'MY_TEST_KEY'
+      puts "  13c (update_bug sets X-BUGZILLA-API-KEY) FAILED"
+      test_13_passed = false
+    end
+
+    if req && req.path !~ %r{/rest/bug/12345(\?.*api_key=MY_TEST_KEY)?}
+      puts "  13d (update_bug sends request to /rest/bug/12345) FAILED"
+      test_13_passed = false
+    end
+
+    parsed_body = req ? JSON.parse(req.body) : {}
+    if parsed_body["assigned_to"] != "kernel-security-sentinel@lists.suse.com" ||
+       parsed_body.dig("comment", "body") != "Merged" ||
+       parsed_body.dig("comment", "is_private") != true
+      puts "  13e (update_bug payload contains assigned_to and private comment) FAILED: Got #{req.body}"
+      test_13_passed = false
+    end
+
+    # 2. Test error response triggers BugzillaError
+    mock_bz.response_code = "400"
+    mock_bz.response_body = '{"message":"Bad request"}'
+
+    error_raised = false
+    begin
+      client.update_bug("12345", { assigned_to: "someone@suse.com" })
+    rescue KernelWork::CveCLI::BugzillaError => e
+      error_raised = true
+    end
+
+    unless error_raised
+      puts "  13f (update_bug raises BugzillaError on HTTP 400) FAILED"
+      test_13_passed = false
+    end
+  ensure
+    class << Net::HTTP
+      if method_defined?(:orig_bz_new)
+        alias_method :new, :orig_bz_new
+        remove_method :orig_bz_new
+      end
+      remove_method :mock_bz_instance if respond_to?(:mock_bz_instance)
+      remove_method :mock_bz_instance= if respond_to?(:mock_bz_instance=)
+    end
+  end
+
+  if test_13_passed
+    puts "Test Case 13 (BugzillaClient#update_bug and PUT requests) Passed"
+  else
+    failures += 1
+  end
+end
+
+
+# --- Test Case 14: kernel cve reassign ---
+Dir.mktmpdir("test_cve_reassign") do |tmpdir|
+  test_14_passed = true
+
+  # 1. Test configuration defaults
+  cfg = KernelWork.config.cve.to_h
+  if cfg[:reassign_to] != "kernel-security-sentinel@lists.suse.com"
+    puts "  14a (default config reassign_to) FAILED: Got #{cfg[:reassign_to]}"
+    test_14_passed = false
+  end
+  if cfg[:reassign_comment] != "Merged"
+    puts "  14b (default config reassign_comment) FAILED: Got #{cfg[:reassign_comment]}"
+    test_14_passed = false
+  end
+
+  # Setup temporary tracker
+  test_cfg = cfg.merge({
+    tracker_type: "local",
+    data_repo: tmpdir
+  })
+
+  test_cve = KernelWork::TestCve.new
+  # Replace tracker with tmpdir tracker
+  tracker = KernelWork::CveCLI::CveTracker.create(test_cfg, test_cve)
+  test_cve.instance_variable_set(:@tracker, tracker)
+
+  # Seed 3 bugs:
+  # Bug 101: Fully merged across all target branches
+  tracker.write_bug("101", {
+    bug_id: "101",
+    cve: "CVE-2026-0101",
+    summary: "Merged bug",
+    fix_sha: "abcd1234ef01",
+    branches: { "SLE15-SP4": "Merged", "SLE15-SP5": "Merged" }
+  })
+
+  # Bug 102: Partially merged (SLE15-SP4: Merged, SLE15-SP5: ToDo)
+  tracker.write_bug("102", {
+    bug_id: "102",
+    cve: "CVE-2026-0102",
+    summary: "Partially merged bug",
+    branches: { "SLE15-SP4": "Merged", "SLE15-SP5": "ToDo" }
+  })
+
+  # Bug 103: Single branch, fully merged
+  tracker.write_bug("103", {
+    bug_id: "103",
+    cve: "CVE-2026-0103",
+    summary: "Another merged bug",
+    branches: { "SLE15-SP5": "Merged" }
+  })
+
+  # Track Bugzilla updates
+  reassigned_calls = []
+  test_cve.bugzilla_mock_proc = Proc.new do |path, params, method, body|
+    reassigned_calls << { path: path, params: params, method: method, body: body }
+    { "bugs" => [{ "id" => path.split("/").last.to_i }] }
+  end
+
+  # 2. Test interactive decline ('n')
+  class << test_cve
+    attr_accessor :confirm_answer
+    def confirm(opts, msg)
+      @confirm_answer || 'y'
+    end
+  end
+  test_cve.mock_fetch_proc = Proc.new { |opts| 0 }
+  test_cve.confirm_answer = 'n'
+  test_cve.fetch_called = false
+
+  test_cve.reassign({})
+
+  unless test_cve.fetch_called
+    puts "  14c (reassign calls fetch) FAILED"
+    test_14_passed = false
+  end
+
+  # Test fetch failure aborts reassign
+  test_cve.mock_fetch_proc = Proc.new { |opts| 1 }
+  fetch_err_ret = test_cve.reassign({})
+  if fetch_err_ret != 1
+    puts "  14c2 (reassign returns fetch exit code on fetch failure) FAILED: Got #{fetch_err_ret}"
+    test_14_passed = false
+  end
+  test_cve.mock_fetch_proc = Proc.new { |opts| 0 }
+
+  unless reassigned_calls.empty?
+    puts "  14d (declined reassign does not call Bugzilla) FAILED"
+    test_14_passed = false
+  end
+
+  # Ensure all bugs still exist in tracker
+  if tracker.read_all.length != 3
+    puts "  14e (declined reassign does not delete bugs) FAILED"
+    test_14_passed = false
+  end
+
+  # Test dry-run: lists commits/bugs without confirmation and without updating Bugzilla
+  dry_run_output = []
+  orig_stdout = $stdout
+  begin
+    $stdout = StringIO.new
+    test_cve.confirm_answer = 'n' # Even if confirm_answer is 'n', dry-run shouldn't ask
+    test_cve.fetch_called = false
+    reassigned_calls.clear
+    ret = test_cve.reassign({ dry_run: true })
+    dry_run_output = $stdout.string.split("\n")
+  ensure
+    $stdout = orig_stdout
+  end
+
+  unless ret == 0 && test_cve.fetch_called
+    puts "  14-dry1 (reassign --dry-run calls fetch and returns 0) FAILED"
+    test_14_passed = false
+  end
+
+  unless reassigned_calls.empty?
+    puts "  14-dry2 (reassign --dry-run does not call Bugzilla) FAILED"
+    test_14_passed = false
+  end
+
+  unless tracker.read_all.length == 3
+    puts "  14-dry3 (reassign --dry-run does not modify tracker) FAILED"
+    test_14_passed = false
+  end
+
+  has_101 = dry_run_output.any? { |l| l.include?("abcd1234ef01") && l.include?("CVE-2026-0101") && l.include?("bsc#101") }
+  has_103 = dry_run_output.any? { |l| l.include?("CVE-2026-0103") && l.include?("bsc#103") }
+  has_102 = dry_run_output.any? { |l| l.include?("102") }
+
+  unless has_101 && has_103 && !has_102
+    puts "  14-dry4 (reassign --dry-run lists merged commits/bugs and excludes incomplete) FAILED: Got #{dry_run_output.inspect}"
+    test_14_passed = false
+  end
+
+  # Test --no-fetch skips calling fetch
+  test_cve.fetch_called = false
+  test_cve.confirm_answer = 'n'
+  test_cve.reassign({ fetch: false })
+  if test_cve.fetch_called
+    puts "  14-nofetch (reassign --no-fetch skips calling fetch) FAILED"
+    test_14_passed = false
+  end
+
+  # 3. Test successful reassign with default flags
+  test_cve.confirm_answer = 'y'
+  reassigned_calls.clear
+  test_cve.reassign({})
+
+  # Should have called Bugzilla for 101 and 103, but NOT 102
+  called_ids = reassigned_calls.map { |c| c[:path] }
+  unless called_ids == ["bug/101", "bug/103"]
+    puts "  14f (reassign only targeted fully merged bugs) FAILED: Got #{called_ids.inspect}"
+    test_14_passed = false
+  end
+
+  # Verify payload for Bug 101
+  payload_101 = reassigned_calls.first[:body]
+  if payload_101[:assigned_to] != "kernel-security-sentinel@lists.suse.com" ||
+     payload_101.dig(:comment, :body) != "Merged" ||
+     payload_101.dig(:comment, :is_private) != true
+    puts "  14g (reassign default payload) FAILED: Got #{payload_101.inspect}"
+    test_14_passed = false
+  end
+
+  # Verify bugs 101 and 103 were deleted from tracker, but 102 remains
+  remaining_ids = tracker.read_all.map { |b| b.bug_id.to_s }
+  unless remaining_ids == ["102"]
+    puts "  14h (tracker deleted reassigned bugs and preserved others) FAILED: Got #{remaining_ids.inspect}"
+    test_14_passed = false
+  end
+
+  # 4. Test CLI option overrides
+  # Seed bug 104 with all merged
+  tracker.write_bug("104", {
+    bug_id: "104",
+    cve: "CVE-2026-0104",
+    summary: "Override test bug",
+    branches: { "SLE15-SP5": "Merged" }
+  })
+
+  reassigned_calls.clear
+  test_cve.reassign({
+    assignee: "custom-sentinel@suse.com",
+    comment: "Custom merged note",
+    yn_default: :yes
+  })
+
+  payload_104 = reassigned_calls.first[:body]
+  if payload_104[:assigned_to] != "custom-sentinel@suse.com" ||
+     payload_104.dig(:comment, :body) != "Custom merged note" ||
+     payload_104.dig(:comment, :is_private) != true
+    puts "  14i (CLI flag overrides for assignee and comment) FAILED: Got #{payload_104.inspect}"
+    test_14_passed = false
+  end
+
+  # 5. Test REST error handling: throws BugzillaError and retains bug in tracker
+  tracker.write_bug("105", {
+    bug_id: "105",
+    cve: "CVE-2026-0105",
+    summary: "Error test bug",
+    branches: { "SLE15-SP5": "Merged" }
+  })
+
+  test_cve.bugzilla_mock_proc = Proc.new do |path, params, method, body|
+    raise KernelWork::CveCLI::BugzillaError.new("Bugzilla connection refused")
+  end
+
+  error_thrown = false
+  begin
+    test_cve.reassign({ yn_default: :yes })
+  rescue KernelWork::CveCLI::BugzillaError => e
+    error_thrown = true
+  end
+
+  unless error_thrown
+    puts "  14j (reassign throws BugzillaError on REST failure) FAILED"
+    test_14_passed = false
+  end
+
+  # Bug 105 MUST still exist in tracker
+  bug_105_still_exists = false
+  begin
+    tracker.read_bug("105")
+    bug_105_still_exists = true
+  rescue KernelWork::CveCLI::BugNotFoundError
+  end
+
+  unless bug_105_still_exists
+    puts "  14k (bug is preserved in tracker when Bugzilla update fails) FAILED"
+    test_14_passed = false
+  end
+
+  if test_14_passed
+    puts "Test Case 14 (kernel cve reassign) Passed"
   else
     failures += 1
   end

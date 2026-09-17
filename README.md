@@ -31,6 +31,7 @@
   - [4. Apply CVE Fixes (`kernel cve apply`)](#4-apply-cve-fixes-kernel-cve-apply)
   - [5. Push and Sync (`kernel cve push`)](#5-push-and-sync-kernel-cve-push)
   - [6. Manual Status Refreshes (`kernel cve refresh`)](#6-manual-status-refreshes-kernel-cve-refresh)
+  - [7. Reassign Completed CVEs (`kernel cve reassign`)](#7-reassign-completed-cves-kernel-cve-reassign)
 - [Other Key Utilities & Commands](#other-helpful-utilities--commands)
   - [Configuration & Filter Management](#configuration--filter-management)
   - [SUSE kernel-source Specific Commands](#suse-kernel-source-specific-commands)
@@ -390,6 +391,19 @@ To manually force-recalculate the status of CVEs on the current branch based on 
 ```bash
 kernel cve refresh
 ```
+
+### 7. Reassign Completed CVEs (`kernel cve reassign`)
+Once all target branches for a CVE are fully merged, reassign the bug back to the security team and remove it from local tracking:
+```bash
+kernel cve reassign [-d] [--no-fetch] [-a <assignee>] [-m <comment>] [-u <user>] [-y]
+```
+* **What it does:**
+  * Runs a `fetch` to ensure tracked bugs from Bugzilla are up to date (pass `--no-fetch` to skip).
+  * Identifies all CVEs whose active target branches are all in `MERGED` state.
+  * In `--dry-run` (`-d`) mode, lists all commits/bugs that would be updated without confirmation and without sending any update to Bugzilla or modifying local tracking.
+  * Prompts for user confirmation before reassigning (pass `-y`/`--yes` to confirm automatically).
+  * Sends a single Bugzilla REST request to set the assignee (default: `kernel-security-sentinel@lists.suse.com`, configurable via `reassign_to`) and post a private comment (default: `"Merged"`, configurable via `reassign_comment`).
+  * On success, drops the bug from local tracking. If Bugzilla fails, the command exits with an error and the bug is preserved in the tracker.
 
 ---
 

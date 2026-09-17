@@ -35,6 +35,7 @@ module KernelWork
                 :push,
                 :status, :ls,
                 :refresh,
+                :reassign,
             ]
 
             # Brief help description for each action.
@@ -44,6 +45,7 @@ module KernelWork
                 :push  => "Push applied commits and set their status to Pushed",
                 :status => "Show the status of active CVEs",
                 :refresh => "Refresh CVE status for the current branch",
+                :reassign => "Reassign fully merged CVE bugs in Bugzilla and remove from local tracker",
             }
 
             # Set options for CVE actions
@@ -72,6 +74,23 @@ module KernelWork
                 when :status, :ls
                     optsParser.on("--[no-]hyperlinks", "Enable or disable terminal hyperlinks in output.") {
                         |val| opts[:hyperlinks] = val}
+                when :reassign
+                    optsParser.on("-d", "--dry-run", "List CVEs/commits that would be updated without making changes.") {
+                        |val| opts[:dry_run] = true}
+                    optsParser.on("--[no-]fetch", "Fetch bugs from Bugzilla before reassigning (pass --no-fetch to skip).") {
+                        |val| opts[:fetch] = val}
+                    optsParser.on("-u", "--user <email>", String, "Bugzilla user email (overrides config).") {
+                        |val| opts[:bugzilla_user] = val}
+                    optsParser.on("-f", "--force", "Force refresh (deletes old file).") {
+                        |val| opts[:force] = true}
+                    optsParser.on("-a", "--assignee <email>", "--to <email>", String,
+                                  "Assignee email (default: kernel-security-sentinel@lists.suse.com).") {
+                        |val| opts[:assignee] = val}
+                    optsParser.on("-m", "--comment <msg>", "--message <msg>", String,
+                                  "Private comment message (default: Merged).") {
+                        |val| opts[:comment] = val}
+                    optsParser.on("-y", "--yes", "Apply reassignments automatically without confirmation.") {
+                        |val| opts[:yn_default] = :yes}
                 end
             end
 
@@ -385,6 +404,78 @@ module KernelWork
                 return 0
             end
             alias_method :ls, :status
+
+            # Reassign fully merged CVE bugs back to the security team and remove from tracking
+            #
+            # Fetches current CVE bugs from Bugzilla (unless opts[:fetch] is false), identifies
+            # all bugs where all active target branches are merged, requests user confirmation,
+            # updates Bugzilla with the new assignee and a private comment, and deletes the bug
+            # from the local tracker.
+            # If opts[:dry_run] is set, lists all candidate CVEs/commits without confirmation
+            # and without modifying Bugzilla or the local tracker.
+            #
+            # @param opts [Hash] Action options
+            # @return [Integer] 0 on success
+            # @raise [BugzillaTimeoutError] If the Bugzilla request times out
+            # @raise [BugzillaError] If the Bugzilla update fails
+            def reassign(opts)
+                fetch(opts) if opts[:fetch] != false
+
+                cve_files = @tracker.read_all
+                if cve_files.empty?
+                    log(:INFO, "No CVE tracking data found.")
+                    return 0
+                end
+
+                merged_cves = cve_files.select(&:all_merged?)
+                if merged_cves.empty?
+                    log(:INFO, "No merged CVEs found to reassign.")
+                    return 0
+                end
+
+                if opts[:dry_run]
+                    merged_cves.each do |cve|
+                        commit_str = (cve.fix_sha && !cve.fix_sha.empty?) ? "#{cve.fix_sha} " : ""
+                        summary_str = (cve.summary && !cve.summary.empty?) ? " - #{cve.summary}" : ""
+                        puts "#{commit_str}#{cve.cve} (bsc##{cve.bug_id})#{summary_str}"
+                    end
+                    return 0
+                end
+
+                config = KernelWork.config.cve.to_h
+                assignee = opts[:assignee] || config[:reassign_to] || config[:reassign_assignee] || "kernel-security-sentinel@lists.suse.com"
+                comment_msg = opts[:comment] || config[:reassign_comment] || config[:reassign_message] || "Merged"
+
+                reassigned_count = 0
+                merged_cves.each do |cve|
+                    msg = "reassign #{cve.cve} (bsc##{cve.bug_id}) to #{assignee}"
+                    rep = confirm(opts, msg)
+                    if rep != 'y'
+                        log(:INFO, "Skipping #{cve.cve} (bsc##{cve.bug_id}).")
+                        next
+                    end
+
+                    log(:INFO, "Reassigning Bug ##{cve.bug_id} (#{cve.cve}) to #{assignee}...")
+                    @bugzilla.update_bug(cve.bug_id, {
+                        assigned_to: assignee,
+                        comment: {
+                            body: comment_msg,
+                            is_private: true
+                        }
+                    })
+
+                    @tracker.delete_bug(cve.bug_id)
+                    log(:INFO, "Successfully reassigned #{cve.cve} (bsc##{cve.bug_id}) to #{assignee} and dropped from tracker.")
+                    reassigned_count += 1
+                end
+
+                if reassigned_count == 0
+                    log(:INFO, "No CVEs were reassigned.")
+                else
+                    log(:INFO, "Successfully reassigned #{reassigned_count} CVE bug(s).")
+                end
+                return 0
+            end
 
             private
 
