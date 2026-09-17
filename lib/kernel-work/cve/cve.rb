@@ -219,5 +219,19 @@ module KernelWork
             return false if active.empty?
             active.values.all? { |status| status == STATE_MERGED }
         end
+
+        # Generate the Bugzilla web URL for this CVE
+        #
+        # Uses the Bugzilla bug ID if available, otherwise falls back to the CVE identifier.
+        #
+        # @param base_url [String, nil] Optional base URL (defaults to "https://bugzilla.suse.com")
+        # @return [String, nil] The Bugzilla web URL, or nil if neither bug_id nor cve is present
+        def bugzilla_url(base_url = nil)
+            target = (!@bug_id.nil? && !@bug_id.empty?) ? @bug_id : @cve
+            return nil if target.nil? || target.empty?
+
+            base = base_url || "https://bugzilla.suse.com"
+            "#{base.chomp('/')}/show_bug.cgi?id=#{target}"
+        end
     end
 end
