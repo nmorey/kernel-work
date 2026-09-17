@@ -69,6 +69,9 @@ module KernelWork
                 when :push
                     optsParser.on("-f", "--force", "Force push.") {
                         |val| opts[:force_push] = true}
+                when :status, :ls
+                    optsParser.on("--[no-]hyperlinks", "Enable or disable terminal hyperlinks in output.") {
+                        |val| opts[:hyperlinks] = val}
                 end
             end
 
@@ -354,10 +357,20 @@ module KernelWork
                 separator_len = max_cve_width + distros_list.map { |d| distro_widths[d] }.sum
                 puts "-" * separator_len
 
+                use_hyperlinks = opts.key?(:hyperlinks) ? opts[:hyperlinks] : KernelWork.config.hyperlinks
+                bz_web_url = config[:bugzilla_web_url] || config[:bugzilla_url]&.sub("apibugzilla.", "bugzilla.") || "https://bugzilla.suse.com"
+
                 # Print each CVE row
                 matching_cves.each do |cve|
-                    cve_bug_str = "#{cve.cve} bsc##{cve.bug_id}"
-                    cve_bug_str = sprintf("%-#{max_cve_width}s", cve_bug_str)
+                    raw_cve_str = "#{cve.cve} bsc##{cve.bug_id}"
+                    if use_hyperlinks
+                        url = cve.bugzilla_url(bz_web_url)
+                        col_str = raw_cve_str.hyperlink(url)
+                    else
+                        col_str = raw_cve_str
+                    end
+                    padding = " " * [0, max_cve_width - raw_cve_str.length].max
+                    cve_bug_str = "#{col_str}#{padding}"
                     statuses_str = ""
 
                     distros_list.each do |distro|

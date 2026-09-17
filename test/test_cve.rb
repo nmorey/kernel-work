@@ -896,6 +896,124 @@ begin
 end
 
 
+# --- Test Case 12: Terminal Hyperlinks and String#hyperlink ---
+begin
+  test_12_passed = true
+
+  # 1. Test String#hyperlink
+  orig_tty = String.class_variable_get(:@@is_a_tty) rescue nil
+  begin
+    # Test nil/empty url
+    if "test".hyperlink(nil) != "test" || "test".hyperlink("") != "test"
+      puts "  12a (nil/empty url returns self) FAILED"
+      test_12_passed = false
+    end
+
+    # Test non-TTY
+    String.class_variable_set(:@@is_a_tty, false)
+    if "test".hyperlink("https://example.com") != "test"
+      puts "  12b (non-TTY returns unmodified self) FAILED"
+      test_12_passed = false
+    end
+
+    # Test TTY
+    String.class_variable_set(:@@is_a_tty, true)
+    expected_link = "\e]8;;https://example.com\e\\test\e]8;;\e\\"
+    if "test".hyperlink("https://example.com") != expected_link
+      puts "  12c (TTY returns OSC 8 sequence) FAILED"
+      test_12_passed = false
+    end
+  ensure
+    String.class_variable_set(:@@is_a_tty, orig_tty)
+  end
+
+  # 2. Test KernelWork.config.hyperlinks
+  if KernelWork.config.hyperlinks != true
+    puts "  12d (config.hyperlinks default is true) FAILED"
+    test_12_passed = false
+  end
+
+  # 3. Test CVE#bugzilla_url
+  cve_with_both = KernelWork::CVE.new(bug_id: "12345", cve: "CVE-2026-00001")
+  if cve_with_both.bugzilla_url != "https://bugzilla.suse.com/show_bug.cgi?id=12345"
+    puts "  12e (CVE#bugzilla_url with bug_id) FAILED: Got #{cve_with_both.bugzilla_url}"
+    test_12_passed = false
+  end
+
+  cve_only = KernelWork::CVE.new(cve: "CVE-2026-00002")
+  if cve_only.bugzilla_url != "https://bugzilla.suse.com/show_bug.cgi?id=CVE-2026-00002"
+    puts "  12f (CVE#bugzilla_url fallback to cve) FAILED: Got #{cve_only.bugzilla_url}"
+    test_12_passed = false
+  end
+
+  if cve_with_both.bugzilla_url("https://custom.bz.org/") != "https://custom.bz.org/show_bug.cgi?id=12345"
+    puts "  12g (CVE#bugzilla_url with custom base) FAILED"
+    test_12_passed = false
+  end
+
+  cve_empty = KernelWork::CVE.new
+  if cve_empty.bugzilla_url != nil
+    puts "  12h (CVE#bugzilla_url empty returns nil) FAILED"
+    test_12_passed = false
+  end
+
+  # 4. Test CveAction#status with hyperlinks enabled vs disabled
+  test_cve_inst = KernelWork::TestCve.new
+  orig_stdout = $stdout
+  orig_config_hyperlinks = KernelWork.config.settings[:hyperlinks]
+  begin
+    String.class_variable_set(:@@is_a_tty, true)
+
+    # 4a. Enabled (default config + TTY)
+    $stdout = StringIO.new
+    test_cve_inst.status({})
+    output_enabled = $stdout.string
+    unless output_enabled.include?("\e]8;;https://bugzilla.suse.com/show_bug.cgi?id=")
+      puts "  12i (status output contains hyperlinks when enabled) FAILED"
+      test_12_passed = false
+    end
+
+    # 4b. Disabled via opts[:hyperlinks] = false
+    $stdout = StringIO.new
+    test_cve_inst.status({ hyperlinks: false })
+    output_opts_disabled = $stdout.string
+    if output_opts_disabled.include?("\e]8;;")
+      puts "  12j (status output contains no hyperlinks when opts[:hyperlinks] = false) FAILED"
+      test_12_passed = false
+    end
+
+    # 4c. Disabled via global config
+    KernelWork.config.settings[:hyperlinks] = false
+    $stdout = StringIO.new
+    test_cve_inst.status({})
+    output_cfg_disabled = $stdout.string
+    if output_cfg_disabled.include?("\e]8;;")
+      puts "  12k (status output contains no hyperlinks when config.hyperlinks is false) FAILED"
+      test_12_passed = false
+    end
+
+    # 4d. opts[:hyperlinks] = true overrides global config false
+    $stdout = StringIO.new
+    test_cve_inst.status({ hyperlinks: true })
+    output_override = $stdout.string
+    unless output_override.include?("\e]8;;https://bugzilla.suse.com/show_bug.cgi?id=")
+      puts "  12l (status output overrides config.hyperlinks when opts[:hyperlinks] = true) FAILED"
+      test_12_passed = false
+    end
+  ensure
+    $stdout = orig_stdout
+    String.class_variable_set(:@@is_a_tty, orig_tty)
+    KernelWork.config.settings[:hyperlinks] = orig_config_hyperlinks
+  end
+
+  if test_12_passed
+    puts "Test Case 12 (Terminal Hyperlinks & String#hyperlink) Passed"
+  else
+    failures += 1
+  end
+end
+
+
 # --- Test Output ---
 if failures == 0
   puts "All CVE tests passed successfully!"
