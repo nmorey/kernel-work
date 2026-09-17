@@ -85,6 +85,16 @@ module KernelWork
                 cves
             end
 
+            # Read a bug from its CVE id
+            # @param cve_id [String] The CVE Id
+            # @return [CVE] CVE/Bug data
+            # @raise [BugNotFoundError] If the bug could not be found
+            def read_cve(cve_id)
+                bug = read_all.find { |b| b.cve == cve_id }
+                raise BugNotFoundError.new if bug.nil?
+                bug
+            end
+
             def read_bug(bug_id)
                 ensure_dir
                 file_path = File.join(@cves_path, "#{bug_id}.json")

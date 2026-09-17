@@ -379,6 +379,28 @@ Dir.mktmpdir('cve-data') do |dir_path|
     puts "Test Case 5C (Local Tracker read_all) FAILED!"
     failures += 1
   end
+
+  # Test read_cve
+  cve_found = tracker.read_cve("CVE-2026-99999")
+  if cve_found && cve_found[:bug_id] == "12345" && cve_found[:cve] == "CVE-2026-99999"
+    puts "Test Case 5E (Local Tracker read_cve) Passed"
+  else
+    puts "Test Case 5E (Local Tracker read_cve) FAILED!"
+    puts "  Got: #{cve_found.inspect}"
+    failures += 1
+  end
+
+  # Test read_cve not found
+  begin
+    tracker.read_cve("CVE-2026-00000")
+    puts "Test Case 5F (Local Tracker read_cve missing) FAILED: Expected BugNotFoundError"
+    failures += 1
+  rescue KernelWork::CveCLI::BugNotFoundError
+    puts "Test Case 5F (Local Tracker read_cve missing) Passed"
+  rescue => e
+    puts "Test Case 5F (Local Tracker read_cve missing) FAILED: Got #{e.class}"
+    failures += 1
+  end
   
   # Test delete_all
   tracker.delete_all
