@@ -25,13 +25,15 @@ module KernelWork
                 end
             end
 
-            # Request wrapper to execute GET requests to the Bugzilla REST API
-            # @param path [String] Request sub-path (e.g., "bug" or "bug/12345/comment")
+            # Request wrapper to execute HTTP requests to the Bugzilla REST API
+            # @param path [String] Request sub-path (e.g., "bug" or "bug/12345")
             # @param params [Hash] Additional query parameters
+            # @param method [Symbol] HTTP method (:get, :put, :post)
+            # @param body [Hash, String, nil] Request body payload (encoded to JSON if Hash)
             # @return [Hash] Parsed JSON response body
             # @raise [BugzillaTimeoutError] If the request times out
             # @raise [BugzillaError] If the request or connection fails
-            def request(path, params = {})
+            def request(path, params = {}, method = :get, body = nil)
                 url = URI.parse("#{@url.chomp('/')}/rest/#{path}")
 
                 query_params = params.dup
@@ -43,8 +45,35 @@ module KernelWork
                 http.open_timeout = @timeout
                 http.read_timeout = @timeout
 
-                req = Net::HTTP::Get.new(url.request_uri)
+                case method.to_sym.downcase
+                when :get
+                    req = Net::HTTP::Get.new(url.request_uri)
+                when :put
+                    req = Net::HTTP::Put.new(url.request_uri)
+                    req['Content-Type'] = 'application/json'
+                    if body
+                        payload = body.is_a?(Hash) ? body.dup : body
+                        if payload.is_a?(Hash) && @api_key && !@api_key.empty? && !payload.key?(:api_key)
+                            payload[:api_key] = @api_key
+                        end
+                        req.body = payload.is_a?(Hash) ? JSON.generate(payload) : payload.to_s
+                    end
+                when :post
+                    req = Net::HTTP::Post.new(url.request_uri)
+                    req['Content-Type'] = 'application/json'
+                    if body
+                        payload = body.is_a?(Hash) ? body.dup : body
+                        if payload.is_a?(Hash) && @api_key && !@api_key.empty? && !payload.key?(:api_key)
+                            payload[:api_key] = @api_key
+                        end
+                        req.body = payload.is_a?(Hash) ? JSON.generate(payload) : payload.to_s
+                    end
+                else
+                    raise BugzillaError.new("Unsupported HTTP method: #{method}")
+                end
+
                 req['Accept'] = 'application/json'
+                req['X-BUGZILLA-API-KEY'] = @api_key if @api_key && !@api_key.empty?
 
                 begin
                     res = http.request(req)
@@ -54,8 +83,8 @@ module KernelWork
                     raise BugzillaError.new("Bugzilla connection failed: #{e.message}")
                 end
 
-                if res.code == "200"
-                    JSON.parse(res.body)
+                if res.code =~ /^20\d$/
+                    res.body && !res.body.strip.empty? ? JSON.parse(res.body) : {}
                 else
                     raise BugzillaError.new(res)
                 end
