@@ -10,6 +10,8 @@ module KernelWork
         STATE_PUSHED     = "Pushed"
         # The Merged workflow state for a CVE bug.
         STATE_MERGED     = "Merged"
+        # The Blacklisted workflow state for a CVE bug.
+        STATE_BLACKLISTED = "Blacklisted"
         # The Reassigned workflow state for a CVE bug.
         STATE_REASSIGNED = "Reassigned"
 
@@ -62,6 +64,8 @@ module KernelWork
                 text.green
             when STATE_APPLIED
                 text.brown
+            when STATE_BLACKLISTED
+                text.gray
             when STATE_PUSHED
                 text.blue
             else
@@ -217,7 +221,8 @@ module KernelWork
         def all_merged?
             active = active_branches
             return false if active.empty?
-            active.values.all? { |status| status == STATE_MERGED }
+            active.values.all? { |status|
+                status == STATE_MERGED || status == STATE_BLACKLISTED }
         end
 
         # Generate the Bugzilla web URL for this CVE

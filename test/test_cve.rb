@@ -844,6 +844,13 @@ begin
     test_10_passed = false
   end
 
+  # Test all_merged? with STATE_BLACKLISTED
+  cve_obj.set_status("SLE15-SP7", KernelWork::CVE::STATE_BLACKLISTED)
+  if !cve_obj.all_merged?
+    puts "  10e2 (all_merged? with blacklisted positive) FAILED"
+    test_10_passed = false
+  end
+
   # Test hash compatibility reader []
   if cve_obj[:bug_id] != "98765" || cve_obj[:cve] != "CVE-2026-12345"
     puts "  10f (hash reader compatibility) FAILED"
@@ -852,7 +859,7 @@ begin
 
   # Test serialization
   h = cve_obj.to_h
-  if h[:bug_id] != "98765" || h[:branches][:"SLE15-SP7"] != KernelWork::CVE::STATE_MERGED
+  if h[:bug_id] != "98765" || h[:branches][:"SLE15-SP7"] != KernelWork::CVE::STATE_BLACKLISTED
     puts "  10g (serialization to_h) FAILED"
     test_10_passed = false
   end
@@ -868,10 +875,12 @@ begin
   if KernelWork::CVE.colour(KernelWork::CVE::STATE_TODO) != "ToDo".red ||
      KernelWork::CVE.colour(KernelWork::CVE::STATE_MERGED) != "Merged".green ||
      KernelWork::CVE.colour(KernelWork::CVE::STATE_APPLIED) != "Applied".brown ||
+     KernelWork::CVE.colour(KernelWork::CVE::STATE_BLACKLISTED) != "Blacklisted".gray ||
      KernelWork::CVE.colour(KernelWork::CVE::STATE_PUSHED) != "Pushed".blue ||
      KernelWork::CVE.colour(KernelWork::CVE::STATE_TODO, "Custom") != "Custom".red ||
      cve_obj.colour(KernelWork::CVE::STATE_MERGED, "Custom") != "Custom".green ||
-     cve_obj.color(KernelWork::CVE::STATE_APPLIED, "Custom") != "Custom".brown
+     cve_obj.color(KernelWork::CVE::STATE_APPLIED, "Custom") != "Custom".brown ||
+     cve_obj.colour(KernelWork::CVE::STATE_BLACKLISTED, "Custom") != "Custom".gray
     puts "  10i (colour methods) FAILED"
     test_10_passed = false
   end
@@ -929,6 +938,7 @@ begin
     KernelWork::CVE::STATE_APPLIED,
     KernelWork::CVE::STATE_PUSHED,
     KernelWork::CVE::STATE_MERGED,
+    KernelWork::CVE::STATE_BLACKLISTED,
     KernelWork::CVE::STATE_REASSIGNED
   ]
 
@@ -937,7 +947,7 @@ begin
     test_11_passed = false
   end
 
-  if KernelWork::CVE::MAX_STATE_LEN != "Reassigned".length
+  if KernelWork::CVE::MAX_STATE_LEN != "Blacklisted".length
     puts "  11a2 (MAX_STATE_LEN) FAILED: Got #{KernelWork::CVE::MAX_STATE_LEN.inspect}"
     test_11_passed = false
   end
@@ -945,6 +955,7 @@ begin
   # 2. Test validate_state! normalization and error
   if KernelWork::CVE.validate_state!("  todo  ") != KernelWork::CVE::STATE_TODO ||
      KernelWork::CVE.validate_state!(:merged) != KernelWork::CVE::STATE_MERGED ||
+     KernelWork::CVE.validate_state!("blacklisted") != KernelWork::CVE::STATE_BLACKLISTED ||
      KernelWork::CVE.validate_state!("") != "" ||
      KernelWork::CVE.validate_state!(nil) != ""
     puts "  11b (validate_state! normalization) FAILED"
@@ -1275,13 +1286,13 @@ Dir.mktmpdir("test_cve_reassign") do |tmpdir|
   test_cve.instance_variable_set(:@tracker, tracker)
 
   # Seed 3 bugs:
-  # Bug 101: Fully merged across all target branches
+  # Bug 101: Fully merged/resolved across all target branches (using Merged and Blacklisted)
   tracker.write_bug("101", {
     bug_id: "101",
     cve: "CVE-2026-0101",
     summary: "Merged bug",
     fix_sha: "abcd1234ef01",
-    branches: { "SLE15-SP4": "Merged", "SLE15-SP5": "Merged" }
+    branches: { "SLE15-SP4": "Merged", "SLE15-SP5": "Blacklisted" }
   })
 
   # Bug 102: Partially merged (SLE15-SP4: Merged, SLE15-SP5: ToDo)
