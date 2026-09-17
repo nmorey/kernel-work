@@ -83,10 +83,10 @@ module KernelWork
                         |val| opts[:bugzilla_user] = val}
                     optsParser.on("-f", "--force", "Force refresh (deletes old file).") {
                         |val| opts[:force] = true}
-                    optsParser.on("-a", "--assignee <email>", "--to <email>", String,
+                    optsParser.on("-a", "--assignee <email>", String,
                                   "Assignee email (default: kernel-security-sentinel@lists.suse.com).") {
                         |val| opts[:assignee] = val}
-                    optsParser.on("-m", "--comment <msg>", "--message <msg>", String,
+                    optsParser.on("-m", "--message <msg>", String,
                                   "Private comment message (default: Merged).") {
                         |val| opts[:comment] = val}
                     optsParser.on("-y", "--yes", "Apply reassignments automatically without confirmation.") {
