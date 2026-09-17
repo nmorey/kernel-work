@@ -110,7 +110,7 @@ _kernel_work_config(){
                 return
             fi
             local action=${words[3]}
-            local opt_list=$(kernel_work_genoptlist kernel config branch $action)
+            local opt_list=$(_kernel_work_genoptlist kernel config branch $action)
             _kernel_work_filter_opts "$prev" kernel config branch $action && return
             case "$prev" in
                 *)
