@@ -354,7 +354,8 @@ Fetch active CVE tracking bugs assigned to you directly from SUSE Bugzilla:
 kernel cve fetch [-u <bugzilla-email>] [-f]
 ```
 * **What it does:** Authenticates using your Bugzilla credentials (defined in `config.yml` or overridden via `-u`). It downloads all open kernel CVE bugs, parses their descriptions/comments to extract upstream main branch SHAs and target release backport details, and stores/updates them in your local tracker database (configured in `cve.data_repo`).
-* **Cache Cleanup:** Reassigned or resolved CVEs are automatically detected and pruned from your local cache on fetch. Pass `--force` (`-f`) to completely wipe the local tracking data and re-fetch from scratch.
+* **Incremental Fetch by Default:** To minimize Bugzilla API load and avoid query rate limits, `fetch` only downloads detailed comments for new/unknown CVEs. Bugs already cached in your local tracker are kept as-is.
+* **Cache Cleanup & Force Refresh:** Reassigned or resolved CVEs are automatically detected and pruned from your local cache on every fetch. Pass `--force` (`-f`) to completely wipe the local tracking data and re-fetch all CVE details from scratch.
 * **Rate Limiting:** Queries to Bugzilla are rate-limited to avoid overloading the API (default cooldown: `0.5` seconds between queries, configurable via `cve.bugzilla_min_query_delay`).
 
 ### 3. List CVE Status (`kernel cve ls`)

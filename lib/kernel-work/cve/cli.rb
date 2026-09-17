@@ -40,7 +40,7 @@ module KernelWork
 
             # Brief help description for each action.
             ACTION_HELP = {
-                :fetch => "Fetch my CVE bugs from Bugzilla and populate Google Sheet or Local file",
+                :fetch => "Fetch my CVE bugs from Bugzilla and populate local cache",
                 :apply => "Apply the missing CVE fixes to the current branch",
                 :push  => "Push applied commits and set their status to Pushed",
                 :status => "Show the status of active CVEs",
@@ -58,7 +58,7 @@ module KernelWork
                 when :fetch
                     optsParser.on("-u", "--user <email>", String, "Bugzilla user email (overrides config).") {
                         |val| opts[:bugzilla_user] = val}
-                    optsParser.on("-f", "--force", "Force refresh (deletes old file).") {
+                    optsParser.on("-f", "--force", "Force full refresh (clears cache and re-fetches details for all CVEs).") {
                         |val| opts[:force] = true}
                 when :apply
                     Upstream.set_opts(:cve_apply, optsParser, opts)
@@ -81,7 +81,7 @@ module KernelWork
                         |val| opts[:fetch] = val}
                     optsParser.on("-u", "--user <email>", String, "Bugzilla user email (overrides config).") {
                         |val| opts[:bugzilla_user] = val}
-                    optsParser.on("-f", "--force", "Force refresh (deletes old file).") {
+                    optsParser.on("-f", "--force", "Force full refresh (clears cache and re-fetches details for all CVEs).") {
                         |val| opts[:force] = true}
                     optsParser.on("-a", "--assignee <email>", String,
                                   "Assignee email (default: kernel-security-sentinel@lists.suse.com).") {
@@ -128,7 +128,15 @@ module KernelWork
                 @branch
             end
 
-            # Fetch action
+            # Fetch CVE bugs assigned to the user from Bugzilla.
+            #
+            # Reassigned and resolved bugs are pruned from local cache.
+            # By default, details (comments) are fetched only for new/unknown CVE bugs,
+            # keeping known cached CVEs as-is. Passing opts[:force] forces a complete
+            # refresh and re-fetches details for all CVEs.
+            #
+            # @param opts [Hash] Options hash (:bugzilla_user, :force)
+            # @return [Integer] 0 on success, non-zero on failure
             def fetch(opts)
                 config = KernelWork.config.cve.to_h
 
@@ -144,9 +152,9 @@ module KernelWork
                     assigned_to: bz_user
                 }
 
-                response = @bugzilla.request("bug", params)
+                res = @bugzilla.request("bug", params)
+                bugs = res["bugs"] || []
 
-                bugs = response["bugs"] || []
                 resolved_statuses = ["RESOLVED", "VERIFIED", "CLOSED"]
                 filtered_bugs = bugs.select do |bug|
                     status = bug["status"].to_s.upcase
@@ -174,10 +182,26 @@ module KernelWork
                     return 0
                 end
 
-                log(:INFO, "Found #{filtered_bugs.length} CVE bugs. Fetching comments...")
+                known_ids = local_ids - orphaned_ids
+                bugs_to_fetch = if opts[:force]
+                                    filtered_bugs
+                                else
+                                    filtered_bugs.reject { |bug| known_ids.include?(bug["id"].to_s) }
+                                end
+
+                if !opts[:force] && bugs_to_fetch.empty?
+                    log(:INFO, "Found #{filtered_bugs.length} CVE bugs (#{filtered_bugs.length} already known). No new CVE bugs to fetch.")
+                    return 0
+                end
+
+                if opts[:force] || known_ids.empty?
+                    log(:INFO, "Found #{filtered_bugs.length} CVE bugs. Fetching comments...")
+                else
+                    log(:INFO, "Found #{filtered_bugs.length} CVE bugs (#{known_ids.length} already known). Fetching comments for #{bugs_to_fetch.length} new bug(s)...")
+                end
 
                 updates_count = 0
-                filtered_bugs.each do |bug|
+                bugs_to_fetch.each do |bug|
                     bug_id = bug["id"].to_s
                     log(:INFO, "Fetching comments for Bug ##{bug_id}...")
                     comments_response = @bugzilla.request("bug/#{bug_id}/comment")

@@ -1480,6 +1480,124 @@ Dir.mktmpdir("test_cve_reassign") do |tmpdir|
 end
 
 
+# --- Test Case 15: Default Incremental Fetch & --force ---
+Dir.mktmpdir('cve-data-fetch-incremental') do |dir_path|
+  orig_config = KernelWork.config.settings[:cve]
+  KernelWork.config.settings[:cve] = {
+    bugzilla_url: "https://apibugzilla.suse.com",
+    bugzilla_user: "tester@suse.com",
+    data_repo: dir_path,
+    tracker_type: "local",
+    bugzilla_min_query_delay: 0
+  }
+
+  tracker = KernelWork::CveCLI::CveTracker.create(KernelWork.config.cve.to_h)
+
+  # 1. Seed tracker with a known bug and an orphaned bug
+  tracker.write_bug("100", {
+    bug_id: "100",
+    cve: "CVE-2026-0100",
+    summary: "Known bug 100",
+    branches: { "SLE15-SP7": "Applied" }
+  })
+  tracker.write_bug("200", {
+    bug_id: "200",
+    cve: "CVE-2026-0200",
+    summary: "Orphaned bug 200",
+    branches: { "SLE15-SP7": "ToDo" }
+  })
+
+  test_cve = KernelWork::TestCve.new
+
+  comment_calls = []
+  test_cve.bugzilla_mock_proc = Proc.new do |path, params|
+    if path == "bug"
+      {
+        "bugs" => [
+          { "id" => 100, "status" => "CONFIRMED", "summary" => "CVE-2026-0100: kernel: known bug 100" },
+          { "id" => 300, "status" => "CONFIRMED", "summary" => "CVE-2026-0300: kernel: new bug 300" }
+        ]
+      }
+    elsif path =~ %r{bug/(\d+)/comment}
+      bug_id = $1
+      comment_calls << bug_id
+      {
+        "bugs" => {
+          bug_id => {
+            "comments" => [
+              { "text" => "Security fix for CVE-2026-#{bug_id} bsc##{bug_id}\nSLE15-SP7: AUTO: backport 727e1f569855\n" }
+            ]
+          }
+        }
+      }
+    end
+  end
+
+  test_15_passed = true
+
+  # 2. Default fetch should only fetch comments for new bug 300, keep 100 as-is, and drop 200
+  test_cve.fetch({})
+
+  unless comment_calls == ["300"]
+    puts "  15a (fetch only fetched comments for new bug 300, got: #{comment_calls.inspect}) FAILED"
+    test_15_passed = false
+  end
+
+  # Check orphaned bug 200 was dropped
+  bug_200_dropped = false
+  begin
+    tracker.read_bug("200")
+  rescue KernelWork::CveCLI::BugNotFoundError
+    bug_200_dropped = true
+  end
+
+  unless bug_200_dropped
+    puts "  15b (orphaned bug 200 was not dropped) FAILED"
+    test_15_passed = false
+  end
+
+  # Check known bug 100 kept its existing status 'Applied'
+  bug_100 = tracker.read_bug("100")
+  unless bug_100 && bug_100[:branches] && bug_100[:branches][:"SLE15-SP7"] == "Applied"
+    puts "  15c (known bug 100 state was altered or lost, got: #{bug_100.inspect}) FAILED"
+    test_15_passed = false
+  end
+
+  # Check new bug 300 was written to tracker
+  bug_300 = tracker.read_bug("300")
+  unless bug_300 && bug_300[:branches] && bug_300[:branches][:"SLE15-SP7"] == "ToDo"
+    puts "  15d (new bug 300 was not saved properly, got: #{bug_300.inspect}) FAILED"
+    test_15_passed = false
+  end
+
+  # 3. Second fetch with all bugs known should make zero comment calls
+  comment_calls.clear
+  test_cve.fetch({})
+
+  unless comment_calls.empty?
+    puts "  15e (second fetch made comment calls when all bugs known: #{comment_calls.inspect}) FAILED"
+    test_15_passed = false
+  end
+
+  # 4. Fetch with --force should wipe and fetch all comments (both 100 and 300)
+  comment_calls.clear
+  test_cve.fetch({ force: true })
+
+  unless comment_calls.sort == ["100", "300"]
+    puts "  15f (force fetch did not fetch comments for all bugs, got: #{comment_calls.inspect}) FAILED"
+    test_15_passed = false
+  end
+
+  if test_15_passed
+    puts "Test Case 15 (Default Incremental Fetch & --force) Passed"
+  else
+    failures += 1
+  end
+
+  KernelWork.config.settings[:cve] = orig_config
+end
+
+
 # --- Test Output ---
 if failures == 0
   puts "All CVE tests passed successfully!"
