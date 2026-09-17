@@ -161,8 +161,11 @@ _kernel_work_cve(){
     fi
 
     local sub_cmd=${words[2]}
-    case "$sub_cmd" in
+    local opt_list=$(_kernel_work_genoptlist kernel cve $sub_cmd)
+    _kernel_work_filter_opts "$prev" kernel cve $sub_cmd && return
+    case "$prev" in
         *)
+            __gitcomp_nl "$opt_list"
             ;;
     esac
 }
