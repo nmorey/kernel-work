@@ -6,6 +6,7 @@ require 'cli_class_tool'
 require_relative 'kernel-work/error'
 require_relative 'kernel-work/kv'
 require_relative 'kernel-work/config'
+require_relative 'kernel-work/string'
 
 
 ###
