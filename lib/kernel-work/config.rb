@@ -13,6 +13,7 @@ module KernelWork
     DEFAULTS = {
       linux_git_env_var: "LINUX_GIT",
       kernel_source_dir_env_var: "KERNEL_SOURCE_DIR",
+      hyperlinks: true,
       upstream: {
         default_j_opt: "$(nproc --all --ignore=4)",
         remote: "SUSE",
@@ -106,6 +107,12 @@ module KernelWork
     # @return [String]
     def kernel_source_dir_env_var
         @settings[:kernel_source_dir_env_var]
+    end
+
+    # Get the default hyperlinks configuration
+    # @return [Boolean]
+    def hyperlinks
+        @settings[:hyperlinks].nil? ? true : @settings[:hyperlinks]
     end
 
     # Get the path to LINUX_GIT from environment
