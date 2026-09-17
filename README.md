@@ -130,8 +130,8 @@ git clone --bare <suse-kernel-source-remote-url> /work1/$(whoami)/git/kernel-sou
 #### Step 2: Create Your workEnvs
 Create empty `dev` environments corresponding to the target releases you work on:
 ```bash
-kernel env create -n SLE15-SP6 -t dev
-kernel env create -n SLE15-SP7 -t dev
+kernel env create -n SLE15-SP6
+kernel env create -n SLE15-SP7
 ```
 
 #### Step 3: Deploy Worktrees inside each workEnv
@@ -169,7 +169,11 @@ Create/edit the workspace-specific shell profile under your `workEnv` config dir
   export LINUX_GIT="/work1/$(whoami)/work-envs/SLE15-SP7/linux"
   export KERNEL_SOURCE_DIR="/work1/$(whoami)/work-envs/SLE15-SP7/kernel-source"
   ```
-
+* Or use a common definition in your regular bashrc:
+```
+  export LINUX_GIT="/work1/$(whoami)/work-envs/${WORK_ENV_CURRENT}/linux"
+  export KERNEL_SOURCE_DIR="/work1/$(whoami)/work-envs/${WORK_ENV_CURRENT}/kernel-source"
+```
 #### How it Behaves
 Now, whenever you run `kernel env switch SLE15-SP6` or `kernel sw SLE15-SP6`, the shell environment automatically points to the correct SLE15-SP6 directories, prompt, and branches. If you switch to another workspace (even in another tab), the variables automatically redirect to the SLE15-SP7 directories. 
 
