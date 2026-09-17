@@ -381,7 +381,7 @@ module KernelWork
             if entry[:subject]
                 begin
                     clean_subj = entry[:subject].to_s.sub(/\A\[.*?\]\s*/, '').gsub('"', '').strip
-                    output = runGit("log #{target_ref} #{time_filter} -n 5 --format=%H -F --grep=\"#{clean_subj}\"", {}, false)
+                    output = runGit("log #{target_ref} #{time_filter} -n 5 --no-merges --format=%H -F --grep=\"#{clean_subj}\"", {}, false)
                     shas = output.split("\n").map(&:strip).reject(&:empty?)
                     if shas.length == 1
                         return Commit.new(shas.first, :subject => entry[:subject], :path => @path)
