@@ -90,6 +90,16 @@ module KernelWork
                 end
             end
 
+            # Update a bug using a PUT request to the Bugzilla REST API
+            # @param bug_id [String, Integer] The Bugzilla bug ID
+            # @param data [Hash] Bug attributes to update
+            # @return [Hash] Parsed JSON response body
+            # @raise [BugzillaTimeoutError] If the request times out
+            # @raise [BugzillaError] If the request or connection fails
+            def update_bug(bug_id, data)
+                request("bug/#{bug_id}", {}, :put, data)
+            end
+
             # Parse ~/.bugzillarc to find Bugzilla credentials
             # @return [Hash] Config options hash
             def self.read_bugzillarc
