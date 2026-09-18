@@ -140,7 +140,7 @@ module KernelWork
         #
         # @return [Integer] The commit time
         def commit_time()
-            return runGit("log -n 1 --format=%ct #{@sha}", {}, false).strip.to_i rescue 0
+            return runGit("log -n 1 --format=%ct #{@sha}", catch_err: true).strip.to_i rescue 0
         end
 
         # Check if the ref provided is an ancestor of this commit
@@ -149,7 +149,7 @@ module KernelWork
         # @return [bool] True is ref is an ancestor, false if not
         def is_ancestor?(ref)
             begin
-                runGit("merge-base --is-ancestor #{@sha} #{ref}", {}, true)
+                runGit("merge-base --is-ancestor #{@sha} #{ref}")
                 return true
             rescue
             end
@@ -160,7 +160,7 @@ module KernelWork
         #
         # @return [Integer] The commit author
         def author()
-            return runGit("log -n 1 --format=%ae #{@sha}", {}, false).strip
+            return runGit("log -n 1 --format=%ae #{@sha}", catch_err: true).strip
         end
 
         # Extract SHAs of commits fixed by this commit from the "Fixes:" tags in the commit message
@@ -367,7 +367,7 @@ module KernelWork
 
             # 4. Check remote branches containing @sha
             begin
-                branches = runGit("branch -a --contains #{@sha}", {}, false).split("\n").map(&:strip)
+                branches = runGit("branch -a --contains #{@sha}", catch_err: true).split("\n").map(&:strip)
                 remote_br = branches.find { |b| b.start_with?("remotes/") && !b.include?("HEAD") }
                 return remote_br.sub(%r{^remotes/}, '') if remote_br
                 local_br = branches.find { |b| !b.start_with?("*") && !b.include?("detached") }
@@ -388,7 +388,7 @@ module KernelWork
             # 1. Message-ID / Link: trailer search
             if entry[:msgid]
                 begin
-                    sha = runGit("log #{target_ref} #{time_filter} -n 1 --format=%H --grep=\"#{entry[:msgid]}\"", {}, false).strip
+                    sha = runGit("log #{target_ref} #{time_filter} -n 1 --format=%H --grep=\"#{entry[:msgid]}\"", catch_err: true).strip
                     return Commit.new(sha, :subject => entry[:subject], :path => @path) unless sha.empty?
                 rescue
                 end
@@ -398,7 +398,7 @@ module KernelWork
             if entry[:subject]
                 begin
                     clean_subj = entry[:subject].to_s.sub(/\A\[.*?\]\s*/, '').gsub('"', '').strip
-                    output = runGit("log #{target_ref} #{time_filter} -n 5 --no-merges --format=%H -F --grep=\"#{clean_subj}\"", {}, false)
+                    output = runGit("log #{target_ref} #{time_filter} -n 5 --no-merges --format=%H -F --grep=\"#{clean_subj}\"", catch_err: true)
                     shas = output.split("\n").map(&:strip).reject(&:empty?)
                     if shas.length == 1
                         return Commit.new(shas.first, :subject => entry[:subject], :path => @path)
@@ -452,7 +452,7 @@ module KernelWork
             author_arg = author.empty? ? "" : "--author=\"#{author}\""
 
             begin
-                window = runGit("log #{target_ref} #{time_filter} #{author_arg} --format=\"%H %s\" -n 50", {}, false)
+                window = runGit("log #{target_ref} #{time_filter} #{author_arg} --format=\"%H %s\" -n 50", catch_err: true)
                 window.split("\n").each do |line|
                     line = line.strip
                     next if line.empty?

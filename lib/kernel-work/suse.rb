@@ -327,7 +327,7 @@ module KernelWork
         def is_applied?(sha)
             sha = sha.sha if sha.is_a?(Commit)
             begin
-                runGit("grep -q #{sha}", {})
+                runGit("grep -q #{sha}")
                 return true
             rescue
                 return false
@@ -341,7 +341,7 @@ module KernelWork
         def get_suse_commit(sha)
             sha = sha.sha if sha.is_a?(Commit)
             begin
-                file = runGit("grep -l #{sha}", {})
+                file = runGit("grep -l #{sha}")
                 sha = runGit("log -n1 --format='%H' -- #{file}")
                 return sha
             rescue
@@ -416,7 +416,7 @@ module KernelWork
                     log(:WARNING, "Get on with rebasing")
 
                     begin
-                        runGitInteractive("rebase #{rebaseOpt}", { :env => "GIT_EDITOR=true"})
+                        runGitInteractive("rebase #{rebaseOpt}", env: "GIT_EDITOR=true")
                         ret = 0
                     rescue
                         ret = 1
@@ -745,7 +745,7 @@ module KernelWork
             else
                 log(:INFO, "No auto-sorted patch series on this branch")
                 log(:INFO, "Please insert it yourself.")
-                runSystem("PS1_WARNING='SERIES INSERT' bash", false)
+                runSystem("PS1_WARNING='SERIES INSERT' bash", catch_err: true)
                 rep = confirm(opts, "continue with scp",
                               ignore_default: true,
                               allowed_reps: ["y", "n", "s"],

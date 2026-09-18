@@ -431,7 +431,7 @@ module KernelWork
         # @return [Integer] Exit code
         def apply_pending(opts)
             # Ignore errors here, we're aborting just in case
-            runGit("am --abort", {}, false)
+            runGit("am --abort", catch_err: true)
             runGitInteractive("reset --hard #{KernelWork.config.upstream.remote}/#{branch()}")
 
             patches = @suse.gen_ordered_patchlist()
@@ -771,7 +771,7 @@ module KernelWork
                     # Do not crash if diff was interrupted
                 end
                 log( :INFO, "Entering subshell to fix conflicts. Exit when done")
-                runSystem("PS1_WARNING='SCP FIX' bash", false)
+                runSystem("PS1_WARNING='SCP FIX' bash", catch_err: true)
                 rep = confirm(opts, "continue with scp",
                               ignore_default: true,
                               allowed_reps: ["y", "n", "s"],
@@ -884,7 +884,7 @@ module KernelWork
                 when "n"
                     break
                 when "?"
-                    runGitInteractive("show #{commit.sha}", {}, false)
+                    runGitInteractive("show #{commit.sha}", catch_err: true)
                 when "r"
                     ref = Readline.readline("Enter reference for this commit: ", true)
                     if ref != nil
