@@ -38,7 +38,9 @@ module KernelWork
             @extra_desc = opts[:extra_desc]
             @data = opts[:data]
             @series = opts[:series]
-            @message = nil
+            @message = opts[:message]
+            @author = opts[:author]
+            @commit_time = opts[:commit_time]
         end
 
         # Retrieve the subject of the commit
@@ -49,7 +51,8 @@ module KernelWork
             return @subject if @subject != nil
 
             begin
-                desc=runGit("log -n1  --format=oneline --no-decorate #{@sha} 2>/dev/null")
+                desc=runGit("log -n1  --format=oneline --no-decorate #{@sha}",
+                            silent_err: true)
                 desc =~ /^[0-9a-f]+\s+(.*)$/
                 @subject = $1
             rescue
@@ -66,8 +69,9 @@ module KernelWork
             return @patch_id if @patch_id != nil
 
             begin
-                @patch_id = runGit("format-patch -1 #{@sha} --no-signature --stdout 2> /dev/null | " +
-                                   "git patch-id | awk '{ print $1}'").chomp()
+                @patch_id = runGit("format-patch -1 #{@sha} --no-signature --stdout | " +
+                                   "git patch-id | awk '{ print $1}'",
+                                   silent_err: true).chomp()
             rescue
                 raise ShaNotFoundError.new(@sha)
             end
@@ -131,7 +135,7 @@ module KernelWork
         # @return [String] The commit message
         def message()
             return @message if @message != nil
-            @message = runGit("log -n1 --format=%B #{@sha}")
+            @message = runGit("log -n1 --format=%B #{@sha}", silent_err: true)
 
             return @message
         end
@@ -140,7 +144,12 @@ module KernelWork
         #
         # @return [Integer] The commit time
         def commit_time()
-            return runGit("log -n 1 --format=%ct #{@sha}", catch_err: true).strip.to_i rescue 0
+            return @commit_time if @commit_time != nil
+
+            @commit_time = runGit("log -n 1 --format=%ct #{@sha}",
+                                silent_err: true,
+                                catch_err: true).strip.to_i rescue 0
+            return @commit_time
         end
 
         # Check if the ref provided is an ancestor of this commit
@@ -149,7 +158,8 @@ module KernelWork
         # @return [bool] True is ref is an ancestor, false if not
         def is_ancestor?(ref)
             begin
-                runGit("merge-base --is-ancestor #{@sha} #{ref}")
+                runGit("merge-base --is-ancestor #{@sha} #{ref}",
+                       silent_err: true)
                 return true
             rescue
             end
@@ -160,7 +170,11 @@ module KernelWork
         #
         # @return [Integer] The commit author
         def author()
-            return runGit("log -n 1 --format=%ae #{@sha}", catch_err: true).strip
+            return @author if @author != nil
+            @author = runGit("log -n 1 --format=%ae #{@sha}",
+                           silent_err: true,
+                           catch_err: true).strip
+            return @author
         end
 
         # Extract SHAs of commits fixed by this commit from the "Fixes:" tags in the commit message
@@ -367,7 +381,9 @@ module KernelWork
 
             # 4. Check remote branches containing @sha
             begin
-                branches = runGit("branch -a --contains #{@sha}", catch_err: true).split("\n").map(&:strip)
+                branches = runGit("branch -a --contains #{@sha}",
+                                  silent_err: true,
+                                  catch_err: true).split("\n").map(&:strip)
                 remote_br = branches.find { |b| b.start_with?("remotes/") && !b.include?("HEAD") }
                 return remote_br.sub(%r{^remotes/}, '') if remote_br
                 local_br = branches.find { |b| !b.start_with?("*") && !b.include?("detached") }
