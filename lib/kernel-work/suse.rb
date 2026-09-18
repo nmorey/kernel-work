@@ -516,7 +516,7 @@ module KernelWork
         def fix_mainline(opts)
             patch = get_last_patch(opts)
             commit = get_patch_commit(patch)
-            tag = @upstream.get_mainline(commit)
+            tag = commit.get_mainline
             runSystem("sed -i -e 's/Patch-mainline:.*/Patch-mainline: #{tag}/' \"#{patch}\"")
             runGit("add \"#{patch}\"")
             runGitInteractive("diff --cached")

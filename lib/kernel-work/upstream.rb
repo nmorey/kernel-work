@@ -331,20 +331,6 @@ module KernelWork
             return build(build_opts)
         end
 
-        # Get mainline tag containing the commit
-        # @param commit [Commit] Commit object
-        # @return [String] Tag name
-        # @raise [ShaNotCommitError] If commit is not valid
-        # @raise [NoSuchMainline] If mainline not found
-        def get_mainline(commit)
-            raise ShaNotCommitError.new() if !commit.is_a(KernelWork::Commit)
-            begin
-                return runGit("describe --contains --match 'v*' #{commit.sha}").gsub(/~.*/, '')
-            rescue
-                raise NoSuchMainline.new()
-            end
-        end
-
         # Convert opts to build directory and arch info
         # @param opts [Hash] Options hash
         # @return [String, Hash, String] Arch name, Arch info, Build dir
