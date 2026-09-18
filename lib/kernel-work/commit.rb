@@ -143,6 +143,19 @@ module KernelWork
             return runGit("log -n 1 --format=%ct #{@sha}", {}, false).strip.to_i rescue 0
         end
 
+        # Check if the ref provided is an ancestor of this commit
+        #
+        # @param ref [String] Ref to name to check
+        # @return [bool] True is ref is an ancestor, false if not
+        def is_ancestor?(ref)
+            begin
+                runGit("merge-base --is-ancestor #{@sha} #{ref}", {}, true)
+                return true
+            rescue
+            end
+            return false
+        end
+
         # Extract SHAs of commits fixed by this commit from the "Fixes:" tags in the commit message
         #
         # @return [Array<String>] List of fixed commit SHAs
@@ -333,27 +346,15 @@ module KernelWork
             return "HEAD" if @sha.nil?
 
             # 1. Check if self is ancestor of origin/master
-            begin
-                runGit("merge-base --is-ancestor #{@sha} origin/master", {}, true)
-                return "origin/master"
-            rescue
-            end
+            return "origin/master" if is_ancestor?("origin/master")
 
             # 2. Check if self is ancestor of master
-            begin
-                runGit("merge-base --is-ancestor #{@sha} master", {}, true)
-                return "master"
-            rescue
-            end
+            return "master" if is_ancestor?("master")
 
             # 3. Check maintainer branches from config
             if KernelWork.config.upstream && KernelWork.config.upstream.maintainer_branches
                 KernelWork.config.upstream.maintainer_branches.each do |br|
-                    begin
-                        runGit("merge-base --is-ancestor #{@sha} #{br}", {}, true)
-                        return br
-                    rescue
-                    end
+                    return br if is_ancestor?(br)
                 end
             end
 
