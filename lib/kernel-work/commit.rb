@@ -38,6 +38,7 @@ module KernelWork
             @extra_desc = opts[:extra_desc]
             @data = opts[:data]
             @series = opts[:series]
+            @message = nil
         end
 
         # Retrieve the subject of the commit
@@ -125,6 +126,16 @@ module KernelWork
             return @patchname
         end
 
+        # Retrieve the comit message, generating it if necessary
+        #
+        # @return [String] The commit message
+        def message()
+            return @message if @message != nil
+            @message = runGit("log -n1 --format=%B #{@sha}")
+
+            return @message
+        end
+
         # Extract SHAs of commits fixed by this commit from the "Fixes:" tags in the commit message
         #
         # @return [Array<String>] List of fixed commit SHAs
@@ -132,8 +143,7 @@ module KernelWork
             return @fixes_shas if @fixes_shas != nil
             @fixes_shas = []
             begin
-                msg = runGit("log -n1 --format=%B #{@sha}")
-                msg.each_line do |line|
+                message().each_line do |line|
                     if line =~ /Fixes:\s*([0-9a-f]{12,40})/i
                         @fixes_shas << $1
                     end
@@ -151,8 +161,7 @@ module KernelWork
             return @lore_links if @lore_links != nil
             @lore_links = []
             begin
-                msg = runGit("log -n1 --format=%B #{@sha}")
-                msg.each_line do |line|
+                message().each_line do |line|
                     if line =~ /^\s*Link:\s*<?(https?:\/\/(?:patch\.msgid\.link|lore\.kernel\.org)[^\s>]+)>?/i
                         @lore_links << $1
                     end
