@@ -859,14 +859,14 @@ module KernelWork
                     fixes_commit = KernelWork::Commit.new(f_sha)
                     begin
                         f_desc = fixes_commit.desc()
+                        if is_fixes_sha_in_house?(fixes_commit, inHouse, suse_commit_ids)
+                            log(:INFO, "  backported #{f_desc}")
+                        elsif suse_commit_ids != nil
+                            # Only show unbackported if we listed commt_ids
+                            log(:WARNING, "  unbackported #{f_desc}")
+                        end
                     rescue ShaNotFoundError
-                        f_desc = f_sha + " (not found linux repo)"
-                    end
-                    if is_fixes_sha_in_house?(f_sha, inHouse, suse_commit_ids)
-                        log(:INFO, "  backported #{f_desc}")
-                    elsif suse_commit_ids != nil
-                        # Only show unbackported if we listed commt_ids
-                        log(:WARNING, "  unbackported #{f_desc}")
+                        log(:WARNING, "  unknown sha #{f_sha}")
                     end
                 end
             end
@@ -927,33 +927,25 @@ module KernelWork
             _tune_last_patch(opts)
         end
 
-
-        def is_fixes_sha_in_house?(f_sha, inHouse, suse_commit_ids)
+        # Check if the commit in the Fixes tag is on our branch
+        #
+        # @param fixes_commit [Commit] Commit in the fixes tag
+        # @param inHouse [Array<Commit>, nil] Already backported commits list
+        # @param suse_commit_ids [Hash, nil] Suse commit id list
+        # @return [bool] True is we have the breaker, false if we do not
+        def is_fixes_sha_in_house?(fixes_commit, inHouse, suse_commit_ids)
             # 1. Is it an ancestor of HEAD in LINUX_GIT?
-            begin
-                full_sha = runGit("rev-parse --verify --quiet #{f_sha}").chomp()
-                if full_sha != ""
-                    runGit("merge-base --is-ancestor #{full_sha} HEAD")
-                    return true
-                end
-            rescue
-            end
+            return true if fixes_commit.is_ancestor?("HEAD")
 
             # 2. Is it in the SUSE .patches directory?
-            if suse_commit_ids
-                begin
-                    full_sha ||= runGit("rev-parse --verify --quiet #{f_sha}").chomp()
-                    if full_sha != "" && suse_commit_ids[full_sha] == true
-                        return true
-                    end
-                rescue
-                end
+            if suse_commit_ids && suse_commit_ids[fixes_commit.f_sha] == true
+                return true
             end
 
             # 3. Is its patch_id in our inHouse list?
             if inHouse
                 begin
-                    fixes_commit = KernelWork::Commit.new(f_sha)
+                    fixes_commit = KernelWork::Commit.new(fixes_commit.f_sha)
                     fixes_patch_id = fixes_commit.patch_id()
                     if fixes_patch_id
                         inHouse.each do |x|
