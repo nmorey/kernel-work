@@ -404,9 +404,8 @@ module KernelWork
                 idx += 1
                 sha = x.gsub(/^([0-9a-f]*) .*$/, '\1')
                 name = x.gsub(/^[0-9a-f]* (.*)$/, '\1')
-                patch_id = run("git format-patch -n1 #{sha} --stdout | git patch-id | awk '{ print $1}'").chomp()
 
-                Commit.new(sha, :subject => name, :patch_id => patch_id)
+                Commit.new(sha, :subject => name)
             }
             log(:INFO, "Checking patches in #{ahead} ^#{trailing} (#{nPatches}/#{nPatches})")
             return list
@@ -810,7 +809,7 @@ module KernelWork
         # @return [void]
         def _tune_last_patch(opts)
             run("rm -f 0001*.patch")
-            runGit("format-patch -n1 HEAD")
+            Commit.new("@", path: @path).patchname()
 
             ret = 1
             while ret == 1  do

@@ -65,7 +65,7 @@ module KernelWork
             return @patch_id if @patch_id != nil
 
             begin
-                @patch_id = runGit("format-patch -n1 #{@sha} --stdout 2> /dev/null | " +
+                @patch_id = runGit("format-patch -1 #{@sha} --no-signature --stdout 2> /dev/null | " +
                                    "git patch-id | awk '{ print $1}'").chomp()
             rescue
                 raise ShaNotFoundError.new(@sha)
@@ -115,20 +115,13 @@ module KernelWork
             end
         end
 
-        # Generate a patch file for the commit
-        #
-        # @return [String] The filename of the generated patch
-        def gen_patch()
-            @patchname = runGit("format-patch -n1 #{sha}")
-        end
-
         # Retrieve the patch filename, generating it if necessary
         #
         # @return [String] The patch filename
         def patchname()
             return @patchname if @patchname != nil
 
-            @patchname = runGit("format-patch -n1 #{sha}")
+            @patchname = runGit("format-patch -1 --no-signature #{sha}")
             return @patchname
         end
 
