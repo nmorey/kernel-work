@@ -156,6 +156,13 @@ module KernelWork
             return false
         end
 
+        # Return the commit author
+        #
+        # @return [Integer] The commit author
+        def author()
+            return runGit("log -n 1 --format=%ae #{@sha}", {}, false).strip
+        end
+
         # Extract SHAs of commits fixed by this commit from the "Fixes:" tags in the commit message
         #
         # @return [Array<String>] List of fixed commit SHAs
@@ -420,9 +427,9 @@ module KernelWork
         def disambiguate_shas(shas)
             return nil if shas.nil? || shas.empty?
             begin
-                self_author = runGit("log -n 1 --format=%ae #{@sha}", {}, false).strip
+                self_author = author()
                 shas.each do |cand|
-                    cand_author = runGit("log -n 1 --format=%ae #{cand}", {}, false).strip
+                    cand_author = Commit.new(cand, path: @path).author
                     return cand if !self_author.empty? && cand_author == self_author
                 end
             rescue
@@ -441,7 +448,7 @@ module KernelWork
             clean_subj = entry[:subject].to_s.sub(/\A\[.*?\]\s*/, '').gsub('"', '').strip.downcase
             return nil if clean_subj.empty?
 
-            author = runGit("log -n 1 --format=%ae #{@sha}", {}, false).strip rescue ""
+            author = author()
             author_arg = author.empty? ? "" : "--author=\"#{author}\""
 
             begin
