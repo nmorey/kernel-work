@@ -136,6 +136,13 @@ module KernelWork
             return @message
         end
 
+        # Return the commit time of the Commit
+        #
+        # @return [Integer] The commit time
+        def commit_time()
+            return runGit("log -n 1 --format=%ct #{@sha}", {}, false).strip.to_i rescue 0
+        end
+
         # Extract SHAs of commits fixed by this commit from the "Fixes:" tags in the commit message
         #
         # @return [Array<String>] List of fixed commit SHAs
@@ -233,7 +240,7 @@ module KernelWork
             @series = []
 
             target_ref = determine_target_ref()
-            ct = runGit("log -n 1 --format=%ct #{@sha}", {}, false).strip.to_i rescue 0
+            ct = commit_time()
             time_filter = ct > 0 ? "--since=\"@#{ct - 30 * 86400}\" --until=\"@#{ct + 30 * 86400}\"" : ""
 
             lore_links().each do |url|
