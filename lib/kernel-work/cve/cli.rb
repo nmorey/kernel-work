@@ -372,7 +372,10 @@ module KernelWork
 
                     # Check if it's applied locally, already pushed or even merged
                     kSha = @suse.get_suse_commit(cve.fix_sha)
-                    next if kSha == nil # Patch is not applied !
+                     if kSha == nil # Patch is not applied !
+                         cve.set_status(branch, CVE::STATE_TODO) if status != CVE::STATE_TODO
+                         next
+                     end
 
                     if unpushed_commits.index(kSha) != nil
                         # Commit is unpushed, let's go normaly
