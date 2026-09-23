@@ -42,6 +42,7 @@ module KernelWork
         # @option opts [String, nil] :message Commit message (optional)
         # @option opts [String, nil] :author Commit author (optional)
         # @option opts [String, nil] :commit_time Commit time (optional)
+        # @option opts [Bool, nil] :safe_sha If true, assume sha is valid full length SHA (optional)
         def initialize(sha, opts = {})
             opts ||= {}
             @path = opts[:path] || KernelWork.config.linux_git
@@ -55,6 +56,7 @@ module KernelWork
             @author = opts[:author]
             @commit_time = opts[:commit_time]
             @patchname = []
+            @f_sha = @sha if opts[:safe_sha] == true
         end
 
         # Retrieve the subject of the commit
