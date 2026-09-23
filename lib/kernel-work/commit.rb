@@ -17,7 +17,7 @@ module KernelWork
         #   @return [Object] Anonymous data to store in a Commit object
         attr_accessor :data
         # @!attribute [rw] path
-        #   @return [Patch] Kernel-source patch object linked to this commit 
+        #   @return [Patch] Kernel-source patch object linked to this commit
         attr_accessor :patch
         # @!attribute [rw] extra_desc
         #   @return [String] Extra descriptiont to print in desc()
