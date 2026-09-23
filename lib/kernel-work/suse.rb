@@ -6,6 +6,7 @@ module KernelWork
     # Class for handling SUSE kernel source directory operations
     class Suse < Common
         attr_reader :upstream
+        attr_reader :path
 
         # List of available actions for Suse class
         ACTION_LIST = [
@@ -242,7 +243,7 @@ module KernelWork
         # @return [Hash] Hash with SHA keys and true values
         def gen_commit_id_list(opts)
             h={}
-            run("git grep Git-commit: #{get_patch_dir(opts)} | awk '{ print $NF}'").
+            run("git grep Git-commit: #{get_patch_dir()} | awk '{ print $NF}'").
                 chomp().split("\n").map(){|x|
                 h[x] = true
             }
@@ -250,27 +251,9 @@ module KernelWork
         end
 
         # Get the patch directory path
-        # @param opts [Hash] Options hash
         # @return [String] Path to patch directory
-        def get_patch_dir(opts)
-            return opts[:patch_path] if opts[:patch_path] != nil
+        def get_patch_dir()
             return @patch_path
-        end
-
-        # Convert patch name to local path
-        # @param opts [Hash] Options hash
-        # @param pname [String] Patch name
-        # @return [String] Local path
-        def patchname_to_local_path(opts, pname)
-            return get_patch_dir(opts) + "/" + pname
-        end
-
-        # Convert patch name to absolute path
-        # @param opts [Hash] Options hash
-        # @param pname [String] Patch name
-        # @return [String] Absolute path
-        def patchname_to_absolute_path(opts, pname)
-            return KernelWork.config.kernel_source_dir + "/" + patchname_to_local_path(opts, pname)
         end
 
         # Returns default patch references
@@ -443,19 +426,13 @@ module KernelWork
             raise ShaNotCommitError.new() if !commit.is_a?(KernelWork::Commit)
             commit.check_patch_info(opts)
 
-            # Generate the patch name in KERN tree and check its availability
-            targetPatch = _gen_patch_name(opts, commit)
-
-            _copy_and_fill_patch(opts, commit, targetPatch)
-
-            runGitInteractive("add #{targetPatch[:local_path]}")
-
-            refs = opts[:ref]
+            patch = Patch.new(self, opts, commit)
+            file = patch.generate(opts)
             if opts[:cve] == true then
-                _patch_fill_in_CVE(opts, commit, targetPatch)
+                patch.update_ref_with_cve(opts)
             end
 
-            _insert_and_commit_patch(opts, commit, targetPatch)
+            _insert_and_commit_patch(opts, commit, patch)
         end
 
         # Extract patches action
@@ -572,116 +549,18 @@ module KernelWork
         ###########################################
         private
 
-        # Generate a unique patch name, prompting the user if a conflict exists.
-        #
-        # @param opts [Hash] Options including potential custom filename
-        # @param commit [Commit] The commit to generate a name for
-        # @return [Hash] Patch metadata (pname, local_path, full_path, ref)
-        # @raise [TargetFileExistsError] If target file exists and filename is provided via opts
-        # @raise [SCPAbort] If user aborts conflict resolution
-        def _gen_patch_name(opts, commit)
-            pname= commit.patchname().gsub(/^0001-/,"")
-            # Default name might be overriden from CLI
-            pname = opts[:filename] if opts[:filename] != nil
-
-            fpath=patchname_to_absolute_path(opts, pname)
-            while File.exist?(fpath) do
-                if opts[:filename] != nil
-                    raise TargetFileExistsError.new(pname)
-                end
-
-                log(:ERROR, "File '#{pname}' already exists in KERNEL_SOURCE_DIR")
-
-                # If user has not specified a name, try to prompt him for one
-                rep= confirm(opts, "set a custom filename",
-                             ignore_default: true,
-                             allowed_reps: ["y", "n"])
-                if rep == "n" then
-                    raise SCPAbort.new("User aborted filename selection")
-                end
-
-                rep="t"
-                nName=nil
-                while rep != "y"
-                    nName = Readline.readline("Enter a filename (auto name was: #{pname} ): ", true)
-                    if nName == nil
-                        raise SCPAbort.new("User aborted filename selection")
-                    end
-                    nName.strip!
-                    rep = confirm(opts, "keep the filename '#{nName}'",
-                                  ignore_default: true,
-                                  allowed_reps: ["y", "n", "A" ])
-                    if rep == "A" then
-                        raise SCPAbort.new("User aborted filename selection")
-                    end
-                end
-                pname = nName
-                fpath=patchname_to_absolute_path(opts, pname)
-            end
-
-            return {
-                :pname => pname,
-                :local_path => patchname_to_local_path(opts, pname),
-                :full_path => patchname_to_absolute_path(opts, pname),
-                :ref => opts[:ref],
-            }
-        end
-
-        # Copy a patch from the Linux tree and fill in custom headers (Git-commit, Patch-mainline, etc.)
-        #
-        # @param opts [Hash] Options hash
-        # @param commit [Commit] The source commit
-        # @param targetPatch [Hash] Destination patch metadata
-        # @return [void]
-        def _copy_and_fill_patch(opts, commit, targetPatch)
-            i = File.open(KernelWork.config.linux_git + "/" + commit.patchname,"r")
-            o = File.open(targetPatch[:full_path] , "w+")
-
-            p_split=0
-            in_subj=false
-            i.each(){|l|
-                case l
-                when /^Subject: \[PATCH/
-                    in_subj=true
-                    o.puts l
-                when /^\n$/
-                    if in_subj == true
-                        o.puts "Git-commit: #{commit.f_sha()}" if commit.f_sha() != ""
-                        o.puts "Patch-mainline: #{commit.orig_tag()}" if commit.orig_tag() != nil
-                        o.puts "References: #{targetPatch[:ref]}"
-                        o.puts "Git-repo: #{commit.git_repo()}" if commit.git_repo() != nil
-                        in_subj=false
-                    end
-                    o.puts l
-                when /^---\n$/
-                    if p_split == 0 then
-                        name=runGit("config --get user.name")
-                        email=runGit("config --get user.email")
-                        o.puts "Acked-by: #{name} <#{email}>"
-                        p_split = 1
-                    end
-                    o.puts l
-                else
-                    o.puts l
-                end
-            }
-            i.close()
-            o.close()
-            File.delete(i)
-        end
-
         # Insert the patch into series.conf and commit it to the SUSE repository
         #
         # @param opts [Hash] Options hash
         # @param commit [Commit] The source commit
-        # @param targetPatch [Hash] Target patch metadata
+        # @param patch [Patch] Patch to commit
         # @return [void]
-        def _insert_and_commit_patch(opts, commit, targetPatch)
-            lpath = targetPatch[:local_path]
+        def _insert_and_commit_patch(opts, commit, patch)
+            lpath = patch.localpath()
             cname=run("mktemp")
 
             log(:INFO, "Generating commit message in #{cname}")
-            subject="#{commit.subject()} (#{targetPatch[:ref]})"
+            subject="#{commit.subject()} (#{patch.ref})"
             f = File.open(cname, "w+")
             f.puts subject
             f.close()
@@ -701,33 +580,6 @@ module KernelWork
             run("rm -f #{cname}")
         end
 
-        # Automatically extract CVE and BSC references for a patch using suse-add-cves
-        #
-        # @param opts [Hash] Options hash
-        # @param commit [Commit] The source commit
-        # @param targetPatch [Hash] Target patch metadata
-        # @return [void]
-        def _patch_fill_in_CVE(opts, commit, targetPatch)
-            lpath = targetPatch[:local_path]
-            log(:INFO, "Auto referencing CVE id and BSC")
-            runSystem("echo '#{lpath}' | suse-add-cves  -v $VULNS_GIT  -f")
-            begin
-                newRefs=run("git diff -U0 -- #{lpath}").split("\n").
-                            grep(/^\+References/)[0].gsub(/^\+References: +/, "")
-                targetPatch[:ref] = newRefs
-            rescue => e
-                log(:WARNING, "No CVE reference found")
-
-                if targetPatch[:ref] == nil then
-                    # We have not set any ref as we were expecting CVE ones.
-                    # Get the default ref and we need to update the patch file with it
-                    targetPatch[:ref] = default_patch_references(opts)
-
-                    run("sed -i -e 's/^References: $/References: #{targetPatch[:ref]}/' #{lpath}")
-                end
-            end
-            runGitInteractive("add #{lpath}")
-        end
 
         # Insert a patch file into series.conf using the project's sort script
         #

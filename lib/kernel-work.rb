@@ -14,6 +14,7 @@ require_relative 'kernel-work/string'
 ###
 require_relative 'kernel-work/common'
 require_relative 'kernel-work/commit'
+require_relative 'kernel-work/patch'
 require_relative 'kernel-work/upstream'
 require_relative 'kernel-work/suse'
 require_relative 'kernel-work/wenv'
