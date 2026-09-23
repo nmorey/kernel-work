@@ -388,10 +388,8 @@ module KernelWork
             list = patches.map(){|x|
                 log(:PROGRESS, "Checking patches in #{ahead} ^#{trailing} (#{idx}/#{nPatches})") if (idx % 10) == 0
                 idx += 1
-                sha = x.gsub(/^([0-9a-f]*) .*$/, '\1')
-                name = x.gsub(/^[0-9a-f]* (.*)$/, '\1')
-
-                Commit.new(sha, subject: name, safe_sha: true)
+                x =~ /^([0-9a-f]*) (.*)$/
+                Commit.new($1, subject: $2, safe_sha: true)
             }
             log(:INFO, "Checking patches in #{ahead} ^#{trailing} (#{nPatches}/#{nPatches})")
             return list
