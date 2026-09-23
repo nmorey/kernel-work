@@ -20,7 +20,7 @@ module KernelWork
             # Default name might be overriden from CLI
             @pname = opts[:filename] if opts[:filename] != nil
             @name_checked = false
-            @ref = @suse.default_patch_references(opts)
+            @ref = nil
             @cve_refs=nil
         end
 
@@ -31,6 +31,7 @@ module KernelWork
         # @return [void]
         def generate(opts)
             name_check(opts)
+            compute_ref(opts)
 
             i = File.open(@commit.path + "/" + @commit.patchname,"r")
             o = File.open(fullpath() , "w+")
@@ -45,6 +46,7 @@ module KernelWork
                     if in_subj == true
                         o.puts "Git-commit: #{@commit.f_sha()}" if @commit.f_sha() != ""
                         o.puts "Patch-mainline: #{@commit.orig_tag()}" if @commit.orig_tag() != nil
+                        raise NoRefError.new() if @ref.to_s() == ""
                         o.puts "References: #{@ref}"
                         o.puts "Git-repo: #{@commit.git_repo()}" if @commit.git_repo() != nil
                         in_subj=false
@@ -85,20 +87,25 @@ module KernelWork
         end
 
         # Automatically extract CVE and BSC references for a patch using suse-add-cves
+        # Fallback to default ref
         #
         # @return [void]
-        def update_ref_with_cve()
+        def compute_ref(opts)
+            if opts[:cve] != true
+                @ref = @suse.default_patch_references(opts)
+                return
+            end
+
             refs = cve_refs()
             if refs.to_s() == "" then
-                # Keep original refsq
+                # Warn and use fallback refs
                 log(:WARNING, "No CVE reference found")
+                @ref = @suse.default_patch_references(opts)
                 raise NoRefError.new() if @ref.to_s() == ""
             else
                 # Set ref to the CVE refs
                 @ref = refs
             end
-            @suse.run("sed -i -e 's/^References: $/References: #{@ref}/' #{fullpath()}")
-
         end
 
         private
