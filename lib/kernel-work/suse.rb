@@ -429,7 +429,7 @@ module KernelWork
             patch = Patch.new(self, opts, commit)
             file = patch.generate(opts)
             if opts[:cve] == true then
-                patch.update_ref_with_cve(opts)
+                patch.update_ref_with_cve()
             end
             commit.patch = patch
 

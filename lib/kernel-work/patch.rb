@@ -20,7 +20,7 @@ module KernelWork
             # Default name might be overriden from CLI
             @pname = opts[:filename] if opts[:filename] != nil
             @name_checked = false
-            @ref = opts[:ref]
+            @ref = @suse.default_patch_references(opts)
             @cve_refs=nil
         end
 
@@ -86,16 +86,17 @@ module KernelWork
 
         # Automatically extract CVE and BSC references for a patch using suse-add-cves
         #
-        # @param opts [Hash] Options hash
         # @return [void]
-        def update_ref_with_cve(opts)
+        def update_ref_with_cve()
             refs = cve_refs()
             if refs.to_s() == "" then
+                # Keep original refsq
                 log(:WARNING, "No CVE reference found")
-                refs = @suse.default_patch_references(opts)
+                raise NoRefError.new() if @ref.to_s() == ""
+            else
+                # Set ref to the CVE refs
+                @ref = refs
             end
-            # Mark refs as the cve_refs or fallback refs and update the patchfile
-            @ref = refs
             @suse.run("sed -i -e 's/^References: $/References: #{@ref}/' #{fullpath()}")
 
         end
