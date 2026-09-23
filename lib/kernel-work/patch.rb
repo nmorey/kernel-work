@@ -111,10 +111,19 @@ module KernelWork
             return if @name_checked == true
             fpath=fullpath()
 
-            # If user specified a file name and it already exists, we cannot solve this
-            # Raise an errro
-            if File.exist?(fpath) && opts[:filename] != nil
-                raise TargetFileExistsError.new(@pname)
+            if File.exist?(fpath)
+                # If user specified a file name and it already exists, we cannot solve this
+                # Raise an error
+                raise TargetFileExistsError.new(@pname) if opts[:filename] != nil
+
+                # Tries with a longer filename. Most of the time, it should solve the issue
+                long_name = @commit.patchname(92)
+                if !File.exist?(fullpath(long_name)) then
+                    log(:WARNING, "File '#{@pname}' already exists in KERNEL_SOURCE_DIR")
+                    log(:WARNING, "Auto-expanding name to '#{long_name}'")
+                    @pname = long_name
+                    fpath = fullpath()
+                end
             end
 
             while File.exist?(fpath) do
