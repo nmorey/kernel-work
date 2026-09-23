@@ -568,10 +568,12 @@ module KernelWork
                         f.puts x.to_s
                     end
                 end
-                log(:INFO, "Patch list written to #{opts[:file]}")
+                log(:INFO, "#{inHead.length} patches written to #{opts[:file]}")
+            else
+                runGitInteractive("show --no-patch --format=oneline #{inHead.map(){|x| x.sha}.join(" ")}",
+                                  catch_err: true)
             end
 
-            runGitInteractive("show --no-patch --format=oneline #{inHead.map(){|x| x.sha}.join(" ")}")
 
             if opts[:backport_apply] == true then
                 opts[:commits] = inHead.reverse
