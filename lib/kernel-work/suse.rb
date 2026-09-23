@@ -273,21 +273,17 @@ module KernelWork
             return KernelWork.config.kernel_source_dir + "/" + patchname_to_local_path(opts, pname)
         end
 
-        # Fill in target patch reference if missing
-        # @param h [Hash] Target patch info
-        # @param override_cve [Boolean] Whether to override CVE
+        # Returns default patch references
+        # @param opts [Hash] Option hash
         # @raise [NoRefError] If no reference can be found
-        def fill_targetPatch_ref(h, override_cve = false)
-            return if h[:cve] == true && override_cve == false
-            if h[:ref] == nil then
-                h[:ref] = @branch_infos[:ref]
-            end
+        # @return [String] Default reference
+        def default_patch_references(opts)
+            return opts[:ref] if opts[:ref] != nil
+            return @branch_infos[:ref] if @branch_infos[:ref] != nil
 
-            if h[:ref] == nil then
-                e = NoRefError.new()
-                log(:ERROR, e.to_s())
-                raise e
-            end
+            e = NoRefError.new()
+            log(:ERROR, e.to_s())
+            raise e
         end
 
         # Find commit local branch started from upstream
@@ -467,7 +463,6 @@ module KernelWork
         # @return [void]
         # @raise [MissingArgumentError] If no commits are provided
         def extract_patch(opts)
-            fill_targetPatch_ref(opts)
             if opts[:commits].length == 0 then
                 raise MissingArgumentError.new("No SHA1 provided")
             end
@@ -726,7 +721,7 @@ module KernelWork
                 if targetPatch[:ref] == nil then
                     # We have not set any ref as we were expecting CVE ones.
                     # Get the default ref and we need to update the patch file with it
-                    fill_targetPatch_ref(targetPatch, true)
+                    targetPatch[:ref] = default_patch_references(opts)
 
                     run("sed -i -e 's/^References: $/References: #{targetPatch[:ref]}/' #{lpath}")
                 end

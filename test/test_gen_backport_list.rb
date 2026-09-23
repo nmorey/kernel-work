@@ -477,7 +477,6 @@ module KernelWork
     def initialize
       super
       @built_commits = []
-      def @suse.fill_targetPatch_ref(opts); end
     end
 
     def branch

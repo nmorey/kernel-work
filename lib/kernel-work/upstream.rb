@@ -481,7 +481,6 @@ module KernelWork
             if opts[:commits].length == 0 then
                 raise MissingArgumentError.new("No SHA1 provided")
             end
-            @suse.fill_targetPatch_ref(opts)
 
             commits = opts[:commits].dup
             begin
@@ -672,7 +671,6 @@ module KernelWork
                         end
                     rescue SCPQueueSeries => e
                         commits.shift
-                        e.series.each { |s| s.data ||= commit.data }
                         new_commits = (e.series + commits).uniq
                         commits.replace(new_commits)
                         log(:INFO, "# Queued series (#{e.series.length} patches). #{commits.length} commits now in queue.")
