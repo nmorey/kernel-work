@@ -400,27 +400,19 @@ module KernelWork
         # Filter already backported patches
         # @param opts [Hash] Options hash
         # @param head [Array<Commit>] List of upstream commits
-        # @param house [Array<Commit>] List of in-house commits
-        def filterInHouse(opts, head, house)
-            houseList = house.inject({}){|h, x|
-                h[x.patch_id] = true
-                h
-            }
+        def filterInHouse(opts, head)
+            suse_commit_ids = @suse.gen_commit_id_list(opts)
             # Filter the easy one first
             head.delete_if(){|x|
-                # DROP: Patch is excluded
-                next true if opts[:backport_exclude].index(x.sha) != nil
-                # KEEP: Patch is force included
-                next false if opts[:backport_include].index(x.sha) != nil
-                # DROP: We already have this patch in house
-                next true if houseList[x.patch_id] == true
-            }
+                sha = x.f_sha
 
-            # Some patches may have conflicted and the fix changes the patch-id
-            # so look for the originalcommit id in the .patches files in the SUSE tree.
-            # We could do only this, but it's much much slower, so filter as much as we can first
-            houseList = @suse.gen_commit_id_list(opts)
-            head.delete_if(){|x| houseList[x.sha] == true }
+                # DROP: Patch is excluded
+                next true if opts[:backport_exclude].index(sha) != nil
+                # KEEP: Patch is force included
+                next false if opts[:backport_include].index(sha) != nil
+                # DROP: We already have this patch in house
+                next true if suse_commit_ids[sha] == true
+            }
         end
 
         #
@@ -562,9 +554,7 @@ module KernelWork
             tBranch=opts[:base_ref] || local_branch()
 
             inHead = genBackportList(head, tBranch, opts[:filter])
-            inHouse = genBackportList(local_branch(), head, opts[:filter])
-
-            filterInHouse(opts, inHead, inHouse)
+            filterInHouse(opts, inHead)
 
             if inHead.length == 0 then
                 log(:INFO, "No patch left to backport ! Congrats !")
