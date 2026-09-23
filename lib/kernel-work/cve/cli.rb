@@ -288,9 +288,18 @@ module KernelWork
                 scp_opts[:cve] = true
 
                 @upstream._scp(scp_opts, patchlist) do |commit, error = nil|
-                    cve    = commit.data
+                    cve = nil
+                    patch = commit.patch
+                    if patch.ref =~ /(CVE-[0-9]+-[0-9]+)/ then
+                        # It has a CVE
+                        begin
+                            cve = @tracker.read_cve($1)
+                        rescue BugNotFoundError
+                            # Not a CVE in our pool. Ignore it
+                        end
+                    end
+                    next if cve == nil
                     bug_id = cve.bug_id
-                    sha    = cve.fix_sha
                     newState = nil
 
                     if error == nil
@@ -624,7 +633,6 @@ module KernelWork
                     raise ShaNotFoundError(bug_id) if sha.nil? || sha.empty?
 
                     c = Commit.new(sha)
-                    c.data = cve
                     c.extra_desc = "#{cve_id} bsc##{bug_id}"
                     patchlist << c
                 end
