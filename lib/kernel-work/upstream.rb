@@ -345,21 +345,28 @@ module KernelWork
         # Generate list of patches to backport
         # @param ahead [String] Ahead reference
         # @param trailing [String] Trailing reference
-        # @param filters [Hash] Filter options (e.g. :paths => Array, :fixes => Boolean, :grep => String, :author => String)
+        # @param filters [Hash] Filter options
+        # @option filters [Array<String>] :paths Only select commits that touched some of these paths
+        # @option filters [Array<String>] :exclude_paths Ignore changes in these paths
+        # @option filters [Boolean] :fixes List only commits that have Fixes: tags
+        # @option filters [String] :grep List only commits that contains this string in their message
+        # @option filters [String] :author List only commits with this author
+        # @option filters [Boolean] :skip_treewide Ignore commits with tree-wire related commit messages
         # @return [Array<Commit>] List of commits
         def genBackportList(ahead, trailing, filters = {})
             filters ||= {}
-            git_opts = ["log", "--no-merges", "--format=oneline"]
+            rev_list_opts = ["rev-list", "--no-merges"]
+            log_opts = ["|", "git", "log", "--stdin", "--no-walk", "--format=oneline"]
             if filters[:fixes]
-                git_opts << "--grep='Fixes:'"
+                log_opts << "--grep='Fixes:'"
             end
             if filters[:grep]
-                git_opts << "--grep='#{filters[:grep]}'"
+                log_opts << "--grep='#{filters[:grep]}'"
             end
             if filters[:author]
-                git_opts << "--author='#{filters[:author]}'"
+                log_opts << "--author='#{filters[:author]}'"
             end
-            git_opts << "#{ahead} ^#{trailing}"
+            rev_list_opts << "#{ahead} ^#{trailing}"
             paths_arg = []
             if filters[:paths] && !filters[:paths].empty?
                 paths_arg += filters[:paths]
@@ -375,11 +382,11 @@ module KernelWork
             end
 
             if !paths_arg.empty?
-                git_opts << "--"
-                git_opts << paths_arg.join(" ")
+                rev_list_opts << "--"
+                rev_list_opts << paths_arg.join(" ")
             end
 
-            patches = runGit(git_opts.join(" ")).split("\n")
+            patches = runGit((rev_list_opts + log_opts).join(" ")).split("\n")
             if filters[:skip_treewide]
                 patches.delete_if() {|x| x =~ /(tree|kernel)-?wide/ }
             end
@@ -396,8 +403,10 @@ module KernelWork
         end
 
         # Filter already backported patches
+        #
         # @param opts [Hash] Options hash
         # @param head [Array<Commit>] List of upstream commits
+        # @return [Array<Commit>] Filtered list of commits
         def filterInHouse(opts, head)
             suse_commit_ids = @suse.gen_commit_id_list(opts)
             # Filter the easy one first
@@ -630,7 +639,7 @@ module KernelWork
                 begin
                     log(:INFO, "# #{commits.length} commits left".grey())
 
-                    # Lazily load inHouse and suse_commit_ids if commit has Fixes: tags
+                    # Lazily load suse_commit_ids if commit has Fixes: tags
                     fixes = commit.fixes_shas()
                     if !fixes.empty? && suse_commit_ids.nil?
                         suse_commit_ids = @suse.gen_commit_id_list(opts)

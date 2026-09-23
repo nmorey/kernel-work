@@ -73,7 +73,7 @@ failures = 0
 
 # Test Case 1: Standard paths only
 test.genBackportList("HEAD", "HEAD~1", { :paths => ["drivers/net", "drivers/ib"] })
-expected1 = 'log --no-merges --format=oneline HEAD ^HEAD~1 -- drivers/net drivers/ib'
+expected1 = "rev-list --no-merges HEAD ^HEAD~1 -- drivers/net drivers/ib | git log --stdin --no-walk --format=oneline"
 if test.last_git_command == expected1
   puts "Test Case 1 Passed"
 else
@@ -85,7 +85,7 @@ end
 
 # Test Case 2: Exclude paths only
 test.genBackportList("HEAD", "HEAD~1", { :exclude_paths => ["drivers/net/wireless"] })
-expected2 = "log --no-merges --format=oneline HEAD ^HEAD~1 -- ':(exclude)drivers/net/wireless'"
+expected2 = "rev-list --no-merges HEAD ^HEAD~1 -- ':(exclude)drivers/net/wireless' | git log --stdin --no-walk --format=oneline"
 if test.last_git_command == expected2
   puts "Test Case 2 Passed"
 else
@@ -97,7 +97,7 @@ end
 
 # Test Case 3: Both paths and exclude paths
 test.genBackportList("HEAD", "HEAD~1", { :paths => ["drivers/net"], :exclude_paths => ["drivers/net/wireless"] })
-expected3 = "log --no-merges --format=oneline HEAD ^HEAD~1 -- drivers/net ':(exclude)drivers/net/wireless'"
+expected3 = "rev-list --no-merges HEAD ^HEAD~1 -- drivers/net ':(exclude)drivers/net/wireless' | git log --stdin --no-walk --format=oneline"
 if test.last_git_command == expected3
   puts "Test Case 3 Passed"
 else
@@ -109,12 +109,24 @@ end
 
 # Test Case 4: Exclude path already starting with :(exclude)
 test.genBackportList("HEAD", "HEAD~1", { :paths => ["drivers/net"], :exclude_paths => [":(exclude)drivers/net/wireless"] })
-expected4 = "log --no-merges --format=oneline HEAD ^HEAD~1 -- drivers/net ':(exclude)drivers/net/wireless'"
+expected4 = "rev-list --no-merges HEAD ^HEAD~1 -- drivers/net ':(exclude)drivers/net/wireless' | git log --stdin --no-walk --format=oneline"
 if test.last_git_command == expected4
   puts "Test Case 4 Passed"
 else
   puts "Test Case 4 FAILED!"
   puts "  Expected: #{expected4}"
+  puts "  Got:      #{test.last_git_command}"
+  failures += 1
+end
+
+# Test Case 4B: Message filters (fixes, grep, author)
+test.genBackportList("HEAD", "HEAD~1", { :fixes => true, :grep => "mlx5", :author => "Alice" })
+expected4b = "rev-list --no-merges HEAD ^HEAD~1 | git log --stdin --no-walk --format=oneline --grep='Fixes:' --grep='mlx5' --author='Alice'"
+if test.last_git_command == expected4b
+  puts "Test Case 4B Passed"
+else
+  puts "Test Case 4B FAILED!"
+  puts "  Expected: #{expected4b}"
   puts "  Got:      #{test.last_git_command}"
   failures += 1
 end
@@ -151,7 +163,7 @@ end
 # Test Case 7: backport_todo behavior with custom base_ref
 opts = { :upstream_ref => "origin/master", :base_ref => "custom-base-branch", :filter => {} }
 test.backport_todo(opts)
-expected7 = "log --no-merges --format=oneline origin/master ^custom-base-branch"
+expected7 = "rev-list --no-merges origin/master ^custom-base-branch | git log --stdin --no-walk --format=oneline"
 if test.last_git_command == expected7
   puts "Test Case 7 Passed"
 else
@@ -164,7 +176,7 @@ end
 # Test Case 8: backport_todo behavior with default base_ref (nil) falling back to local_branch()
 opts = { :upstream_ref => "origin/master", :base_ref => nil, :filter => {} }
 test.backport_todo(opts)
-expected8 = "log --no-merges --format=oneline origin/master ^mock-local-branch"
+expected8 = "rev-list --no-merges origin/master ^mock-local-branch | git log --stdin --no-walk --format=oneline"
 if test.last_git_command == expected8
   puts "Test Case 8 Passed"
 else
