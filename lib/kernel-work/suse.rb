@@ -176,7 +176,8 @@ module KernelWork
         # @param patchfile [String] Path to patch file
         # @return [String] Commit SHA
         def get_patch_commit(patchfile = nil)
-            return Commit.new(runGit("grep Git-commit #{patchfile}").split(/[ \t]/)[-1])
+            return Commit.new(runGit("grep Git-commit #{patchfile}").split(/[ \t]/)[-1],
+                              safe_sha: true)
         end
 
         # Check for blacklist.conf conflict

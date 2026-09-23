@@ -425,7 +425,8 @@ module KernelWork
             if entry[:msgid]
                 begin
                     sha = runGit("log #{target_ref} #{time_filter} -n 1 --format=%H --grep=\"#{entry[:msgid]}\"", catch_err: true).strip
-                    return Commit.new(sha, :subject => entry[:subject], :path => @path) unless sha.empty?
+                    return Commit.new(sha, subject: entry[:subject],
+                                      path: @path, safe_sha: true) unless sha.empty?
                 rescue
                 end
             end
@@ -437,10 +438,12 @@ module KernelWork
                     output = runGit("log #{target_ref} #{time_filter} -n 5 --no-merges --format=%H -F --grep=\"#{clean_subj}\"", catch_err: true)
                     shas = output.split("\n").map(&:strip).reject(&:empty?)
                     if shas.length == 1
-                        return Commit.new(shas.first, :subject => entry[:subject], :path => @path)
+                        return Commit.new(shas.first, subject: entry[:subject],
+                                          path: @path, safe_sha: true)
                     elsif shas.length > 1
                         matched_sha = disambiguate_shas(shas)
-                        return Commit.new(matched_sha, :subject => entry[:subject], :path => @path) if matched_sha
+                        return Commit.new(matched_sha, subject: entry[:subject],
+                                          path: @path, safe_sha: true) if matched_sha
                     end
                 rescue
                 end
@@ -449,7 +452,8 @@ module KernelWork
             # 3. Neighborhood scan around self.sha using author and date window
             begin
                 neighbor_sha = find_in_neighborhood(entry, target_ref, time_filter)
-                return Commit.new(neighbor_sha, :subject => entry[:subject], :path => @path) if neighbor_sha
+                return Commit.new(neighbor_sha, subject: entry[:subject],
+                                  path: @path, safe_sha: true) if neighbor_sha
             rescue
             end
 

@@ -391,7 +391,7 @@ module KernelWork
                 sha = x.gsub(/^([0-9a-f]*) .*$/, '\1')
                 name = x.gsub(/^[0-9a-f]* (.*)$/, '\1')
 
-                Commit.new(sha, :subject => name)
+                Commit.new(sha, subject: name, safe_sha: true)
             }
             log(:INFO, "Checking patches in #{ahead} ^#{trailing} (#{nPatches}/#{nPatches})")
             return list
