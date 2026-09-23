@@ -18,7 +18,7 @@ module KernelWork
       "mock-local-branch"
     end
 
-    def filterInHouse(opts, head, house)
+    def filterInHouse(opts, head)
       # No-op for test
     end
   end
@@ -151,7 +151,7 @@ end
 # Test Case 7: backport_todo behavior with custom base_ref
 opts = { :upstream_ref => "origin/master", :base_ref => "custom-base-branch", :filter => {} }
 test.backport_todo(opts)
-expected7 = "log --no-merges --format=oneline mock-local-branch ^origin/master"
+expected7 = "log --no-merges --format=oneline origin/master ^custom-base-branch"
 if test.last_git_command == expected7
   puts "Test Case 7 Passed"
 else
@@ -164,7 +164,7 @@ end
 # Test Case 8: backport_todo behavior with default base_ref (nil) falling back to local_branch()
 opts = { :upstream_ref => "origin/master", :base_ref => nil, :filter => {} }
 test.backport_todo(opts)
-expected8 = "log --no-merges --format=oneline mock-local-branch ^origin/master"
+expected8 = "log --no-merges --format=oneline origin/master ^mock-local-branch"
 if test.last_git_command == expected8
   puts "Test Case 8 Passed"
 else
@@ -503,6 +503,54 @@ else
   puts "Test Case 15 FAILED!"
   puts "  Expected built commits: #{[c_build.sha]}"
   puts "  Got built commits:      #{build_upstream.built_commits.map(&:sha)}"
+  failures += 1
+end
+
+# Test Case 16: filterInHouse filtering logic with suse_commit_ids, exclude, and include
+module KernelWork
+  class MockSuseCommitTracker
+    attr_accessor :commit_ids
+
+    def initialize(commit_ids = {})
+      @commit_ids = commit_ids
+    end
+
+    def gen_commit_id_list(opts)
+      @commit_ids
+    end
+  end
+
+  class FilterInHouseTestUpstream < Upstream
+    def initialize(mock_suse)
+      @path = "."
+      @suse = mock_suse
+    end
+  end
+end
+
+c_normal = KernelWork::Commit.new("1111111111111111111111111111111111111111", safe_sha: true)
+c_in_house = KernelWork::Commit.new("2222222222222222222222222222222222222222", safe_sha: true)
+c_excluded = KernelWork::Commit.new("3333333333333333333333333333333333333333", safe_sha: true)
+c_forced = KernelWork::Commit.new("4444444444444444444444444444444444444444", safe_sha: true)
+
+mock_suse = KernelWork::MockSuseCommitTracker.new({
+  c_in_house.sha => true,
+  c_forced.sha => true
+})
+filter_upstream = KernelWork::FilterInHouseTestUpstream.new(mock_suse)
+filter_opts = {
+  :backport_exclude => [c_excluded],
+  :backport_include => [c_forced]
+}
+head_commits = [c_normal, c_in_house, c_excluded, c_forced]
+filter_upstream.filterInHouse(filter_opts, head_commits)
+
+if head_commits.map(&:sha) == [c_normal.sha, c_forced.sha]
+  puts "Test Case 16 Passed"
+else
+  puts "Test Case 16 FAILED!"
+  puts "  Expected commits: #{[c_normal.sha, c_forced.sha]}"
+  puts "  Got commits:      #{head_commits.map(&:sha)}"
   failures += 1
 end
 
