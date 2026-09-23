@@ -1,0 +1,19 @@
+#!/bin/sh
+
+set -e
+
+TMPDIR=$(mktemp -d)
+
+cleanup() {
+    if [ -d $TMPDIR ]; then
+        rm -Rf $TMPDIR
+    fi
+}
+trap cleanup EXIT INT TERM HUP
+
+git checkout-index --prefix="$TMPDIR/" -a
+(
+    cd $TMPDIR
+    rake
+)
+rm -Rf $TMPDIR
