@@ -39,6 +39,9 @@ module KernelWork
         # @option opts [String, nil] :extra_desc Additional description text (optional)
         # @option opts [Object, nil] :data Associated arbitrary data or CVE object (optional)
         # @option opts [Array<Commit>, nil] :series Cached patch series commits (optional)
+        # @option opts [String, nil] :message Commit message (optional)
+        # @option opts [String, nil] :author Commit author (optional)
+        # @option opts [String, nil] :commit_time Commit time (optional)
         def initialize(sha, opts = {})
             opts ||= {}
             @path = opts[:path] || KernelWork.config.linux_git
