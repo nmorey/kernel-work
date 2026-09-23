@@ -943,6 +943,7 @@ module KernelWork
                     f
                 end
             }.uniq.compact
+            return "" if dirs.length == 0
 
             merged_dirs = [ dirs[0] ]
             dirs[1..-1].each do |dir|
