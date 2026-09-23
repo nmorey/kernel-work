@@ -813,6 +813,9 @@ module KernelWork
 
             if @suse.is_applied?(commit)
                 log(:INFO, "Patch already applied in KERNEL_SOURCE_DIR: #{desc}")
+                patch = Patch.new(@suse, opts, commit)
+                patch.compute_ref(opts)
+                commit.patch = patch
                 raise SCPAlreadyApplied.new()
             end
 
