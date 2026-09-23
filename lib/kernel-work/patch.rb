@@ -68,15 +68,20 @@ module KernelWork
         end
 
         # Get the full/absolute path to this patch
+        #
+        # @param pname [String] Optional argument to compute path for a given filename
         # @return [String] Absolute path
-        def fullpath()
-            return @suse.path + "/" + localpath()
+        def fullpath(pname=nil)
+            return @suse.path + "/" + localpath(pname)
         end
 
         # Get the local path to this patch in kernel-source
+        #
+        # @param pname [String] Optional argument to compute path for a given filename
         # @return [String] Local path
-        def localpath()
-            return @suse.get_patch_dir() + "/" + @pname
+        def localpath(pname=nil)
+            pname = @pname if pname == nil
+            return @suse.get_patch_dir() + "/" + pname
         end
 
         # Automatically extract CVE and BSC references for a patch using suse-add-cves
