@@ -19,6 +19,9 @@ module KernelWork
         #   @return [Array<Commit>, nil] Cached patch series commits or nil if uncomputed
         attr_accessor :series
 
+        # Default max length for a patch file name
+        DEFAULT_PATCH_NAMELEN = 64
+
         # Initialize a new Commit object
         #
         # @param sha [String] The commit SHA
@@ -41,6 +44,7 @@ module KernelWork
             @message = opts[:message]
             @author = opts[:author]
             @commit_time = opts[:commit_time]
+            @patchname = []
         end
 
         # Retrieve the subject of the commit
@@ -121,13 +125,17 @@ module KernelWork
         end
 
         # Retrieve the patch filename, generating it if necessary
+        # param len [Integer] Max filename length
         #
         # @return [String] The patch filename
-        def patchname()
-            return @patchname if @patchname != nil
+        def patchname(len=DEFAULT_PATCH_NAMELEN)
+            return @patchname[len] if @patchname[len] != nil
 
-            @patchname = runGit("format-patch -1 --no-signature #{sha}")
-            return @patchname
+            @patchname[len] = runGit("format-patch -1 --no-signature --filename-max-length=#{len.to_s} #{sha}")
+            # We do not want the patch file for non standard lengths, just the name
+            run("rm -f #{@patchname[len]}") if len != DEFAULT_PATCH_NAMELEN
+
+            return @patchname[len]
         end
 
         # Retrieve the comit message, generating it if necessary
