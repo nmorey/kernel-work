@@ -431,6 +431,7 @@ module KernelWork
             if opts[:cve] == true then
                 patch.update_ref_with_cve(opts)
             end
+            commit.patch = patch
 
             _insert_and_commit_patch(opts, commit, patch)
         end
