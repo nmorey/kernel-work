@@ -13,7 +13,11 @@ module KernelWork
         # @!attribute [r] path
         #   @return [String] The git repository path
         attr_reader :sha, :orig_tag, :git_repo, :path
+        # @!attribute [rw] data
+        #   @return [Object] Anonymous data to store in a Commit object
         attr_accessor :data
+        # @!attribute [rw] extra_desc
+        #   @return [String] Extra descriptiont to print in desc()
         attr_accessor :extra_desc
         # @!attribute [rw] series
         #   @return [Array<Commit>, nil] Cached patch series commits or nil if uncomputed
