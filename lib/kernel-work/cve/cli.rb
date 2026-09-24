@@ -322,13 +322,7 @@ module KernelWork
             def blacklist(opts)
                 initialize_repo()
                 config = KernelWork.config.cve.to_h
-                bzId = opts[:bugzilla_id].gsub(/^bsc#/, '') # strip eventual bsc prefix
-                cve = nil
-                if bzId =~ /^CVE-/ then
-                    cve = @tracker.read_cve(bzId)
-                else
-                    cve = @tracker.read_bug(bzId)
-                end
+                cve = @tracker.read_id(opts[:bugzilla_id])
                 bzId = cve.bug_id
                 @suse.runSystem("./scripts/cve_tools/blacklist-cve add #{cve.cve} #{branch()} '#{opts[:bugzilla_ref]}'")
                 cve.set_status(branch(), CVE::STATE_BLACKLISTED)
