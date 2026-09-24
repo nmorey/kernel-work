@@ -58,11 +58,17 @@ module KernelWork
             def self.set_opts(action, optsParser, opts)
                 case action
                 when :fetch
+                    opts[:bz_list] = []
                     optsParser.on("-u", "--user <email>", String, "Bugzilla user email (overrides config).") {
                         |val| opts[:bugzilla_user] = val}
                     optsParser.on("-f", "--force",
                                   "Force full refresh (clears cache and re-fetches details for all CVEs).") {
                         |val| opts[:force] = true}
+                    optsParser.on("-b", "--bz <bug id>", String,
+                                  "Only refresh the specified bugs (can be specified multiple times)") {
+                        |val| opts[:bz_list] << val
+                        opts[:force] = true
+                    }
                 when :apply
                     Upstream.set_opts(:cve_apply, optsParser, opts)
                     optsParser.on("-y", "--yes", "Apply fixes automatically without confirmation.") {
@@ -153,14 +159,17 @@ module KernelWork
             # Reassigned and resolved bugs are pruned from local cache.
             # By default, details (comments) are fetched only for new/unknown CVE bugs,
             # keeping known cached CVEs as-is. Passing opts[:force] forces a complete
-            # refresh and re-fetches details for all CVEs.
+            # refresh and re-fetches details for all CVEs. Passing opts[:bz_list] selectively
+            # clears and re-fetches details only for the specified bugs or CVE IDs.
             #
-            # @param opts [Hash] Options hash (:bugzilla_user, :force)
+            # @param opts [Hash] Options hash (:bugzilla_user, :force, :bz_list)
             # @return [Integer] 0 on success, non-zero on failure
             def fetch(opts)
                 config = KernelWork.config.cve.to_h
 
                 bz_user = opts[:bugzilla_user] || config[:bugzilla_user]
+                bz_list = opts[:bz_list] || []
+
                 if bz_user.nil? || bz_user.empty?
                     log(:ERROR, "Bugzilla user email is required. Please set it in config or pass via -u.")
                     return 1
@@ -185,8 +194,20 @@ module KernelWork
                 fetched_ids = filtered_bugs.map { |bug| bug["id"].to_s }
 
                 if opts[:force]
-                    log(:INFO, "Force option specified. Clearing tracking data...")
-                    @tracker.delete_all
+                    if bz_list.length == 0 then
+                        log(:INFO, "Force option specified. Clearing tracking data...")
+                        @tracker.delete_all
+                    else
+                        log(:INFO, "Force option specified. Clearing tracking data for bugs #{bz_list.join(" ")}...")
+                        bz_list.each(){|bz|
+                            begin
+                                cve = @tracker.read_id(bz)
+                                @tracker.delete_bug(cve.bug_id)
+                            rescue BugNotFoundError
+                                # Ignore if we do not know this one
+                            end
+                        }
+                    end
                 end
 
                 local_bugs = @tracker.read_all

@@ -1621,8 +1621,62 @@ Dir.mktmpdir('cve-data-fetch-incremental') do |dir_path|
     test_15_passed = false
   end
 
+  # 5. Selective fetch with bug ID in bz_list should only wipe and re-fetch that bug
+  bug_300 = tracker.read_bug("300")
+  bug_300.set_status(:"SLE15-SP7", KernelWork::CVE::STATE_APPLIED)
+  comment_calls.clear
+  test_cve.fetch({ force: true, bz_list: ["100"] })
+
+  unless comment_calls == ["100"]
+    puts "  15g (selective fetch with bug ID re-fetched wrong bugs, got: #{comment_calls.inspect}) FAILED"
+    test_15_passed = false
+  end
+
+  # Check that bug 300 retained its 'Applied' status
+  bug_300_after = tracker.read_bug("300")
+  unless bug_300_after && bug_300_after[:branches] && bug_300_after[:branches][:"SLE15-SP7"] == "Applied"
+    puts "  15h (selective fetch wiped untargeted bug 300 state) FAILED"
+    test_15_passed = false
+  end
+
+  # 6. Selective fetch with CVE ID
+  comment_calls.clear
+  test_cve.fetch({ force: true, bz_list: ["CVE-2026-300"] })
+
+  unless comment_calls == ["300"]
+    puts "  15i (selective fetch with CVE ID re-fetched wrong bugs, got: #{comment_calls.inspect}) FAILED"
+    test_15_passed = false
+  end
+
+  # 7. Selective fetch with bsc# prefix
+  comment_calls.clear
+  test_cve.fetch({ force: true, bz_list: ["bsc#100"] })
+
+  unless comment_calls == ["100"]
+    puts "  15j (selective fetch with bsc# prefix re-fetched wrong bugs, got: #{comment_calls.inspect}) FAILED"
+    test_15_passed = false
+  end
+
+  # 8. Selective fetch for uncached bug does not crash with BugNotFoundError
+  comment_calls.clear
+  begin
+    test_cve.fetch({ force: true, bz_list: ["999"] })
+  rescue KernelWork::CveCLI::BugNotFoundError => e
+    puts "  15k (selective fetch for uncached bug raised BugNotFoundError: #{e.message}) FAILED"
+    test_15_passed = false
+  end
+
+  # 9. Verify CLI OptionParser sets :bz_list and forces :force = true
+  cli_opts = {}
+  parser = OptionParser.new { |o| KernelWork::CveCLI::CveAction.set_opts(:fetch, o, cli_opts) }
+  parser.parse!(["-b", "100", "--bz", "CVE-2026-0300"])
+  unless cli_opts[:bz_list] == ["100", "CVE-2026-0300"] && cli_opts[:force] == true
+    puts "  15l (OptionParser -b did not populate :bz_list or set :force, got: #{cli_opts.inspect}) FAILED"
+    test_15_passed = false
+  end
+
   if test_15_passed
-    puts "Test Case 15 (Default Incremental Fetch & --force) Passed"
+    puts "Test Case 15 (Default Incremental Fetch, --force & Selective -b) Passed"
   else
     failures += 1
   end

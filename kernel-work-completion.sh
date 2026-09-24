@@ -162,7 +162,8 @@ _kernel_work_cve(){
 
     local sub_cmd=${words[2]}
     local opt_list=$(_kernel_work_genoptlist kernel cve $sub_cmd)
-    _kernel_work_filter_opts "$prev" kernel cve $sub_cmd && return
+    _kernel_work_opt_takes_arg "$prev" kernel cve $sub_cmd && return
+
     case "$prev" in
         *)
             __gitcomp_nl "$opt_list"
