@@ -244,7 +244,7 @@ module KernelWork
         # @return [Hash] Hash with SHA keys and true values
         def gen_commit_id_list(opts)
             h={}
-            run("git grep Git-commit: #{get_patch_dir()} | awk '{ print $NF}'").
+            run("git grep Git-commit: patches.* | awk '{ print $NF}'").
                 chomp().split("\n").map(){|x|
                 h[x] = true
             }
