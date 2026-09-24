@@ -60,7 +60,8 @@ module KernelWork
                 when :fetch
                     optsParser.on("-u", "--user <email>", String, "Bugzilla user email (overrides config).") {
                         |val| opts[:bugzilla_user] = val}
-                    optsParser.on("-f", "--force", "Force full refresh (clears cache and re-fetches details for all CVEs).") {
+                    optsParser.on("-f", "--force",
+                                  "Force full refresh (clears cache and re-fetches details for all CVEs).") {
                         |val| opts[:force] = true}
                 when :apply
                     Upstream.set_opts(:cve_apply, optsParser, opts)
@@ -165,7 +166,7 @@ module KernelWork
                     return 1
                 end
 
-                log(:INFO, "Fetching bugs for #{bz_user} from Bugzilla...")
+                log(:INFO, "Fetching bug list for #{bz_user} from Bugzilla...")
                 params = {
                     product: "SUSE Security Incidents",
                     assigned_to: bz_user
@@ -202,27 +203,20 @@ module KernelWork
                 end
 
                 known_ids = local_ids - orphaned_ids
-                bugs_to_fetch = if opts[:force]
-                                    filtered_bugs
-                                else
-                                    filtered_bugs.reject { |bug| known_ids.include?(bug["id"].to_s) }
-                                end
+                bugs_to_fetch = filtered_bugs.reject { |bug| known_ids.include?(bug["id"].to_s) }
 
-                if !opts[:force] && bugs_to_fetch.empty?
-                    log(:INFO, "Found #{filtered_bugs.length} CVE bugs (#{filtered_bugs.length} already known). No new CVE bugs to fetch.")
+                log_str = "Found #{filtered_bugs.length} CVE bugs (#{known_ids.length} already known). "
+                if bugs_to_fetch.empty?
+                    log(:INFO, log_str + "No new CVE bugs to fetch.")
                     return 0
-                end
-
-                if opts[:force] || known_ids.empty?
-                    log(:INFO, "Found #{filtered_bugs.length} CVE bugs. Fetching comments...")
                 else
-                    log(:INFO, "Found #{filtered_bugs.length} CVE bugs (#{known_ids.length} already known). Fetching comments for #{bugs_to_fetch.length} new bug(s)...")
+                    log(:INFO, log_str + "Fetching comments for #{bugs_to_fetch.length} bugs.")
                 end
 
                 updates_count = 0
                 bugs_to_fetch.each do |bug|
                     bug_id = bug["id"].to_s
-                    log(:INFO, "Fetching comments for Bug ##{bug_id}...")
+                    log(:INFO, "Fetching comments #{updates_count + 1}/#{bugs_to_fetch.length} for Bug ##{bug_id}...")
                     comments_response = @bugzilla.request("bug/#{bug_id}/comment")
                     comments = comments_response["bugs"][bug_id]["comments"] || []
                     fix_info = parse_cve_comment(comments)
