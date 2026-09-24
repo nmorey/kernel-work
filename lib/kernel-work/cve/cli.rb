@@ -471,12 +471,15 @@ module KernelWork
                     cve_bug_str = "#{col_str}#{padding}"
                     statuses_str = ""
 
+                    statuses = []
                     distros_list.each do |distro|
                         status = cve.get_status(distro) || ""
+                        statuses << status
                         status_str = sprintf("%-#{distro_widths[distro]}s", status)
                         statuses_str += CVE.colour(status, status_str)
                     end
-                    cve_bug_str = CVE.colour(CVE::STATE_MERGED, cve_bug_str) if cve.all_merged?
+                    statuses.reject! { |s| s.nil? || s.empty? || s == CVE::STATE_REASSIGNED }
+                    cve_bug_str = CVE.colour(status_global_state(statuses), cve_bug_str)
                     puts "#{cve_bug_str}#{statuses_str}"
                 end
 
