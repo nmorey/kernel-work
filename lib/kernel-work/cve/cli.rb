@@ -663,7 +663,7 @@ module KernelWork
                 return newState
             end
 
-            # Determine the aggregate workflow state for a distro column header based on CVE statuses.
+            # Determine the aggregate workflow state for a column or row header based on CVE statuses.
             #
             # The workflow state precedence is:
             # - {CVE::STATE_TODO} if any CVE on the distro has a ToDo status
@@ -671,11 +671,9 @@ module KernelWork
             # - {CVE::STATE_PUSHED} if any CVE on the distro has a Pushed status
             # - {CVE::STATE_MERGED} otherwise (all CVEs are Merged or Blacklisted)
             #
-            # @param distro [String, Symbol] The distro branch name.
-            # @param cves [Array<CVE>] The list of matching CVE bugs.
+            # @param statuses [Array<String>] List of all status to consider
             # @return [String] The workflow state constant representing the column status.
-            def distro_column_state(distro, cves)
-                statuses = cves.map { |cve| cve.get_status(distro) }.reject { |s| s.nil? || s.empty? || s == CVE::STATE_REASSIGNED }
+            def status_global_state(statuses)
                 if statuses.any? { |s| s == CVE::STATE_TODO }
                     CVE::STATE_TODO
                 elsif statuses.any? { |s| s == CVE::STATE_APPLIED }
@@ -685,6 +683,19 @@ module KernelWork
                 else
                     CVE::STATE_MERGED
                 end
+            end
+
+            # Determine the aggregate workflow state for a distro column header based on CVE statuses.
+            #
+            # @param distro [String, Symbol] The distro branch name.
+            # @param cves [Array<CVE>] The list of matching CVE bugs.
+            # @return [String] The workflow state constant representing the column status.
+            def distro_column_state(distro, cves)
+                statuses = cves.map { |cve|
+                    cve.get_status(distro)
+                }.reject { |s| s.nil? || s.empty? || s == CVE::STATE_REASSIGNED }
+
+                return status_global_state(statuses)
             end
         end
 
