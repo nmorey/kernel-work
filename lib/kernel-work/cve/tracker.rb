@@ -46,6 +46,16 @@ module KernelWork
                 raise NotImplementedError
             end
 
+            # Read a bug from its CVE id
+            # @param cve_id [String] The CVE Id
+            # @return [CVE] CVE/Bug data
+            # @raise [BugNotFoundError] If the bug could not be found
+            def read_cve(cve_id)
+                bug = read_all.find { |b| b.cve == cve_id }
+                raise BugNotFoundError.new if bug.nil?
+                bug
+            end
+
             # Read a bug from its bugzilla id or CVE id
             # Convert a string in format bsc#xxxx, xxxx, CVE-YYYY-NNNNN
             #
@@ -101,16 +111,6 @@ module KernelWork
                     end
                 end
                 cves
-            end
-
-            # Read a bug from its CVE id
-            # @param cve_id [String] The CVE Id
-            # @return [CVE] CVE/Bug data
-            # @raise [BugNotFoundError] If the bug could not be found
-            def read_cve(cve_id)
-                bug = read_all.find { |b| b.cve == cve_id }
-                raise BugNotFoundError.new if bug.nil?
-                bug
             end
 
             # Read a bug from its bugzilla id
