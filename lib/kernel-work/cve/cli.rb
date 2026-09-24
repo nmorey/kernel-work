@@ -432,7 +432,7 @@ module KernelWork
                 distros_list = active_distros.to_a.sort
 
                 # Determine the maximum width for the first column "CVE (Bug ID)"
-                cve_col_header = "CVE BugID"
+                cve_col_header = "CVE BugID (#{matching_cves.length})"
                 max_cve_width = [cve_col_header.length, matching_cves.map { |cve|
                                      "#{cve.cve} bsc##{cve.bug_id}".length }.max || 0].max + 3
 

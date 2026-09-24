@@ -1865,6 +1865,10 @@ begin
       puts "  17j (header output contains green BR-MERG) FAILED: Got header #{header_line.inspect}"
       test_17_passed = false
     end
+    unless header_line.include?("CVE BugID (2)")
+      puts "  17k (header output contains CVE BugID (2)) FAILED: Got header #{header_line.inspect}"
+      test_17_passed = false
+    end
   end
 
   if test_17_passed
