@@ -1758,6 +1758,123 @@ Dir.mktmpdir("test_cve_blacklist") do |tmpdir|
 end
 
 
+# --- Test Case 17: Distro Column Header Coloring in status view ---
+begin
+  test_17_passed = true
+  test_cve_inst = KernelWork::TestCve.new
+
+  # 1. Unit test distro_column_state precedence
+  # Create sample CVE fixtures
+  cve_todo = KernelWork::CVE.new(branches: { "D1" => KernelWork::CVE::STATE_TODO })
+  cve_applied = KernelWork::CVE.new(branches: { "D1" => KernelWork::CVE::STATE_APPLIED, "D2" => KernelWork::CVE::STATE_APPLIED })
+  cve_pushed = KernelWork::CVE.new(branches: { "D1" => KernelWork::CVE::STATE_PUSHED, "D2" => KernelWork::CVE::STATE_PUSHED, "D3" => KernelWork::CVE::STATE_PUSHED })
+  cve_merged = KernelWork::CVE.new(branches: { "D1" => KernelWork::CVE::STATE_MERGED, "D2" => KernelWork::CVE::STATE_MERGED, "D3" => KernelWork::CVE::STATE_MERGED, "D4" => KernelWork::CVE::STATE_MERGED, "D5" => KernelWork::CVE::STATE_MERGED })
+  cve_blacklisted = KernelWork::CVE.new(branches: { "D5" => KernelWork::CVE::STATE_BLACKLISTED, "D6" => KernelWork::CVE::STATE_BLACKLISTED })
+
+  # D1: has ToDo, Applied, Pushed, Merged => should be STATE_TODO
+  d1_state = test_cve_inst.send(:distro_column_state, "D1", [cve_todo, cve_applied, cve_pushed, cve_merged])
+  if d1_state != KernelWork::CVE::STATE_TODO
+    puts "  17a (distro with ToDo returns STATE_TODO) FAILED: Got #{d1_state}"
+    test_17_passed = false
+  end
+
+  # D2: has Applied, Pushed, Merged => should be STATE_APPLIED
+  d2_state = test_cve_inst.send(:distro_column_state, "D2", [cve_applied, cve_pushed, cve_merged])
+  if d2_state != KernelWork::CVE::STATE_APPLIED
+    puts "  17b (distro with Applied returns STATE_APPLIED) FAILED: Got #{d2_state}"
+    test_17_passed = false
+  end
+
+  # D3: has Pushed, Merged => should be STATE_PUSHED
+  d3_state = test_cve_inst.send(:distro_column_state, "D3", [cve_pushed, cve_merged])
+  if d3_state != KernelWork::CVE::STATE_PUSHED
+    puts "  17c (distro with Pushed returns STATE_PUSHED) FAILED: Got #{d3_state}"
+    test_17_passed = false
+  end
+
+  # D4: has only Merged => should be STATE_MERGED
+  d4_state = test_cve_inst.send(:distro_column_state, "D4", [cve_merged])
+  if d4_state != KernelWork::CVE::STATE_MERGED
+    puts "  17d (distro with only Merged returns STATE_MERGED) FAILED: Got #{d4_state}"
+    test_17_passed = false
+  end
+
+  # D5: has Merged and Blacklisted => should be STATE_MERGED
+  d5_state = test_cve_inst.send(:distro_column_state, "D5", [cve_merged, cve_blacklisted])
+  if d5_state != KernelWork::CVE::STATE_MERGED
+    puts "  17e (distro with Merged + Blacklisted returns STATE_MERGED) FAILED: Got #{d5_state}"
+    test_17_passed = false
+  end
+
+  # D6: has only Blacklisted => should be STATE_MERGED
+  d6_state = test_cve_inst.send(:distro_column_state, "D6", [cve_blacklisted])
+  if d6_state != KernelWork::CVE::STATE_MERGED
+    puts "  17f (distro with only Blacklisted returns STATE_MERGED) FAILED: Got #{d6_state}"
+    test_17_passed = false
+  end
+
+  # 2. Integration test: verify status CLI header output formatting
+  Dir.mktmpdir("test_cve_header_color") do |dir_path|
+    test_cfg = {
+      tracker_type: "local",
+      data_repo: dir_path
+    }
+    tracker = KernelWork::CveCLI::CveTracker.create(test_cfg)
+    test_cve_inst.instance_variable_set(:@tracker, tracker)
+
+    tracker.write_bug("1", {
+      bug_id: "1",
+      cve: "CVE-2026-0001",
+      branches: { "BR-TODO" => "ToDo", "BR-APPL" => "Applied", "BR-PUSH" => "Pushed", "BR-MERG" => "Merged" }
+    })
+    tracker.write_bug("2", {
+      bug_id: "2",
+      cve: "CVE-2026-0002",
+      branches: { "BR-APPL" => "Merged", "BR-PUSH" => "Merged", "BR-MERG" => "Blacklisted" }
+    })
+
+    orig_stdout = $stdout
+    output = ""
+    begin
+      $stdout = StringIO.new
+      test_cve_inst.status({})
+      output = $stdout.string
+    ensure
+      $stdout = orig_stdout
+    end
+
+    header_line = output.split("\n").first || ""
+    expected_todo_col = KernelWork::CVE.colour(KernelWork::CVE::STATE_TODO, "BR-TODO")
+    expected_appl_col = KernelWork::CVE.colour(KernelWork::CVE::STATE_APPLIED, "BR-APPL")
+    expected_push_col = KernelWork::CVE.colour(KernelWork::CVE::STATE_PUSHED, "BR-PUSH")
+    expected_merg_col = KernelWork::CVE.colour(KernelWork::CVE::STATE_MERGED, "BR-MERG")
+
+    unless header_line.include?(expected_todo_col)
+      puts "  17g (header output contains red BR-TODO) FAILED: Got header #{header_line.inspect}"
+      test_17_passed = false
+    end
+    unless header_line.include?(expected_appl_col)
+      puts "  17h (header output contains brown BR-APPL) FAILED: Got header #{header_line.inspect}"
+      test_17_passed = false
+    end
+    unless header_line.include?(expected_push_col)
+      puts "  17i (header output contains blue BR-PUSH) FAILED: Got header #{header_line.inspect}"
+      test_17_passed = false
+    end
+    unless header_line.include?(expected_merg_col)
+      puts "  17j (header output contains green BR-MERG) FAILED: Got header #{header_line.inspect}"
+      test_17_passed = false
+    end
+  end
+
+  if test_17_passed
+    puts "Test Case 17 (Distro Column Header Coloring) Passed"
+  else
+    failures += 1
+  end
+end
+
+
 # --- Test Output ---
 if failures == 0
   puts "All CVE tests passed successfully!"

@@ -445,7 +445,9 @@ module KernelWork
                 # Print header
                 print sprintf("%-#{max_cve_width}s", cve_col_header)
                 distros_list.each do |distro|
-                    print sprintf("%-#{distro_widths[distro]}s", distro)
+                    header_state = distro_column_state(distro, matching_cves)
+                    padding = " " * (distro_widths[distro] - distro.length)
+                    print "#{CVE.colour(header_state, distro)}#{padding}"
                 end
                 puts ""
 
@@ -659,6 +661,30 @@ module KernelWork
                     newState = CVE::STATE_MERGED
                 end
                 return newState
+            end
+
+            # Determine the aggregate workflow state for a distro column header based on CVE statuses.
+            #
+            # The workflow state precedence is:
+            # - {CVE::STATE_TODO} if any CVE on the distro has a ToDo status
+            # - {CVE::STATE_APPLIED} if any CVE on the distro has an Applied status
+            # - {CVE::STATE_PUSHED} if any CVE on the distro has a Pushed status
+            # - {CVE::STATE_MERGED} otherwise (all CVEs are Merged or Blacklisted)
+            #
+            # @param distro [String, Symbol] The distro branch name.
+            # @param cves [Array<CVE>] The list of matching CVE bugs.
+            # @return [String] The workflow state constant representing the column status.
+            def distro_column_state(distro, cves)
+                statuses = cves.map { |cve| cve.get_status(distro) }.reject { |s| s.nil? || s.empty? || s == CVE::STATE_REASSIGNED }
+                if statuses.any? { |s| s == CVE::STATE_TODO }
+                    CVE::STATE_TODO
+                elsif statuses.any? { |s| s == CVE::STATE_APPLIED }
+                    CVE::STATE_APPLIED
+                elsif statuses.any? { |s| s == CVE::STATE_PUSHED }
+                    CVE::STATE_PUSHED
+                else
+                    CVE::STATE_MERGED
+                end
             end
         end
 
