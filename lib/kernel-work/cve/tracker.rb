@@ -112,6 +112,23 @@ module KernelWork
                 end
             end
 
+            # Read a bug from its bugzilla id or CVE id
+            # Convert a string in format bsc#xxxx, xxxx, CVE-YYYY-NNNNN
+            #
+            # @param id [String] string in format bsc#xxxx, xxxx, CVE-YYYY-NNNNN
+            # @return [CVE] CVBE/Bug data
+            # @raise [BugNotFoundError] If the bug could not be found
+            # @raise [CorruptedJSONError] If any file contains corrupted JSON.
+            def read_id(id)
+                bzId = id.gsub(/^bsc#/, '') # strip eventual bsc prefix
+                cve = nil
+                if bzId =~ /^CVE-/ then
+                    return read_cve(bzId)
+                else
+                    return read_bug(bzId)
+                end
+            end
+
             # Write bug tracking data to local repository file.
             # @param bug_id [String] The Bugzilla bug ID.
             # @param data [CVE, Hash] The CVE instance or raw data hash.
