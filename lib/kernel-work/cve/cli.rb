@@ -288,6 +288,9 @@ module KernelWork
                 scp_opts[:cve] = true
 
                 @upstream._scp(scp_opts, patchlist) do |commit, error = nil|
+                    next if error.class == SCPSkip
+                    next if error.class == SCPNotApplied
+
                     cve = nil
                     patch = commit.patch
                     if patch.ref =~ /(CVE-[0-9]+-[0-9]+)/ then
