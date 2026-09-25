@@ -239,6 +239,13 @@ module KernelWork
             "#{base.chomp('/')}/show_bug.cgi?id=#{target}"
         end
 
+        # Return a formatted string representation of the CVE and Bugzilla ID
+        #
+        # Optionally formats the output as an OSC 8 terminal hyperlink pointing to Bugzilla.
+        #
+        # @param opts [Hash] Formatting options
+        # @option opts [Boolean] :hyperlinks Whether to format the string as a terminal hyperlink (defaults to KernelWork.config.hyperlinks)
+        # @return [String] The formatted string representation
         def to_s(opts={})
             use_hyperlinks = opts.key?(:hyperlinks) ? opts[:hyperlinks] : KernelWork.config.hyperlinks
             bz_web_url = KernelWork.config.cve.bugzilla_url.sub("apibugzilla.", "bugzilla.") ||
