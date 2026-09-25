@@ -100,6 +100,8 @@ module KernelWork
                         |val| opts[:comment] = val}
                     optsParser.on("-y", "--yes", "Apply reassignments automatically without confirmation.") {
                         |val| opts[:yn_default] = :yes}
+                    optsParser.on("--[no-]hyperlinks", "Enable or disable terminal hyperlinks in output.") {
+                        |val| opts[:hyperlinks] = val}
                 when :blacklist
                     optsParser.on("-b", "--bug <bugzilla id or CVE>", String,
                                   "bsc#XXXX or XXXX or CVE-YYYY-NNNNN") {
@@ -515,29 +517,29 @@ module KernelWork
                     return 0
                 end
 
-                if opts[:dry_run]
-                    merged_cves.each do |cve|
-                        commit_str = (cve.fix_sha && !cve.fix_sha.empty?) ? "#{cve.fix_sha} " : ""
-                        summary_str = (cve.summary && !cve.summary.empty?) ? " - #{cve.summary}" : ""
-                        puts "#{commit_str}#{cve.cve} (bsc##{cve.bug_id})#{summary_str}"
-                    end
-                    return 0
-                end
-
                 config = KernelWork.config.cve.to_h
-                assignee = opts[:assignee] || config[:reassign_to] || config[:reassign_assignee] || "kernel-security-sentinel@lists.suse.com"
-                comment_msg = opts[:comment] || config[:reassign_comment] || config[:reassign_message] || "Merged"
+                assignee = opts[:assignee] || config[:reassign_to] ||
+                           config[:reassign_assignee] || "kernel-security-sentinel@lists.suse.com"
+                comment_msg = opts[:comment] || config[:reassign_comment] ||
+                              config[:reassign_message] || "Merged"
 
                 reassigned_count = 0
                 merged_cves.each do |cve|
-                    msg = "reassign #{cve.cve} (bsc##{cve.bug_id}) to #{assignee}"
+                    cve_s = cve.to_s(opts)
+                    commit_str = (cve.fix_sha && !cve.fix_sha.empty?) ? "#{cve.fix_sha} " : ""
+                    summary_str = (cve.summary && !cve.summary.empty?) ? " - #{cve.summary.brown}" : ""
+                    puts "#{commit_str}#{cve_s.blue()}#{summary_str}"
+
+                    next if opts[:dry_run]
+
+                    msg = "reassign #{cve_s.blue} to #{assignee}"
                     rep = confirm(opts, msg)
                     if rep != 'y'
-                        log(:INFO, "Skipping #{cve.cve} (bsc##{cve.bug_id}).")
+                        log(:INFO, "Skipping #{cve_s}.")
                         next
                     end
 
-                    log(:INFO, "Reassigning Bug ##{cve.bug_id} (#{cve.cve}) to #{assignee}...")
+                    log(:INFO, "Reassigning #{cve_s} to #{assignee}...")
                     @bugzilla.update_bug(cve.bug_id, {
                         assigned_to: assignee,
                         comment: {
@@ -547,7 +549,7 @@ module KernelWork
                     })
 
                     @tracker.delete_bug(cve.bug_id)
-                    log(:INFO, "Successfully reassigned #{cve.cve} (bsc##{cve.bug_id}) to #{assignee} and dropped from tracker.")
+                    log(:INFO, "Successfully reassigned #{cve_s} to #{assignee} and dropped from tracker.")
                     reassigned_count += 1
                 end
 
