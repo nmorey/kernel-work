@@ -576,7 +576,7 @@ module KernelWork
 
             # Parse CVE Bugzilla Comments
             def parse_cve_comment(comments)
-                comments.each do |comment|
+                comments.reverse_each do |comment|
                     text = comment["text"] || ""
                     if text =~ /Security fix for (CVE-\d{4}-\d+)\s+bsc#(\d+)/i
                         cve = $1
