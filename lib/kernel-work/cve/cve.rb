@@ -238,5 +238,14 @@ module KernelWork
             base = base_url || "https://bugzilla.suse.com"
             "#{base.chomp('/')}/show_bug.cgi?id=#{target}"
         end
+
+        def to_s(opts={})
+            use_hyperlinks = opts.key?(:hyperlinks) ? opts[:hyperlinks] : KernelWork.config.hyperlinks
+            bz_web_url = KernelWork.config.cve.bugzilla_url.sub("apibugzilla.", "bugzilla.") ||
+                         "https://bugzilla.suse.com"
+            raw_cve_str = "#{@cve} bsc##{@bug_id}"
+            return raw_cve_str if use_hyperlinks != true
+            return raw_cve_str.hyperlink(bugzilla_url(bz_web_url))
+        end
     end
 end
