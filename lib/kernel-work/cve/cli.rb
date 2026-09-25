@@ -443,7 +443,7 @@ module KernelWork
                 # Determine the maximum width for the first column "CVE (Bug ID)"
                 cve_col_header = "CVE BugID (#{matching_cves.length})"
                 max_cve_width = [cve_col_header.length, matching_cves.map { |cve|
-                                     "#{cve.cve} bsc##{cve.bug_id}".length }.max || 0].max + 3
+                                     cve.to_s.visible_length }.max || 0].max + 3
 
                 # Determine width for each distro column
                 distro_widths = {}
@@ -464,19 +464,10 @@ module KernelWork
                 separator_len = max_cve_width + distros_list.map { |d| distro_widths[d] }.sum
                 puts "-" * separator_len
 
-                use_hyperlinks = opts.key?(:hyperlinks) ? opts[:hyperlinks] : KernelWork.config.hyperlinks
-                bz_web_url = config[:bugzilla_web_url] || config[:bugzilla_url]&.sub("apibugzilla.", "bugzilla.") || "https://bugzilla.suse.com"
-
                 # Print each CVE row
                 matching_cves.each do |cve|
-                    raw_cve_str = "#{cve.cve} bsc##{cve.bug_id}"
-                    if use_hyperlinks
-                        url = cve.bugzilla_url(bz_web_url)
-                        col_str = raw_cve_str.hyperlink(url)
-                    else
-                        col_str = raw_cve_str
-                    end
-                    padding = " " * [0, max_cve_width - raw_cve_str.length].max
+                    col_str = cve.to_s(opts)
+                    padding = " " * [0, max_cve_width - col_str.visible_length].max
                     cve_bug_str = "#{col_str}#{padding}"
                     statuses_str = ""
 
