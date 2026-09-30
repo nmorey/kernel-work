@@ -816,7 +816,7 @@ module KernelWork
                     fixes_commit = KernelWork::Commit.new(f_sha)
                     begin
                         f_desc = fixes_commit.desc()
-                        if is_fixes_sha_in_house?(fixes_commit)
+                        if has_commit?(fixes_commit)
                             log(:INFO, "  backported #{f_desc}")
                         else
                             log(:WARNING, "  unbackported #{f_desc}")
@@ -883,11 +883,11 @@ module KernelWork
             _tune_last_patch(opts)
         end
 
-        # Check if the commit in the Fixes tag is on our branch
+        # Check if the commit is on our branch (in upstream or backported)
         #
-        # @param fixes_commit [Commit] Commit in the fixes tag
-        # @return [bool] True is we have the breaker, false if we do not
-        def is_fixes_sha_in_house?(fixes_commit)
+        # @param fixes_commit [Commit] Commit to look for
+        # @return [bool] True is we have that commit, false if we do not
+        def has_commit?(fixes_commit)
             # 1. Is it an ancestor of HEAD in LINUX_GIT?
             return true if fixes_commit.is_ancestor?("HEAD")
 
