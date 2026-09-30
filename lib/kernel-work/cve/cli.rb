@@ -318,16 +318,16 @@ module KernelWork
                             # Not a CVE in our pool. Ignore it
                         end
                     end
-                    next if cve == nil
-                    bug_id = cve.bug_id
-                    newState = nil
 
+                    newState = nil
                     if error == nil
                         @upstream.build_commit(opts, commit)
                         newState = CVE::STATE_APPLIED
                     elsif error.class == SCPAlreadyApplied
                         newState = CVE::STATE_APPLIED
                     end
+                    next if cve == nil
+                    bug_id = cve.bug_id
                     cve.set_status(branch(), newState) if newState != nil
                 end
             end
