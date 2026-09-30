@@ -1,5 +1,258 @@
-require_relative 'cve/error'
-require_relative 'cve/cve'
-require_relative 'cve/bugzilla'
-require_relative 'cve/tracker'
-require_relative 'cve/cli'
+module KernelWork
+
+    # Represents a CVE bug being tracked in the system
+    class CVE < Common
+        # The ToDo workflow state for a CVE bug.
+        STATE_TODO       = "ToDo"
+        # The Applied workflow state for a CVE bug.
+        STATE_APPLIED    = "Applied"
+        # The Pushed workflow state for a CVE bug.
+        STATE_PUSHED     = "Pushed"
+        # The Merged workflow state for a CVE bug.
+        STATE_MERGED     = "Merged"
+        # The Blacklisted workflow state for a CVE bug.
+        STATE_BLACKLISTED = "Blacklisted"
+        # The Reassigned workflow state for a CVE bug.
+        STATE_REASSIGNED = "Reassigned"
+
+        # List of all valid workflow states dynamically retrieved from STATE_* constants.
+        VALID_STATES = constants.grep(/^STATE_/).map { |c| const_get(c) }.freeze
+
+        # Maximum string length among all valid workflow states.
+        MAX_STATE_LEN = VALID_STATES.map(&:length).max
+
+        attr_reader :bug_id, :cve, :summary, :fix_sha, :distros, :branches, :tracker
+
+        # Validate that a state is a recognized workflow state and return its canonical form
+        # @param state [String, Symbol, nil] The state value to validate
+        # @return [String] The normalized state string
+        # @raise [CveCLI::InvalidCveStateError] If the state is unknown
+        def self.validate_state!(state)
+            state_str = state.to_s.strip
+            return "" if state_str.empty?
+
+            canonical = VALID_STATES.find { |s| s.casecmp?(state_str) }
+            return canonical if canonical
+
+            raise CveCLI::InvalidCveStateError.new(state)
+        end
+
+        # Validate that a state is a recognized workflow state and return its canonical form
+        # @param state [String, Symbol, nil] The state value to validate
+        # @return [String] The normalized state string
+        # @raise [CveCLI::InvalidCveStateError] If the state is unknown
+        def validate_state!(state)
+            self.class.validate_state!(state)
+        end
+
+        # Colour a string (or state string) based on the CVE workflow state
+        # @param state [String, Symbol] The workflow state value
+        # @param text [String, nil] Optional text to colour (defaults to state)
+        # @return [String] The coloured string
+        def self.colour(state, text = nil)
+            text = (text || state).to_s
+            norm_state = begin
+                validate_state!(state)
+            rescue CveCLI::InvalidCveStateError
+                state.to_s
+            end
+
+            case norm_state
+            when STATE_TODO
+                text.red.bold
+            when STATE_MERGED
+                text.green
+            when STATE_APPLIED
+                text.brown
+            when STATE_BLACKLISTED
+                text.gray
+            when STATE_PUSHED
+                text.blue
+            else
+                text
+            end
+        end
+
+        class << self
+            alias_method :color, :colour
+        end
+
+        # Colour a string (or state string) based on the CVE workflow state
+        # @param state [String, Symbol] The workflow state value
+        # @param text [String, nil] Optional text to colour (defaults to state)
+        # @return [String] The coloured string
+        def colour(state, text = nil)
+            self.class.colour(state, text)
+        end
+        alias_method :color, :colour
+
+        # Initialize a new CVE instance
+        # @param attributes [Hash, CVE] The attributes hash or CVE instance
+        # @raise [CveCLI::InvalidCveStateError] If any branch state is unknown
+        def initialize(attributes = {})
+            @bug_id = ""
+            @cve = nil
+            @summary = nil
+            @fix_sha = nil
+            @distros = []
+            @tracker = nil
+            @branches = {}
+            copy(attributes)
+        end
+
+        # Copy attributes into internal fields from a Hash or CVE instance
+        # @param attributes [Hash, CVE, nil] Attributes to copy
+        # @raise [CveCLI::InvalidCveStateError] If any branch state is unknown
+        # @return [CVE] self
+        def copy(attributes)
+            return self if attributes.nil?
+            attrs = attributes.is_a?(CVE) ? attributes.to_h : attributes
+            return self unless attrs.is_a?(Hash)
+
+            @bug_id = attrs[:bug_id].to_s if attrs.key?(:bug_id)
+            @cve = attrs[:cve] if attrs.key?(:cve)
+            @summary = attrs[:summary] if attrs.key?(:summary)
+            @fix_sha = attrs[:fix_sha] if attrs.key?(:fix_sha)
+            @distros = attrs[:distros] || [] if attrs.key?(:distros)
+            @tracker = attrs[:tracker] if attrs.key?(:tracker) && !attrs[:tracker].nil?
+
+            if attrs.key?(:branches) && attrs[:branches]
+                @branches = {}
+                attrs[:branches].each do |k, v|
+                    @branches[k.to_sym] = self.class.validate_state!(v)
+                end
+            end
+            self
+        end
+
+        # Reload bug data from the tracker if available
+        # @return [CVE] self
+        def reload
+            return self unless @tracker && @tracker.respond_to?(:read_bug)
+
+            begin
+                latest = @tracker.read_bug(@bug_id)
+                copy(latest) if latest
+            rescue CveCLI::BugNotFoundError
+                # Bug not found in tracker yet, retain current in-memory state
+            end
+            self
+        end
+
+        # Create a CVE instance from a hash, or return the CVE instance if already one
+        # @param tracker [CveTracker] Tracker used to load the data
+        # @param data [Hash, CVE] The source data
+        # @return [CVE, nil]
+        def self.from_h(tracker, data)
+            return nil if data.nil?
+            return data if data.is_a?(CVE)
+            data[:tracker] = tracker
+            new(data)
+        end
+
+        # Convert the CVE instance to a symbolized hash
+        # @return [Hash]
+        def to_h
+            {
+                bug_id: @bug_id,
+                cve: @cve,
+                summary: @summary,
+                fix_sha: @fix_sha,
+                distros: @distros,
+                branches: @branches
+            }
+        end
+
+        # Custom JSON serialization support (e.g. for WEBrick pretty_generate)
+        # @return [String]
+        def to_json(*args)
+            to_h.to_json(*args)
+        end
+
+        # Retrieve the status of a specific branch
+        # @param branch [String, Symbol] The branch name
+        # @return [String, nil]
+        def get_status(branch)
+            @branches[branch.to_sym]
+        end
+
+        # Update the status of a specific branch
+        # @param branch [String, Symbol] The branch name
+        # @param status [String, Symbol] The new status value
+        # @raise [CveCLI::InvalidCveStateError] If the state is unknown
+        # @return [String]
+        def set_status(branch, status)
+            norm_status = self.class.validate_state!(status)
+            reload
+            @branches[branch.to_sym] = norm_status
+            @tracker.write_bug(@bug_id, self) if @tracker
+            log(:INFO, "Successfully updated status of Bug ##{@bug_id} to '#{colour(norm_status)}'.")
+            norm_status
+        end
+
+        # Hash-like reader compatibility method
+        # @param key [Symbol, String] The attribute name
+        # @return [Object]
+        def [](key)
+            case key.to_sym
+            when :bug_id then @bug_id
+            when :cve then @cve
+            when :summary then @summary
+            when :fix_sha then @fix_sha
+            when :distros then @distros
+            when :branches then @branches
+            when :tracker then @tracker
+            else
+                nil
+            end
+        end
+
+        # Get list of active branch/status pairs, filtering out empty or reassigned ones
+        # @return [Hash]
+        def active_branches
+            @branches.select do |_, status_val|
+                status_str = status_val.to_s.strip
+                !status_str.empty? && status_str != STATE_REASSIGNED
+            end
+        end
+
+        # Check if all active branches are merged (or fully resolved)
+        # @return [Boolean]
+        def all_merged?
+            active = active_branches
+            return false if active.empty?
+            active.values.all? { |status|
+                status == STATE_MERGED || status == STATE_BLACKLISTED }
+        end
+
+        # Generate the Bugzilla web URL for this CVE
+        #
+        # Uses the Bugzilla bug ID if available, otherwise falls back to the CVE identifier.
+        #
+        # @param base_url [String, nil] Optional base URL (defaults to "https://bugzilla.suse.com")
+        # @return [String, nil] The Bugzilla web URL, or nil if neither bug_id nor cve is present
+        def bugzilla_url(base_url = nil)
+            target = (!@bug_id.nil? && !@bug_id.empty?) ? @bug_id : @cve
+            return nil if target.nil? || target.empty?
+
+            base = base_url || "https://bugzilla.suse.com"
+            "#{base.chomp('/')}/show_bug.cgi?id=#{target}"
+        end
+
+        # Return a formatted string representation of the CVE and Bugzilla ID
+        #
+        # Optionally formats the output as an OSC 8 terminal hyperlink pointing to Bugzilla.
+        #
+        # @param opts [Hash] Formatting options
+        # @option opts [Boolean] :hyperlinks Whether to format the string as a terminal hyperlink (defaults to KernelWork.config.hyperlinks)
+        # @return [String] The formatted string representation
+        def to_s(opts={})
+            use_hyperlinks = opts.key?(:hyperlinks) ? opts[:hyperlinks] : KernelWork.config.hyperlinks
+            bz_web_url = KernelWork.config.cve.bugzilla_url.sub("apibugzilla.", "bugzilla.") ||
+                         "https://bugzilla.suse.com"
+            raw_cve_str = "#{@cve} bsc##{@bug_id}"
+            return raw_cve_str if use_hyperlinks != true
+            return raw_cve_str.hyperlink(bugzilla_url(bz_web_url))
+        end
+    end
+end

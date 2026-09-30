@@ -6,19 +6,23 @@ require 'cli_class_tool'
 require_relative 'kernel-work/error'
 require_relative 'kernel-work/kv'
 require_relative 'kernel-work/config'
+require_relative 'kernel-work/common'
 
+###
+# Common objects
+###
+require_relative 'kernel-work/commit'
+require_relative 'kernel-work/config_cli'
+require_relative 'kernel-work/cve'
+require_relative 'kernel-work/patch'
 
 ###
 # Action Classes
 ###
-require_relative 'kernel-work/common'
-require_relative 'kernel-work/commit'
-require_relative 'kernel-work/patch'
 require_relative 'kernel-work/upstream'
 require_relative 'kernel-work/suse'
 require_relative 'kernel-work/wenv'
-require_relative 'kernel-work/config_cli'
-require_relative 'kernel-work/cve'
+require_relative 'kernel-work/cve_cli'
 
 # Namespace for the Kernel Work tool suite.
 #

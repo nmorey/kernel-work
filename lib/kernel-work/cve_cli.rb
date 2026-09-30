@@ -4,6 +4,9 @@ require 'json'
 require 'set'
 require 'yaml'
 require 'fileutils'
+require_relative 'cve_cli/error'
+require_relative 'cve_cli/bugzilla'
+require_relative 'cve_cli/tracker'
 
 module KernelWork
     # Module exposing CVE commands nested under 'cve'
@@ -309,9 +312,9 @@ module KernelWork
 
     end
     # Load all the actions
-    require_relative 'apply'
-    require_relative 'fetch'
-    require_relative 'refresh'
-    require_relative 'status'
+    require_relative 'cve_cli/apply'
+    require_relative 'cve_cli/fetch'
+    require_relative 'cve_cli/refresh'
+    require_relative 'cve_cli/status'
 end
 
