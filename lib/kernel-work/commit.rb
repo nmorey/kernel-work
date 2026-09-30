@@ -322,22 +322,27 @@ module KernelWork
                 next if parsed_entries.empty?
 
                 resolved_commits = []
-                parsed_entries.each do |entry|
+                latest_sha = nil
+                parsed_entries.reverse_each do |entry|
                     if (entry[:msgid] && lore_links().any? { |l| l.include?(entry[:msgid]) }) ||
                        (@subject && entry[:subject] == @subject)
                         resolved_commits << self
+                        latest_sha = f_sha if latest_sha == nil
                         next
                     end
 
-                    commit = resolve_series_patch(entry, target_ref, time_filter)
+                    commit = resolve_series_patch(entry, target_ref,
+                                                  latest_sha: latest_sha,
+                                                  time_filter: time_filter)
                     if commit != nil
                         resolved_commits << commit
+                        latest_sha = commit.f_sha if latest_sha == nil
                     else
                         log(:DEBUG, "Could not find commit in #{@path} for series patch #{entry[:idx]}/#{entry[:total]}: '#{entry[:subject]}'")
                     end
                 end
 
-                @series = resolved_commits
+                @series = resolved_commits.reverse
                 break unless @series.empty?
             end
 
@@ -431,12 +436,29 @@ module KernelWork
         # @param entry [Hash] Patch metadata hash containing :idx, :total, :subject, :msgid
         # @param target_ref [String] The git target ref to search (e.g. origin/master, master, HEAD)
         # @param time_filter [String] Optional git date-bounded argument
+        # @param latest_sha [String] Look from this SHA before looking in the whole target_ref
         # @return [Commit, nil] Resolved commit or nil if not found
-        def resolve_series_patch(entry, target_ref = "HEAD", time_filter = "")
+        def resolve_series_patch(entry, target_ref = "HEAD",
+                                 time_filter: "",
+                                 latest_sha: nil)
+
             # 1. Message-ID / Link: trailer search
             if entry[:msgid]
+                searchCmd = "log #{time_filter} -n 1 --format=%H "+
+                            "--grep=\"#{entry[:msgid]}\""
+
+                # 1.1 Look just before the latest commit we had
+                if latest_sha != nil
+                    begin
+                        sha = runGit("#{searchCmd} #{latest_sha}")
+                        return Commit.new(sha, subject: entry[:subject],
+                                          path: @path, safe_sha: true) unless sha.empty?
+                    rescue
+                    end
+                end
+                # 1.2 Look in the provided ref
                 begin
-                    sha = runGit("log #{target_ref} #{time_filter} -n 1 --format=%H --grep=\"#{entry[:msgid]}\"", catch_err: true).strip
+                    sha = runGit("#{searchCmd} #{target_ref}")
                     return Commit.new(sha, subject: entry[:subject],
                                       path: @path, safe_sha: true) unless sha.empty?
                 rescue
@@ -447,7 +469,8 @@ module KernelWork
             if entry[:subject]
                 begin
                     clean_subj = entry[:subject].to_s.sub(/\A\[.*?\]\s*/, '').gsub('"', '').strip
-                    output = runGit("log #{target_ref} #{time_filter} -n 5 --no-merges --format=%H -F --grep=\"#{clean_subj}\"", catch_err: true)
+                    output = runGit("log #{target_ref} #{time_filter} -n 5 --no-merges " +
+                                    "--format=%H -F --grep=\"#{clean_subj}\"", catch_err: true)
                     shas = output.split("\n").map(&:strip).reject(&:empty?)
                     if shas.length == 1
                         return Commit.new(shas.first, subject: entry[:subject],
