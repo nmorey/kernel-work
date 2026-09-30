@@ -2,150 +2,148 @@ require 'net/http'
 require 'uri'
 require 'json'
 
-module KernelWork
-    module CveCLI
-        # A lightweight, reusable client for interacting with the Bugzilla REST API
-        class BugzillaClient
-            # Default timeout for Bugzilla requests in seconds.
-            DEFAULT_TIMEOUT = 15
+module KernelWork::CveCLI
+    # A lightweight, reusable client for interacting with the Bugzilla REST API
+    class BugzillaClient
+        # Default timeout for Bugzilla requests in seconds.
+        DEFAULT_TIMEOUT = 15
 
-            attr_reader :url, :api_key
-            attr_accessor :timeout
+        attr_reader :url, :api_key
+        attr_accessor :timeout
 
-            # @param config [Hash] Client configuration (bugzilla_url, bugzilla_api_key, bugzilla_timeout, bugzilla_min_query_delay)
-            def initialize(config = {})
-                @url = config[:bugzilla_url] || "https://apibugzilla.suse.com"
-                @api_key = config[:bugzilla_api_key]
-                @timeout = (config[:bugzilla_timeout] || config[:timeout] || DEFAULT_TIMEOUT).to_i
-                @min_query_delay = (config[:bugzilla_min_query_delay] || 0.5).to_f
-                @last_query_time = Time.at(0)
+        # @param config [Hash] Client configuration (bugzilla_url, bugzilla_api_key, bugzilla_timeout, bugzilla_min_query_delay)
+        def initialize(config = {})
+            @url = config[:bugzilla_url] || "https://apibugzilla.suse.com"
+            @api_key = config[:bugzilla_api_key]
+            @timeout = (config[:bugzilla_timeout] || config[:timeout] || DEFAULT_TIMEOUT).to_i
+            @min_query_delay = (config[:bugzilla_min_query_delay] || 0.5).to_f
+            @last_query_time = Time.at(0)
 
-                # Fallback to .bugzillarc credentials if API key is not explicitly provided
-                if @api_key.nil? || @api_key.empty?
-                    bz_config = self.class.read_bugzillarc["apibugzilla.suse.com"] || {}
-                    @api_key = bz_config["api_key"]
-                end
+            # Fallback to .bugzillarc credentials if API key is not explicitly provided
+            if @api_key.nil? || @api_key.empty?
+                bz_config = self.class.read_bugzillarc["apibugzilla.suse.com"] || {}
+                @api_key = bz_config["api_key"]
             end
+        end
 
-            # Request wrapper to execute HTTP requests to the Bugzilla REST API
-            # @param path [String] Request sub-path (e.g., "bug" or "bug/12345")
-            # @param params [Hash] Additional query parameters
-            # @param method [Symbol] HTTP method (:get, :put, :post)
-            # @param body [Hash, String, nil] Request body payload (encoded to JSON if Hash)
-            # @return [Hash] Parsed JSON response body
-            # @raise [BugzillaTimeoutError] If the request times out
-            # @raise [BugzillaError] If the request or connection fails
-            def request(path, params = {}, method = :get, body = nil)
-                url = URI.parse("#{@url.chomp('/')}/rest/#{path}")
+        # Request wrapper to execute HTTP requests to the Bugzilla REST API
+        # @param path [String] Request sub-path (e.g., "bug" or "bug/12345")
+        # @param params [Hash] Additional query parameters
+        # @param method [Symbol] HTTP method (:get, :put, :post)
+        # @param body [Hash, String, nil] Request body payload (encoded to JSON if Hash)
+        # @return [Hash] Parsed JSON response body
+        # @raise [BugzillaTimeoutError] If the request times out
+        # @raise [BugzillaError] If the request or connection fails
+        def request(path, params = {}, method = :get, body = nil)
+            url = URI.parse("#{@url.chomp('/')}/rest/#{path}")
 
-                query_params = params.dup
-                query_params[:api_key] = @api_key if @api_key && !@api_key.empty?
-                url.query = URI.encode_www_form(query_params) unless query_params.empty?
+            query_params = params.dup
+            query_params[:api_key] = @api_key if @api_key && !@api_key.empty?
+            url.query = URI.encode_www_form(query_params) unless query_params.empty?
 
-                http = Net::HTTP.new(url.host, url.port)
-                http.use_ssl = true if url.scheme == 'https'
-                http.open_timeout = @timeout
-                http.read_timeout = @timeout
+            http = Net::HTTP.new(url.host, url.port)
+            http.use_ssl = true if url.scheme == 'https'
+            http.open_timeout = @timeout
+            http.read_timeout = @timeout
 
-                case method.to_sym.downcase
-                when :get
-                    req = Net::HTTP::Get.new(url.request_uri)
-                when :put
-                    req = Net::HTTP::Put.new(url.request_uri)
-                    req['Content-Type'] = 'application/json'
-                    if body
-                        payload = body.is_a?(Hash) ? body.dup : body
-                        if payload.is_a?(Hash) && @api_key && !@api_key.empty? && !payload.key?(:api_key)
-                            payload[:api_key] = @api_key
-                        end
-                        req.body = payload.is_a?(Hash) ? JSON.generate(payload) : payload.to_s
+            case method.to_sym.downcase
+            when :get
+                req = Net::HTTP::Get.new(url.request_uri)
+            when :put
+                req = Net::HTTP::Put.new(url.request_uri)
+                req['Content-Type'] = 'application/json'
+                if body
+                    payload = body.is_a?(Hash) ? body.dup : body
+                    if payload.is_a?(Hash) && @api_key && !@api_key.empty? && !payload.key?(:api_key)
+                        payload[:api_key] = @api_key
                     end
-                when :post
-                    req = Net::HTTP::Post.new(url.request_uri)
-                    req['Content-Type'] = 'application/json'
-                    if body
-                        payload = body.is_a?(Hash) ? body.dup : body
-                        if payload.is_a?(Hash) && @api_key && !@api_key.empty? && !payload.key?(:api_key)
-                            payload[:api_key] = @api_key
-                        end
-                        req.body = payload.is_a?(Hash) ? JSON.generate(payload) : payload.to_s
+                    req.body = payload.is_a?(Hash) ? JSON.generate(payload) : payload.to_s
+                end
+            when :post
+                req = Net::HTTP::Post.new(url.request_uri)
+                req['Content-Type'] = 'application/json'
+                if body
+                    payload = body.is_a?(Hash) ? body.dup : body
+                    if payload.is_a?(Hash) && @api_key && !@api_key.empty? && !payload.key?(:api_key)
+                        payload[:api_key] = @api_key
                     end
-                else
-                    raise BugzillaError.new("Unsupported HTTP method: #{method}")
+                    req.body = payload.is_a?(Hash) ? JSON.generate(payload) : payload.to_s
                 end
+            else
+                raise BugzillaError.new("Unsupported HTTP method: #{method}")
+            end
 
-                req['Accept'] = 'application/json'
-                req['X-BUGZILLA-API-KEY'] = @api_key if @api_key && !@api_key.empty?
+            req['Accept'] = 'application/json'
+            req['X-BUGZILLA-API-KEY'] = @api_key if @api_key && !@api_key.empty?
 
-                res = with_query_delay do
-                    begin
-                        http.request(req)
-                    rescue Net::OpenTimeout, Net::ReadTimeout, Timeout::Error
-                        raise BugzillaTimeoutError.new(@timeout)
-                    rescue SocketError, Errno::ECONNREFUSED, Errno::EHOSTUNREACH => e
-                        raise BugzillaError.new("Bugzilla connection failed: #{e.message}")
-                    end
-                end
-
-                if res.code =~ /^20\d$/
-                    res.body && !res.body.strip.empty? ? JSON.parse(res.body) : {}
-                else
-                    raise BugzillaError.new(res)
+            res = with_query_delay do
+                begin
+                    http.request(req)
+                rescue Net::OpenTimeout, Net::ReadTimeout, Timeout::Error
+                    raise BugzillaTimeoutError.new(@timeout)
+                rescue SocketError, Errno::ECONNREFUSED, Errno::EHOSTUNREACH => e
+                    raise BugzillaError.new("Bugzilla connection failed: #{e.message}")
                 end
             end
 
-            # Update a bug using a PUT request to the Bugzilla REST API
-            # @param bug_id [String, Integer] The Bugzilla bug ID
-            # @param data [Hash] Bug attributes to update
-            # @return [Hash] Parsed JSON response body
-            # @raise [BugzillaTimeoutError] If the request times out
-            # @raise [BugzillaError] If the request or connection fails
-            def update_bug(bug_id, data)
-                request("bug/#{bug_id}", {}, :put, data)
+            if res.code =~ /^20\d$/
+                res.body && !res.body.strip.empty? ? JSON.parse(res.body) : {}
+            else
+                raise BugzillaError.new(res)
             end
+        end
 
-            private
+        # Update a bug using a PUT request to the Bugzilla REST API
+        # @param bug_id [String, Integer] The Bugzilla bug ID
+        # @param data [Hash] Bug attributes to update
+        # @return [Hash] Parsed JSON response body
+        # @raise [BugzillaTimeoutError] If the request times out
+        # @raise [BugzillaError] If the request or connection fails
+        def update_bug(bug_id, data)
+            request("bug/#{bug_id}", {}, :put, data)
+        end
 
-            # Execute a block subject to minimum query delay cooldown
-            #
-            # Sleeps for the remaining cooldown time if necessary, yields to the block,
-            # and updates the last query timestamp upon completion.
-            #
-            # @yield Block executing the network query
-            # @return [Object] Result of yielding to the block
-            def with_query_delay
-                sleep([0.0, @last_query_time + @min_query_delay - Time.now].max)
-                yield
-            ensure
-                @last_query_time = Time.now
-            end
+        private
 
-            # Parse ~/.bugzillarc to find Bugzilla credentials
-            # @return [Hash] Config options hash
-            def self.read_bugzillarc
-                path = File.expand_path("~/.bugzillarc")
-                return {} unless File.exist?(path)
+        # Execute a block subject to minimum query delay cooldown
+        #
+        # Sleeps for the remaining cooldown time if necessary, yields to the block,
+        # and updates the last query timestamp upon completion.
+        #
+        # @yield Block executing the network query
+        # @return [Object] Result of yielding to the block
+        def with_query_delay
+            sleep([0.0, @last_query_time + @min_query_delay - Time.now].max)
+            yield
+        ensure
+            @last_query_time = Time.now
+        end
 
-                config = {}
-                current_section = nil
+        # Parse ~/.bugzillarc to find Bugzilla credentials
+        # @return [Hash] Config options hash
+        def self.read_bugzillarc
+            path = File.expand_path("~/.bugzillarc")
+            return {} unless File.exist?(path)
 
-                File.foreach(path) do |line|
-                    line = line.strip
-                    next if line.empty? || line.start_with?("#", ";")
+            config = {}
+            current_section = nil
 
-                    if line =~ /^\[(.*)\]$/
-                        current_section = $1
-                        config[current_section] = {}
-                    elsif line =~ /^([^=]+)=(.*)$/ && current_section
-                        key = $1.strip
-                        val = $2.strip
-                        val = val[1..-2] if val.start_with?('"') && val.end_with?('"')
-                        val = val[1..-2] if val.start_with?("'") && val.end_with?("'")
-                        config[current_section][key] = val
-                    end
+            File.foreach(path) do |line|
+                line = line.strip
+                next if line.empty? || line.start_with?("#", ";")
+
+                if line =~ /^\[(.*)\]$/
+                    current_section = $1
+                    config[current_section] = {}
+                elsif line =~ /^([^=]+)=(.*)$/ && current_section
+                    key = $1.strip
+                    val = $2.strip
+                    val = val[1..-2] if val.start_with?('"') && val.end_with?('"')
+                    val = val[1..-2] if val.start_with?("'") && val.end_with?("'")
+                    config[current_section][key] = val
                 end
-                config
             end
+            config
         end
     end
 end
