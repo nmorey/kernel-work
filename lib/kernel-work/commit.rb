@@ -4,6 +4,11 @@ require 'open3'
 module KernelWork
     # Represents a git commit with utility methods to retrieve metadata
     class Commit < Common
+
+        # Class cache for parsed series.
+        # Allows faster iteration through patches of the same series
+        @@series_cache={}
+
         # @!attribute [r] sha
         #   @return [String] The commit SHA
         # @!attribute [r] orig_tag
@@ -291,6 +296,12 @@ module KernelWork
         # @return [Array<Commit>] List of resolved commit objects in the patch series
         def patch_series()
             return @series if @series != nil
+
+            # Lookup in the cache if it exists
+            if @@series_cache[f_sha()] != nil
+                @series = @@series_cache[f_sha]
+                return @series
+            end
             @series = []
 
             target_ref = determine_target_ref()
@@ -333,6 +344,7 @@ module KernelWork
             # Cross-attach cached series array to all sibling commits in the series
             @series.each do |c|
                 c.series = @series if c.is_a?(Commit)
+                @@series_cache[c.f_sha] = @series
             end
 
             @series

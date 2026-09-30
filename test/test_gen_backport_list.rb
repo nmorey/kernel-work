@@ -505,7 +505,7 @@ end
 
 build_upstream = KernelWork::ScpBuildTestUpstream.new
 build_upstream.confirm_responses = ["y"]
-c_build = KernelWork::ScpTestCommit.new("5555555555555555555555555555555555555555", :subject => "Build test")
+c_build = KernelWork::ScpTestCommit.new("5555555555555555555555555555555555555555", :subject => "Build test", :safe_sha => true)
 build_opts = { :commits => [c_build], :build => true }
 
 build_upstream.scp(build_opts)
