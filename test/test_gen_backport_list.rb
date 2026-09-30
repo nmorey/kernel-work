@@ -407,6 +407,7 @@ module KernelWork
       @suse = Object.new
       def @suse.is_applied?(c); false; end
       def @suse.extract_single_patch(opts, c); true; end
+      def @suse.commit_ids; {}; end
     end
 
     # Prompt the user for confirmation (mocked)
@@ -527,7 +528,7 @@ module KernelWork
       @commit_ids = commit_ids
     end
 
-    def gen_commit_id_list(opts)
+    def commit_ids()
       @commit_ids
     end
   end

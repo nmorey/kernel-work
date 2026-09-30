@@ -408,7 +408,7 @@ module KernelWork
         # @param head [Array<Commit>] List of upstream commits
         # @return [Array<Commit>] Filtered list of commits
         def filterInHouse(opts, head)
-            suse_commit_ids = @suse.gen_commit_id_list(opts)
+            suse_commit_ids = @suse.commit_ids()
             # Filter the easy one first
             head.delete_if(){|x|
                 sha = x.f_sha
@@ -632,20 +632,14 @@ module KernelWork
         # @param block Optional per commit callback
         # @return [void]
         def _scp(opts, commits, &block)
-            suse_commit_ids = nil
-
             while ! commits.empty?
                 commit = commits.first
                 begin
                     log(:INFO, "# #{commits.length} commits left".grey())
 
-                    # Lazily load suse_commit_ids if commit has Fixes: tags
                     fixes = commit.fixes_shas()
-                    if !fixes.empty? && suse_commit_ids.nil?
-                        suse_commit_ids = @suse.gen_commit_id_list(opts)
-                    end
                     begin
-                        _scp_one(opts, commit, suse_commit_ids)
+                        _scp_one(opts, commit)
                         if block_given?
                             yield(commit)
                         end
@@ -661,10 +655,6 @@ module KernelWork
                         commits.replace(new_commits)
                         log(:INFO, "# Queued series (#{e.series.length} patches). #{commits.length} commits now in queue.")
                         next
-                    end
-
-                    if !suse_commit_ids.nil?
-                        suse_commit_ids[commit.sha] = true
                     end
 
                     commits.shift # Remove success from list
@@ -793,14 +783,13 @@ module KernelWork
         #
         # @param opts [Hash] Options hash
         # @param commit [Commit] The commit to backport
-        # @param suse_commit_ids [Hash, nil] Suse commit id list
         # @return [void]
         # @raise [ShaNotFoundError] If SHA is invalid
         # @raise [SCPSkip] If skipped
         # @raise [ShaNotCommitError] If commit is not a Commit object
         # @raise [PatchExtractionError] If patch extraction fails
         # @raise [SCPQueueSeries] If user chooses to queue the entire patch series
-        def _scp_one(opts, commit, suse_commit_ids = nil)
+        def _scp_one(opts, commit)
             rep="t"
             raise ShaNotCommitError.new() if !commit.is_a?(KernelWork::Commit)
 
@@ -827,10 +816,9 @@ module KernelWork
                     fixes_commit = KernelWork::Commit.new(f_sha)
                     begin
                         f_desc = fixes_commit.desc()
-                        if is_fixes_sha_in_house?(fixes_commit, suse_commit_ids)
+                        if is_fixes_sha_in_house?(fixes_commit)
                             log(:INFO, "  backported #{f_desc}")
-                        elsif suse_commit_ids != nil
-                            # Only show unbackported if we listed commt_ids
+                        else
                             log(:WARNING, "  unbackported #{f_desc}")
                         end
                     rescue ShaNotFoundError
@@ -898,14 +886,13 @@ module KernelWork
         # Check if the commit in the Fixes tag is on our branch
         #
         # @param fixes_commit [Commit] Commit in the fixes tag
-        # @param suse_commit_ids [Hash, nil] Suse commit id list
         # @return [bool] True is we have the breaker, false if we do not
-        def is_fixes_sha_in_house?(fixes_commit, suse_commit_ids)
+        def is_fixes_sha_in_house?(fixes_commit)
             # 1. Is it an ancestor of HEAD in LINUX_GIT?
             return true if fixes_commit.is_ancestor?("HEAD")
 
             # 2. Is it in the SUSE .patches directory?
-            if suse_commit_ids && suse_commit_ids[fixes_commit.f_sha] == true
+            if @suse.commit_ids[fixes_commit.f_sha] == true
                 return true
             end
 

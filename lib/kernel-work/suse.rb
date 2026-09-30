@@ -239,18 +239,6 @@ module KernelWork
             return toDoList
         end
 
-        # Generate a list of commit IDs already in the patch directory
-        # @param opts [Hash] Options hash
-        # @return [Hash] Hash with SHA keys and true values
-        def gen_commit_id_list(opts)
-            h={}
-            run("git grep Git-commit: patches.* | awk '{ print $NF}'").
-                chomp().split("\n").map(){|x|
-                h[x] = true
-            }
-            return h
-        end
-
         # Get the patch directory path
         # @return [String] Path to patch directory
         def get_patch_dir()
@@ -365,6 +353,19 @@ module KernelWork
             runGitInteractive(_list_unpushed_cmd(opts))
         end
 
+        # Gets a list of commit IDs already in the patch directory
+        # @return [Hash] Hash with SHA keys and true values
+        def commit_ids()
+            return @commit_ids if @commit_ids != nil
+
+            @commit_ids={}
+            run("git grep Git-commit: patches.* | awk '{ print $NF}'").
+                chomp().split("\n").map(){|x|
+                @commit_ids[x] = true
+            }
+            return @commit_ids
+        end
+
         #
         # ACTIONS
         #
@@ -432,6 +433,7 @@ module KernelWork
             commit.patch = patch
 
             _insert_and_commit_patch(opts, commit, patch)
+            @commit_ids[commit.sha] = true if @commit_ids != nil
         end
 
         # Extract patches action
