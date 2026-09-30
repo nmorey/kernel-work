@@ -437,15 +437,19 @@ module KernelWork
   end
 end
 
-c1 = KernelWork::ScpTestCommit.new("1111111111111111111111111111111111111111", :subject => "Patch 1")
-c2 = KernelWork::ScpTestCommit.new("2222222222222222222222222222222222222222", :subject => "Patch 2")
-c3 = KernelWork::ScpTestCommit.new("3333333333333333333333333333333333333333", :subject => "Patch 3")
+c1 = KernelWork::ScpTestCommit.new("1111111111111111111111111111111111111111", :subject => "Patch 1",
+                                   :safe_sha => true )
+c2 = KernelWork::ScpTestCommit.new("2222222222222222222222222222222222222222", :subject => "Patch 2",
+                                   :safe_sha => true )
+c3 = KernelWork::ScpTestCommit.new("3333333333333333333333333333333333333333", :subject => "Patch 3",
+                                   :safe_sha => true )
 series = [c1, c2, c3]
 c1.series = series
 c2.series = series
 c3.series = series
 
-c_extra = KernelWork::ScpTestCommit.new("4444444444444444444444444444444444444444", :subject => "Extra patch")
+c_extra = KernelWork::ScpTestCommit.new("4444444444444444444444444444444444444444", :subject => "Extra patch",
+                                   :safe_sha => true )
 c_extra.series = []
 
 upstream = KernelWork::ScpQueueTestUpstream.new

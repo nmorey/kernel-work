@@ -831,7 +831,11 @@ module KernelWork
                 log(:INFO, "Patch is part of a series:")
                 series.each do |series_commit|
                     str = series_commit.desc
-                    str = series_commit.desc.blue().bold() if commit.sha == series_commit.sha
+                    if commit.sha == series_commit.sha
+                        str = series_commit.desc.blue().bold()
+                    elsif has_commit?(series_commit) == true
+                        str = series_commit.desc.green()
+                    end
                     log(:INFO, "  #{str}")
                 end
             end
