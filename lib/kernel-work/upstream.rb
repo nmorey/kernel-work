@@ -637,7 +637,6 @@ module KernelWork
                 begin
                     log(:INFO, "# #{commits.length} commits left".grey())
 
-                    fixes = commit.fixes_shas()
                     begin
                         _scp_one(opts, commit)
                         if block_given?
