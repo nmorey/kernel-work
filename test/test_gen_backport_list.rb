@@ -60,7 +60,7 @@ module KernelWork
     def runGit(cmd, opts = {}, fatal = true)
       @git_calls << cmd
       @git_mocks.each do |pattern, response|
-        return response if cmd.include?(pattern)
+        return response.chomp if cmd.include?(pattern)
       end
       ""
     end
