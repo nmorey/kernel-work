@@ -110,8 +110,6 @@ module KernelWork
             when :scp
                 optsParser.on("-c", "--sha1 <SHA1>", String, "Commit to backport.") {
                     |val| opts[:commits] << KernelWork::Commit.new(val)}
-                optsParser.on("-C", "--cve", "Auto extract reference from VULNS."){
-                    |val| opts[:cve] = true }
                 optsParser.on("-f", "--file <FILE>", String, "File containing list of SHA1 to backport.") {
                     |val| opts[:file] = val }
                 optsParser.on("-B", "--build", "Build commit after applying.") {

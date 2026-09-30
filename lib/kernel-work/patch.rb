@@ -91,15 +91,8 @@ module KernelWork
         #
         # @return [void]
         def compute_ref(opts)
-            if opts[:cve] != true
-                @ref = @suse.default_patch_references(opts)
-                return
-            end
-
             refs = cve_refs()
             if refs.to_s() == "" then
-                # Warn and use fallback refs
-                log(:WARNING, "No CVE reference found")
                 @ref = @suse.default_patch_references(opts)
                 raise NoRefError.new() if @ref.to_s() == ""
             else

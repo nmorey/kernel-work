@@ -59,8 +59,6 @@ module KernelWork
                     |val| opts[:commits] << KernelWork::Commit.new(val)}
                 optsParser.on("-r", "--ref <ref>", String, "Bug reference.") {
                     |val| opts[:ref] = val}
-                optsParser.on("-C", "--cve", "Auto extract reference from VULNS."){
-                    |val| opts[:cve] = true }
                 optsParser.on("-i", "--ignore-tag", "Ignore missing tag or maintainer branch.") {
                     |val| opts[:ignore_tag] = true}
                 optsParser.on("-f", "--filename <file.patch>", "Custom patch filename.") {

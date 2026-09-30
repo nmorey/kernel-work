@@ -301,10 +301,7 @@ module KernelWork
                     return
                 end
 
-                scp_opts = opts.dup
-                scp_opts[:cve] = true
-
-                @upstream._scp(scp_opts, patchlist) do |commit, error = nil|
+                @upstream._scp(opts, patchlist) do |commit, error = nil|
                     next if error.class == SCPSkip
                     next if error.class == SCPNotApplied
 
