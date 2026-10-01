@@ -26,6 +26,11 @@ module KernelWork
             # @return [CveTracker] Assigned instance
             attr_writer :cve_tracker
 
+            # Set the Bugzilla client instance
+            # @param value [BugzillaClient] BugzillaClient instance
+            # @return [BugzillaClient] Assigned instance
+            attr_writer :bugzilla
+
             # Access the Linux domain model lazily
             # @return [Linux] Linux instance
             def linux
@@ -48,6 +53,12 @@ module KernelWork
             # @return [CveTracker] CveTracker instance
             def cve_tracker
                 @cve_tracker ||= CveTracker.create(KernelWork.config.cve.to_h, self)
+            end
+
+            # Access the Bugzilla client lazily
+            # @return [BugzillaClient] BugzillaClient instance
+            def bugzilla
+                @bugzilla ||= BugzillaClient.new(KernelWork.config.cve.to_h)
             end
         end
     end

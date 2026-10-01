@@ -152,8 +152,6 @@ module KernelWork
                 # Initialize a CveAction object
                 def initialize
                     @path = KernelWork.config.kernel_source_dir
-                    config = KernelWork.config.cve.to_h
-                    @bugzilla = BugzillaClient.new(config)
                 end
 
                 # Initialize repositories and determine current branch
@@ -240,7 +238,7 @@ module KernelWork
                         end
 
                         log(:INFO, "Reassigning #{cve_s} to #{assignee}...")
-                        @bugzilla.update_bug(cve.bug_id, {
+                        bugzilla.update_bug(cve.bug_id, {
                             assigned_to: assignee,
                             comment: {
                                 body: comment_msg,

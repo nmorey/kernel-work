@@ -37,16 +37,17 @@ module KernelWork
       @path = "."
       config = KernelWork.config.cve.to_h
       self.cve_tracker = KernelWork::CveTracker.create(config, self)
-      @bugzilla = BugzillaClient.new(config)
+      bz = BugzillaClient.new(config)
 
       # Delegate bugzilla client request to our local mock proc
-      class << @bugzilla
+      class << bz
         attr_accessor :test_cve_inst
         def request(path, params = {}, method = :get, body = nil)
           @test_cve_inst.bugzilla_request(path, params, method, body)
         end
       end
-      @bugzilla.test_cve_inst = self
+      bz.test_cve_inst = self
+      self.bugzilla = bz
     end
 
     def log(level, msg)

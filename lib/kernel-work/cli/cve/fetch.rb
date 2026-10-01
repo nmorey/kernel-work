@@ -31,7 +31,7 @@ module KernelWork
                         assigned_to: bz_user
                     }
 
-                    res = @bugzilla.request("bug", params)
+                    res = bugzilla.request("bug", params)
                     bugs = res["bugs"] || []
 
                     resolved_statuses = ["RESOLVED", "VERIFIED", "CLOSED"]
@@ -88,7 +88,7 @@ module KernelWork
                     bugs_to_fetch.each do |bug|
                         bug_id = bug["id"].to_s
                         log(:INFO, "Fetching comments #{updates_count + 1}/#{bugs_to_fetch.length} for Bug ##{bug_id}...")
-                        comments_response = @bugzilla.request("bug/#{bug_id}/comment")
+                        comments_response = bugzilla.request("bug/#{bug_id}/comment")
                         comments = comments_response["bugs"][bug_id]["comments"] || []
                         fix_info = parse_cve_comment(comments)
 
