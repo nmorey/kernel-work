@@ -212,7 +212,156 @@ Dir.mktmpdir do |dir|
   end
 end
 
-puts "Test Case 6 (Config linux and kernel_source access and DeprecatedConfigError) Passed"
+# Test Case 7: CLI::Kernel option ordering and commit resolution (-c, -b, -f)
+parser = OptionParser.new
+opts = {}
+KernelWork::CLI::Kernel.set_opts(:scp, parser, opts)
+parser.parse(["-c", "sha1", "-b", "12345", "-c", "sha2", "-b", "CVE-2026-9999"])
+
+raise "Option ordering not preserved" unless opts[:commits] == [
+  { type: :sha, value: "sha1" },
+  { type: :bug, value: "12345" },
+  { type: :sha, value: "sha2" },
+  { type: :bug, value: "CVE-2026-9999" }
+]
+
+extract_parser = OptionParser.new
+extract_opts = {}
+KernelWork::CLI::Kernel.set_opts(:extract_patch, extract_parser, extract_opts)
+extract_parser.parse(["-b", "bsc#12345", "-c", "sha3", "-F", "mypatch.patch", "-f", "mycommits.txt"])
+
+raise "Extract patch options not parsed" unless extract_opts[:commits] == [
+  { type: :bug, value: "bsc#12345" },
+  { type: :sha, value: "sha3" },
+  { type: :file, value: "mycommits.txt" }
+]
+raise "Extract patch filename not parsed" unless extract_opts[:filename] == "mypatch.patch"
+raise "Extract patch file not parsed" unless extract_opts[:file] == "mycommits.txt"
+
+# Test resolve_commits in execution environment
+TestHelper.with_test_repos do |env|
+  linux = env[:linux]
+  ks = env[:kernel_source]
+  cli = KernelWork::CLI::Kernel.new
+  cli.linux = linux
+  cli.kernel_source = ks
+  linux.instance_variable_set(:@branch, "master")
+  ks.branch = "master"
+
+  Dir.mktmpdir do |tracker_dir|
+    cves_dir = File.join(tracker_dir, "cves")
+    FileUtils.mkdir_p(cves_dir)
+    File.write(File.join(cves_dir, "12345.json"), JSON.pretty_generate({
+      bug_id: "12345",
+      cve: "CVE-2026-1234",
+      fix_sha: "1111111111111111111111111111111111111111",
+      summary: "Test bug 1",
+      distros: [],
+      branches: {}
+    }))
+    File.write(File.join(cves_dir, "99999.json"), JSON.pretty_generate({
+      bug_id: "99999",
+      cve: "CVE-2026-9999",
+      fix_sha: "2222222222222222222222222222222222222222",
+      summary: "Test bug 2",
+      distros: [],
+      branches: {}
+    }))
+    File.write(File.join(cves_dir, "88888.json"), JSON.pretty_generate({
+      bug_id: "88888",
+      cve: "CVE-2026-8888",
+      fix_sha: nil,
+      summary: "Test bug without sha",
+      distros: [],
+      branches: {}
+    }))
+
+    tracker = KernelWork::CveLocalTracker.new({ data_repo: tracker_dir })
+    cli.cve_tracker = tracker
+
+    # 1. Test resolving ordered options (-c, -b)
+    commits = cli.send(:resolve_commits, {
+      commits: [
+        { type: :sha, value: "sha1" },
+        { type: :bug, value: "12345" },
+        { type: :sha, value: "sha2" },
+        { type: :bug, value: "CVE-2026-9999" }
+      ]
+    })
+
+    raise "Wrong number of resolved commits" unless commits.length == 4
+    raise "Commit 0 sha mismatch" unless commits[0].sha == "sha1"
+    raise "Commit 1 sha mismatch" unless commits[1].sha == "1111111111111111111111111111111111111111"
+    raise "Commit 1 extra_desc mismatch" unless commits[1].extra_desc == "CVE-2026-1234 bsc#12345"
+    raise "Commit 2 sha mismatch" unless commits[2].sha == "sha2"
+    raise "Commit 3 sha mismatch" unless commits[3].sha == "2222222222222222222222222222222222222222"
+    raise "Commit 3 extra_desc mismatch" unless commits[3].extra_desc == "CVE-2026-9999 bsc#99999"
+
+    # 2. Test resolving with a file
+    file_path = File.join(tracker_dir, "commits.txt")
+    File.write(file_path, <<~EOF
+      # A comment
+      3333333333333333333333333333333333333333 # Subject text
+      CVE-2026-1234
+      4444444444444444444444444444444444444444
+    EOF
+    )
+
+    commits_file = cli.send(:resolve_commits, {
+      commits: [
+        { type: :sha, value: "sha_first" },
+        { type: :file, value: file_path },
+        { type: :sha, value: "sha_last" }
+      ]
+    })
+
+    raise "Wrong number of commits from file" unless commits_file.length == 5
+    raise "First commit mismatch" unless commits_file[0].sha == "sha_first"
+    raise "File commit 1 mismatch" unless commits_file[1].sha == "3333333333333333333333333333333333333333"
+    raise "File commit 2 (CVE) mismatch" unless commits_file[2].sha == "1111111111111111111111111111111111111111"
+    raise "File commit 3 mismatch" unless commits_file[3].sha == "4444444444444444444444444444444444444444"
+    raise "Last commit mismatch" unless commits_file[4].sha == "sha_last"
+
+    # 3. Test BugNotFoundError
+    begin
+      cli.send(:resolve_commits, { commits: [{ type: :bug, value: "999999" }] })
+      raise "BugNotFoundError not raised"
+    rescue KernelWork::BugNotFoundError
+      # Expected
+    end
+
+    # 4. Test FixShaNotFoundError
+    begin
+      cli.send(:resolve_commits, { commits: [{ type: :bug, value: "88888" }] })
+      raise "FixShaNotFoundError not raised"
+    rescue KernelWork::FixShaNotFoundError
+      # Expected
+    end
+
+    # 5. Test FileNotFoundError
+    begin
+      cli.send(:resolve_commits, { file: File.join(tracker_dir, "nonexistent.txt") })
+      raise "FileNotFoundError not raised"
+    rescue KernelWork::FileNotFoundError
+      # Expected
+    end
+
+    # 6. Test MissingArgumentError
+    begin
+      cli.scp({ commits: [] })
+      raise "MissingArgumentError not raised for scp"
+    rescue KernelWork::MissingArgumentError
+      # Expected
+    end
+    begin
+      cli.extract_patch({ commits: [] })
+      raise "MissingArgumentError not raised for extract_patch"
+    rescue KernelWork::MissingArgumentError
+      # Expected
+    end
+  end
+end
+
+puts "Test Case 7 (CLI::Kernel option ordering and commit resolution) Passed"
 
 puts "All CLI unit tests passed successfully!"
-

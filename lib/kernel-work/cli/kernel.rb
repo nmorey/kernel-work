@@ -99,14 +99,21 @@ module KernelWork
                 end
 
                 case action
+                when :scp, :extract_patch
+                    opts_parser.on("-c", "--sha1 <SHA1>", String, "Commit to backport.") { |val| opts[:commits] << { type: :sha, value: val } }
+                    opts_parser.on("-b", "--bug <bugzilla id or CVE>", String, "Bugzilla ID or CVE to backport.") { |val| opts[:commits] << { type: :bug, value: val } }
+                    opts_parser.on("-f", "--file <FILE>", String, "File containing list of SHA1 to backport.") { |val| opts[:file] = val; opts[:commits] << { type: :file, value: val } }
+                end
+
+                case action
                 when :source_rebase
                     opts_parser.on("-A", "--autofix", "Try to autofix series.conf.") { |_val| opts[:autofix] = true }
                     opts_parser.on("-I", "--no-interactive", "Rebase 'dumbly' not interactively.") { |_val| opts[:no_interactive] = true }
                 when :extract_patch
-                    opts_parser.on("-c", "--sha1 <SHA1>", String, "Commit to backport.") { |val| opts[:commits] << KernelWork::Commit.new(val) }
                     opts_parser.on("-r", "--ref <ref>", String, "Bug reference.") { |val| opts[:ref] = val }
                     opts_parser.on("-i", "--ignore-tag", "Ignore missing tag or maintainer branch.") { |_val| opts[:ignore_tag] = true }
-                    opts_parser.on("-f", "--filename <file.patch>", "Custom patch filename.") { |val| opts[:filename] = val }
+                    opts_parser.on("-F", "--filename <file.patch>", String, "Custom patch filename.") { |val| opts[:filename] = val }
+                    opts_parser.on("-o", "--output <file.patch>", String, "Custom patch filename.") { |val| opts[:filename] = val }
                     opts_parser.on("-P", "--patch-path <patch/dir/>", "Custom patch dir. Default is patches.suse unless overriden by branch settings") { |val| opts[:patch_path] = val }
                 when :push
                     opts_parser.on("-f", "--force", "Force push.") { |_val| opts[:force_push] = true }
@@ -118,8 +125,6 @@ module KernelWork
                 when :fix_ref
                     opts_parser.on("-r", "--ref <ref>", String, "Bug reference.") { |val| opts[:ref] = val }
                 when :scp
-                    opts_parser.on("-c", "--sha1 <SHA1>", String, "Commit to backport.") { |val| opts[:commits] << KernelWork::Commit.new(val) }
-                    opts_parser.on("-f", "--file <FILE>", String, "File containing list of SHA1 to backport.") { |val| opts[:file] = val }
                     BuildOpts.add_options(opts_parser, opts, with_build: true, with_compiler: false)
                 when :backport_todo
                     CommitFilter.add_options(opts_parser, opts)
@@ -167,12 +172,12 @@ module KernelWork
             # @return [void]
             # @raise [MissingArgumentError] If no commits are provided
             def extract_patch(opts)
-                if opts[:commits].empty?
-                    raise MissingArgumentError.new("No SHA1 provided")
+                commits = resolve_commits(opts)
+                if commits.empty?
+                    raise MissingArgumentError.new("No SHA1 or bug provided")
                 end
 
-                opts[:commits].each do |sha|
-                    commit = sha.is_a?(Commit) ? sha : Commit.new(sha, path: linux.path)
+                commits.each do |commit|
                     kernel_source.extract_single_patch(
                         commit,
                         ref: opts[:ref],
@@ -252,32 +257,19 @@ module KernelWork
             # @raise [FileNotFoundError] If the provided file does not exist
             # @raise [MissingArgumentError] If no commits are provided
             def scp(opts)
+                commits = resolve_commits(opts)
+                if commits.empty?
+                    raise MissingArgumentError.new("No SHA1 or bug provided")
+                end
+
                 linux.branch
                 kernel_source.branch
 
-                if opts[:file]
-                    if !File.exist?(opts[:file])
-                        raise FileNotFoundError.new(opts[:file])
-                    end
-                    opts[:commits] = File.readlines(opts[:file]).map do |l|
-                        l = l.strip
-                        next if l.empty?
-                        if l =~ /^([0-9a-f]+)\s+#(.*)$/
-                            Commit.new($1, subject: $2, path: linux.path)
-                        else
-                            Commit.new(l.split(/\s+/).first, path: linux.path)
-                        end
-                    end.compact
-                end
-
-                if opts[:commits].empty?
-                    raise MissingArgumentError.new("No SHA1 provided")
-                end
-
-                commits = opts[:commits].dup
+                opts[:commits] = commits
+                commits_to_backport = commits.dup
                 begin
                     workflow.backport_commits(
-                        commits,
+                        commits_to_backport,
                         build_opts: BuildOpts.from_opts(opts),
                         tracker: cve_tracker,
                         skip_broken: opts[:skip_broken],
@@ -286,7 +278,7 @@ module KernelWork
                         full_check: opts[:full_check]
                     )
                 ensure
-                    save_scp_commits(opts, commits)
+                    save_scp_commits(opts, commits_to_backport)
                 end
             end
 
@@ -394,6 +386,93 @@ module KernelWork
             end
 
             private
+
+            # Resolve commit and bug references from options into a list of Commit objects,
+            # preserving option order.
+            #
+            # @param opts [Hash] Options hash containing :commits and/or :file
+            # @return [Array<Commit>] List of resolved Commit objects
+            # @raise [FileNotFoundError] If a specified file does not exist
+            # @raise [BugNotFoundError] If a bug ID or CVE is not known to the local tracker
+            # @raise [FixShaNotFoundError] If a bug or CVE lacks a fix SHA
+            def resolve_commits(opts)
+                entries = (opts[:commits] || []).dup
+
+                if opts[:file] && entries.none? { |e| e.is_a?(Hash) && e[:type] == :file && e[:value] == opts[:file] }
+                    entries << { type: :file, value: opts[:file] }
+                end
+
+                resolved = []
+                entries.each do |entry|
+                    if entry.is_a?(Commit)
+                        resolved << entry
+                    elsif entry.is_a?(String)
+                        resolved << Commit.new(entry, path: linux.path)
+                    elsif entry.is_a?(Hash)
+                        case entry[:type]
+                        when :sha
+                            resolved << Commit.new(entry[:value], path: linux.path)
+                        when :bug
+                            cve = cve_tracker.read_id(entry[:value])
+                            sha = cve.fix_sha
+                            if sha.nil? || sha.empty?
+                                raise FixShaNotFoundError.new(cve.bug_id || entry[:value])
+                            end
+                            c = Commit.new(sha, path: linux.path)
+                            c.extra_desc = "#{cve.cve} bsc##{cve.bug_id}"
+                            c.data = cve
+                            resolved << c
+                        when :file
+                            file_path = entry[:value]
+                            raise FileNotFoundError.new(file_path) unless File.exist?(file_path)
+
+                            File.readlines(file_path).each do |line|
+                                line = line.strip
+                                next if line.empty? || line.start_with?("#")
+
+                                if line =~ /^([0-9a-f]+)\s+#(.*)$/
+                                    resolved << Commit.new($1, subject: $2, path: linux.path)
+                                else
+                                    token = line.split(/\s+/).first
+                                    if token =~ /^[0-9a-f]{40}$/i
+                                        resolved << Commit.new(token, path: linux.path)
+                                    elsif token =~ /^CVE-\d+/i || token =~ /^bsc#\d+/i
+                                        cve = cve_tracker.read_id(token)
+                                        sha = cve.fix_sha
+                                        if sha.nil? || sha.empty?
+                                            raise FixShaNotFoundError.new(cve.bug_id || token)
+                                        end
+                                        c = Commit.new(sha, path: linux.path)
+                                        c.extra_desc = "#{cve.cve} bsc##{cve.bug_id}"
+                                        c.data = cve
+                                        resolved << c
+                                    else
+                                        begin
+                                            if token =~ /^\d+$/
+                                                cve = cve_tracker.read_id(token)
+                                                sha = cve.fix_sha
+                                                if sha.nil? || sha.empty?
+                                                    raise FixShaNotFoundError.new(cve.bug_id || token)
+                                                end
+                                                c = Commit.new(sha, path: linux.path)
+                                                c.extra_desc = "#{cve.cve} bsc##{cve.bug_id}"
+                                                c.data = cve
+                                                resolved << c
+                                            else
+                                                resolved << Commit.new(token, path: linux.path)
+                                            end
+                                        rescue BugNotFoundError
+                                            resolved << Commit.new(token, path: linux.path)
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+
+                resolved
+            end
 
             # Save unhandled SCP commits back to a file if requested
             # @param opts [Hash] Options hash containing :file

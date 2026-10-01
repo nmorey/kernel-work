@@ -5,13 +5,25 @@ require_relative '../lib/kernel-work'
 
 # Helper methods and test harness fixtures for KernelWork unit tests
 module TestHelper
+  # List of git environment variables to isolate during tests
+  GIT_ENV_VARS = %w[
+    GIT_DIR
+    GIT_WORK_TREE
+    GIT_INDEX_FILE
+    GIT_OBJECT_DIRECTORY
+    GIT_ALTERNATE_OBJECT_DIRECTORIES
+    GIT_PREFIX
+    GIT_COMMON_DIR
+  ].freeze
+
   # Execute a git command in the target directory
   # @param dir [String] Working directory
   # @param cmd [String] Git command string
   # @return [String] Output of git command
   # @raise [RuntimeError] If git command fails
   def self.run_git(dir, cmd)
-    out, status = Open3.capture2e("git #{cmd}", chdir: dir)
+    env = GIT_ENV_VARS.map { |v| [v, nil] }.to_h
+    out, status = Open3.capture2e(env, "git #{cmd}", chdir: dir)
     raise "Git command 'git #{cmd}' failed in #{dir}:\n#{out}" unless status.success?
     out
   end
@@ -20,6 +32,9 @@ module TestHelper
   # @yieldparam env [Hash] Hash with :linux, :kernel_source, :workflow, :linux_dir, :ks_dir, :base_sha
   # @return [void]
   def self.with_test_repos
+    orig_git_env = GIT_ENV_VARS.map { |v| [v, ENV[v]] }.to_h
+    GIT_ENV_VARS.each { |v| ENV.delete(v) }
+
     Dir.mktmpdir("kernel-work-test-") do |tmp|
       linux_dir = File.join(tmp, "linux")
       kernel_source_dir = File.join(tmp, "kernel-source")
@@ -82,6 +97,7 @@ module TestHelper
           base_sha: base_sha
         })
       ensure
+        orig_git_env.each { |v, val| val ? ENV[v] = val : ENV.delete(v) }
         ENV["LINUX_GIT"] = orig_linux_env
         ENV["KERNEL_SOURCE_DIR"] = orig_ks_env
         KernelWork.instance_variable_set(:@config, orig_config)

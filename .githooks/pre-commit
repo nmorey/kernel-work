@@ -14,6 +14,7 @@ trap cleanup EXIT INT TERM HUP
 git checkout-index --prefix="$TMPDIR/" -a
 (
     cd $TMPDIR
+    unset $(git rev-parse --local-env-vars)
     rake
 )
 rm -Rf $TMPDIR

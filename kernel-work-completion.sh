@@ -45,12 +45,29 @@ _kernel_work_filter_opts(){
             COMPREPLY=( $(compgen -f -- "$cur") )
             return 0
             ;;
+        -f|--file|-F|-o|--filename|--output)
+            compopt -o filenames +o nospace
+            COMPREPLY=( $(compgen -f -- "$cur") )
+            return 0
+            ;;
         --filter)
             COMPREPLY=( $( compgen -W "$(kernel config filter list --raw 2>/dev/null )" -- "$cur" ) )
             return 0
             ;;
-        -b|--branch)
+        --branch)
             COMPREPLY=( $( compgen -W "$(kernel config branch list --raw 2>/dev/null )" -- "$cur" ) )
+            return 0
+            ;;
+        -b)
+            if [[ "${cmd[*]}" == *"branch"* ]]; then
+                COMPREPLY=( $( compgen -W "$(kernel config branch list --raw 2>/dev/null )" -- "$cur" ) )
+            else
+                COMPREPLY=()
+            fi
+            return 0
+            ;;
+        --bug)
+            COMPREPLY=()
             return 0
             ;;
         -a|--arch)
@@ -140,7 +157,7 @@ _kernel_work_build(){
     esac;
 }
 
-_kernel_work_extract_path(){
+_kernel_work_extract_patch(){
     local OPT_LIST=$(_kernel_work_genoptlist kernel extract_patch)
     _get_comp_words_by_ref cur
 
@@ -151,6 +168,10 @@ _kernel_work_extract_path(){
 	    __gitcomp_nl "$OPT_LIST"
 	    ;;
     esac;
+}
+
+_kernel_work_extract_path(){
+    _kernel_work_extract_patch "$@"
 }
 
 _kernel_work_cve(){
