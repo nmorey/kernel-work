@@ -14,7 +14,7 @@ KernelWork.run_cli(opts) do |parser, phase, action_opts|
         parser.on("-c", "--config-file FILE", "Specify an alternate config file path.") { |val| KernelWork::Config.custom_config_path = val }
         parser.on("-f", "--force-config", "Force the generation of a config file.") { |val| KernelWork::Config.force_generation = true }
     when :action
-        parser.on("-b", "--branch-suffix [SUFFIX]", "Branch suffix. Default is 'master'.") { |val| action_opts[:br_suff] = val }
+        true
     end
 end
 

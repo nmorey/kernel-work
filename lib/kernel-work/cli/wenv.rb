@@ -11,17 +11,32 @@ begin
         CLI_DESCRIPTION = "Manage work environments"
         CLI_HELP_EXPAND = "*** WENV commands ***"
     end
-rescue LoadError => e
+rescue LoadError => _e
     # WorkEnvs is not available on this system
-    p e
 end
 
 module KernelWork
+    module CLI
+        if defined?(WorkEnvs)
+            WEnv = WorkEnvs
+        else
+            # Stub module when WorkEnvs is not available
+            module WEnv
+                # Command name registered with CLIClassTool.
+                CLI_COMMAND_NAME = "env"
+                # Short description of the command.
+                CLI_DESCRIPTION = "Manage work environments"
+            end
+        end
+    end
+
     # Register WorkEnvs as a subcommand under 'env' if available
     if defined?(WorkEnvs)
         # Reference to the WorkEnvs module representing the work environment.
         # @return [Module] the WorkEnvs module alias
         Env = WorkEnvs
+        # Reference to WEnv in CLI namespace.
+        WEnv = CLI::WEnv
 
         # Define top-level command aliases dynamically expanded by CLIClassTool
         CLI_COMMAND_ALIASES = {
@@ -35,4 +50,3 @@ module KernelWork
         }
     end
 end
-

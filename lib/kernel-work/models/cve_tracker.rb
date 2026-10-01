@@ -4,7 +4,7 @@ require 'fileutils'
 require 'net/http'
 require 'uri'
 
-module KernelWork::CveCLI
+module KernelWork
     # Base CVE Tracker interface
     class CveTracker
         # Factory method to create a CVE tracker based on config.

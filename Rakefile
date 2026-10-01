@@ -29,8 +29,11 @@ end
 
 task :test do
   puts "Running tests..."
-  sh "ruby test/test_gen_backport_list.rb"
+  sh "ruby test/test_gen_filtered_list.rb"
   sh "ruby test/test_cve.rb"
+  sh "ruby test/test_kernel_source.rb"
+  sh "ruby test/test_workflow.rb"
+  sh "ruby test/test_cli.rb"
 end
 
 task :test_docker do

@@ -53,6 +53,10 @@ _kernel_work_filter_opts(){
             COMPREPLY=( $( compgen -W "$(kernel config branch list --raw 2>/dev/null )" -- "$cur" ) )
             return 0
             ;;
+        -a|--arch)
+            COMPREPLY=( $( compgen -W "x86_64 i386 s390x ppc64le arm aarch64 riscv64" -- "$cur" ) )
+            return 0
+            ;;
     esac
 
     if [[ "$cur" != -* ]] && _kernel_work_opt_takes_arg "$prev" "${cmd[@]}"; then

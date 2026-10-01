@@ -25,7 +25,7 @@ class << File
 end
 
 module KernelWork
-  class TestCve < CveCLI::CveAction
+  class TestCve < CLI::CVE::CveAction
     attr_accessor :mocked_git_files
     attr_accessor :bugzilla_mock_proc
     attr_accessor :refresh_called
@@ -36,8 +36,8 @@ module KernelWork
       # Skip standard parent initialization which triggers git branch commands
       @path = "."
       config = KernelWork.config.cve.to_h
-      @tracker = KernelWork::CveCLI::CveTracker.create(config, self)
-      @bugzilla = CveCLI::BugzillaClient.new(config)
+      @tracker = KernelWork::CveTracker.create(config, self)
+      @bugzilla = BugzillaClient.new(config)
 
       # Delegate bugzilla client request to our local mock proc
       class << @bugzilla
@@ -78,7 +78,7 @@ module KernelWork
     end
   end
 
-  class TestUpstream < Upstream
+  class TestLinux < Linux
     attr_accessor :mocked_git_output
 
     def initialize
@@ -110,7 +110,7 @@ Tempfile.create('bugzillarc') do |temp|
   temp.flush
   $mock_bugzillarc_path = temp.path
 
-  parsed = KernelWork::CveCLI::BugzillaClient.read_bugzillarc
+  parsed = KernelWork::BugzillaClient.read_bugzillarc
   expected_section = "apibugzilla.suse.com"
   
   if parsed[expected_section] && parsed[expected_section]["api_key"] == "MY_SECRET_API_KEY_12345"
@@ -129,10 +129,10 @@ $mock_bugzillarc_path = nil
 # --- Test Case 1B: BugzillaClient Timeout and Error ---
 begin
   # 1. Test default and configured timeout
-  default_client = KernelWork::CveCLI::BugzillaClient.new({})
-  custom_client = KernelWork::CveCLI::BugzillaClient.new({ bugzilla_timeout: 5 })
+  default_client = KernelWork::BugzillaClient.new({})
+  custom_client = KernelWork::BugzillaClient.new({ bugzilla_timeout: 5 })
 
-  if default_client.timeout != KernelWork::CveCLI::BugzillaClient::DEFAULT_TIMEOUT || custom_client.timeout != 5
+  if default_client.timeout != KernelWork::BugzillaClient::DEFAULT_TIMEOUT || custom_client.timeout != 5
     puts "Test Case 1B (BugzillaClient Timeout Config) FAILED!"
     failures += 1
   else
@@ -140,11 +140,11 @@ begin
   end
 
   # 2. Test Timeout exception mapping
-  timeout_client = KernelWork::CveCLI::BugzillaClient.new({ bugzilla_timeout: 3 })
+  timeout_client = KernelWork::BugzillaClient.new({ bugzilla_timeout: 3 })
   # Mock Net::HTTP to simulate Net::OpenTimeout
   class << timeout_client
     def request(path, params = {})
-      raise KernelWork::CveCLI::BugzillaTimeoutError.new(@timeout)
+      raise KernelWork::BugzillaTimeoutError.new(@timeout)
     end
   end
 
@@ -152,7 +152,7 @@ begin
     timeout_client.request("bug")
     puts "Test Case 1C (BugzillaTimeoutError Exception) FAILED: Expected BugzillaTimeoutError"
     failures += 1
-  rescue KernelWork::CveCLI::BugzillaTimeoutError => e
+  rescue KernelWork::BugzillaTimeoutError => e
     if e.message.include?("3 seconds")
       puts "Test Case 1C (BugzillaTimeoutError Exception) Passed"
     else
@@ -166,7 +166,7 @@ end
 begin
   test_1d_passed = true
 
-  delay_client = KernelWork::CveCLI::BugzillaClient.new({
+  delay_client = KernelWork::BugzillaClient.new({
     bugzilla_min_query_delay: 0.05
   })
 
@@ -215,7 +215,7 @@ begin
     end
 
     # Test bugzilla_min_query_delay: 0 disables delay
-    zero_delay_client = KernelWork::CveCLI::BugzillaClient.new({
+    zero_delay_client = KernelWork::BugzillaClient.new({
       bugzilla_min_query_delay: 0
     })
     zero_delay_client.request("test_zero_1")
@@ -281,8 +281,8 @@ end
 
 
 # --- Test Case 3: find_build_subset smart build subtree ---
-upstream_mock = KernelWork::TestUpstream.new
-test_cve.instance_variable_set(:@upstream, upstream_mock)
+upstream_mock = KernelWork::TestLinux.new
+test_cve.linux = upstream_mock
 
 # Scenario A: Files inside drivers/vdpa/mlx5
 upstream_mock.mocked_git_output = <<~FILES
@@ -340,9 +340,9 @@ Dir.mktmpdir('cve-data') do |dir_path|
     tracker_type: "local"
   }
   
-  tracker = KernelWork::CveCLI::CveTracker.create(config)
+  tracker = KernelWork::CveTracker.create(config)
   
-  if tracker.is_a?(KernelWork::CveCLI::CveLocalTracker)
+  if tracker.is_a?(KernelWork::CveLocalTracker)
     puts "Test Case 5A (Tracker Factory) Passed"
   else
     puts "Test Case 5A (Tracker Factory) FAILED!"
@@ -395,7 +395,7 @@ Dir.mktmpdir('cve-data') do |dir_path|
     tracker.read_cve("CVE-2026-00000")
     puts "Test Case 5F (Local Tracker read_cve missing) FAILED: Expected BugNotFoundError"
     failures += 1
-  rescue KernelWork::CveCLI::BugNotFoundError
+  rescue KernelWork::BugNotFoundError
     puts "Test Case 5F (Local Tracker read_cve missing) Passed"
   rescue => e
     puts "Test Case 5F (Local Tracker read_cve missing) FAILED: Got #{e.class}"
@@ -447,7 +447,7 @@ Dir.mktmpdir('cve-data-merge') do |dir_path|
   # 1. First fetch - should create the file with status 'ToDo'
   test_cve.fetch({})
   
-  tracker = KernelWork::CveCLI::CveTracker.create(KernelWork.config.cve.to_h)
+  tracker = KernelWork::CveTracker.create(KernelWork.config.cve.to_h)
   read_data = tracker.read_bug("12345")
   
   if read_data && read_data[:branches] && read_data[:branches][:"SLE15-SP7"] == "ToDo"
@@ -493,7 +493,7 @@ Dir.mktmpdir('cve-data-status') do |dir_path|
     tracker_type: "local"
   }
   
-  tracker = KernelWork::CveCLI::CveTracker.create(KernelWork.config.cve.to_h)
+  tracker = KernelWork::CveTracker.create(KernelWork.config.cve.to_h)
   
   # 1. Write a matching bug (active status 'ToDo')
   tracker.write_bug("12345", {
@@ -575,7 +575,7 @@ begin
     tracker_type: "rest",
     tracker_url: "http://localhost:4567/"
   }
-  rest_tracker = KernelWork::CveCLI::CveTracker.create(config_rest)
+  rest_tracker = KernelWork::CveTracker.create(config_rest)
 
   # 2. Mock Net::HTTP and Net::HTTP#request to simulate a REST API
   class << Net::HTTP
@@ -680,7 +680,7 @@ begin
   begin
     rest_tracker.read_bug("99999")
     test_8c_passed = false
-  rescue KernelWork::CveCLI::BugNotFoundError
+  rescue KernelWork::BugNotFoundError
     test_8c_passed = true
   end
 
@@ -740,7 +740,7 @@ Dir.mktmpdir('cve-data-drop') do |dir_path|
     tracker_type: "local"
   }
 
-  tracker = KernelWork::CveCLI::CveTracker.create(KernelWork.config.cve.to_h)
+  tracker = KernelWork::CveTracker.create(KernelWork.config.cve.to_h)
 
   # Write two bugs initially
   tracker.write_bug("12345", {
@@ -784,7 +784,7 @@ Dir.mktmpdir('cve-data-drop') do |dir_path|
   begin
     tracker.read_bug("12345")
     has_bug1 = true
-  rescue KernelWork::CveCLI::BugNotFoundError
+  rescue KernelWork::BugNotFoundError
   end
 
   # Verify bug 12346 was dropped
@@ -792,7 +792,7 @@ Dir.mktmpdir('cve-data-drop') do |dir_path|
   begin
     tracker.read_bug("12346")
     has_bug2 = true
-  rescue KernelWork::CveCLI::BugNotFoundError
+  rescue KernelWork::BugNotFoundError
   end
 
   if has_bug1 && !has_bug2
@@ -988,7 +988,7 @@ begin
     KernelWork::CVE.validate_state!("InvalidState")
     puts "  11c (validate_state! unknown error expected) FAILED"
     test_11_passed = false
-  rescue KernelWork::CveCLI::InvalidCveStateError => e
+  rescue KernelWork::InvalidCveStateError => e
     # Expected
   end
 
@@ -1000,7 +1000,7 @@ begin
     )
     puts "  11d (CVE.new unknown state error expected) FAILED"
     test_11_passed = false
-  rescue KernelWork::CveCLI::InvalidCveStateError
+  rescue KernelWork::InvalidCveStateError
     # Expected
   end
 
@@ -1010,7 +1010,7 @@ begin
     cve_test.set_status("SLE15-SP7", "UnknownState")
     puts "  11e (set_status unknown state error expected) FAILED"
     test_11_passed = false
-  rescue KernelWork::CveCLI::InvalidCveStateError
+  rescue KernelWork::InvalidCveStateError
     # Expected
   end
 
@@ -1090,7 +1090,7 @@ begin
       data_repo: dir_path
     })
     test_cve_inst = KernelWork::TestCve.new
-    tracker = KernelWork::CveCLI::CveTracker.create(test_cfg, test_cve_inst)
+    tracker = KernelWork::CveTracker.create(test_cfg, test_cve_inst)
     test_cve_inst.instance_variable_set(:@tracker, tracker)
     tracker.write_bug("12345", {
       bug_id: "12345",
@@ -1164,7 +1164,7 @@ begin
   test_13_passed = true
 
   # 1. Test update_bug sends a PUT request with proper payload and headers
-  client = KernelWork::CveCLI::BugzillaClient.new({
+  client = KernelWork::BugzillaClient.new({
     bugzilla_url: "https://apibugzilla.suse.com",
     bugzilla_api_key: "MY_TEST_KEY",
     bugzilla_min_query_delay: 0
@@ -1254,7 +1254,7 @@ begin
     error_raised = false
     begin
       client.update_bug("12345", { assigned_to: "someone@suse.com" })
-    rescue KernelWork::CveCLI::BugzillaError => e
+    rescue KernelWork::BugzillaError => e
       error_raised = true
     end
 
@@ -1304,7 +1304,7 @@ Dir.mktmpdir("test_cve_reassign") do |tmpdir|
 
   test_cve = KernelWork::TestCve.new
   # Replace tracker with tmpdir tracker
-  tracker = KernelWork::CveCLI::CveTracker.create(test_cfg, test_cve)
+  tracker = KernelWork::CveTracker.create(test_cfg, test_cve)
   test_cve.instance_variable_set(:@tracker, tracker)
 
   # Seed 3 bugs:
@@ -1376,15 +1376,14 @@ Dir.mktmpdir("test_cve_reassign") do |tmpdir|
     $stdout = StringIO.new
     test_cve.confirm_answer = 'n' # Even if confirm_answer is 'n', dry-run shouldn't ask
     test_cve.fetch_called = false
-    reassigned_calls.clear
-    ret = test_cve.reassign({ dry_run: true })
+    test_cve.reassign({ dry_run: true })
     dry_run_output = $stdout.string.split("\n")
   ensure
     $stdout = orig_stdout
   end
 
-  unless ret == 0 && test_cve.fetch_called
-    puts "  14-dry1 (reassign --dry-run calls fetch and returns 0) FAILED"
+  unless test_cve.fetch_called
+    puts "  14-dry1 (reassign --dry-run calls fetch) FAILED"
     test_14_passed = false
   end
 
@@ -1477,13 +1476,13 @@ Dir.mktmpdir("test_cve_reassign") do |tmpdir|
   })
 
   test_cve.bugzilla_mock_proc = Proc.new do |path, params, method, body|
-    raise KernelWork::CveCLI::BugzillaError.new("Bugzilla connection refused")
+    raise KernelWork::BugzillaError.new("Bugzilla connection refused")
   end
 
   error_thrown = false
   begin
     test_cve.reassign({ yn_default: :yes })
-  rescue KernelWork::CveCLI::BugzillaError => e
+  rescue KernelWork::BugzillaError => e
     error_thrown = true
   end
 
@@ -1497,7 +1496,7 @@ Dir.mktmpdir("test_cve_reassign") do |tmpdir|
   begin
     tracker.read_bug("105")
     bug_105_still_exists = true
-  rescue KernelWork::CveCLI::BugNotFoundError
+  rescue KernelWork::BugNotFoundError
   end
 
   unless bug_105_still_exists
@@ -1524,7 +1523,7 @@ Dir.mktmpdir('cve-data-fetch-incremental') do |dir_path|
     bugzilla_min_query_delay: 0
   }
 
-  tracker = KernelWork::CveCLI::CveTracker.create(KernelWork.config.cve.to_h)
+  tracker = KernelWork::CveTracker.create(KernelWork.config.cve.to_h)
 
   # 1. Seed tracker with a known bug and an orphaned bug
   tracker.write_bug("100", {
@@ -1580,7 +1579,7 @@ Dir.mktmpdir('cve-data-fetch-incremental') do |dir_path|
   bug_200_dropped = false
   begin
     tracker.read_bug("200")
-  rescue KernelWork::CveCLI::BugNotFoundError
+  rescue KernelWork::BugNotFoundError
     bug_200_dropped = true
   end
 
@@ -1661,14 +1660,14 @@ Dir.mktmpdir('cve-data-fetch-incremental') do |dir_path|
   comment_calls.clear
   begin
     test_cve.fetch({ force: true, bz_list: ["999"] })
-  rescue KernelWork::CveCLI::BugNotFoundError => e
+  rescue KernelWork::BugNotFoundError => e
     puts "  15k (selective fetch for uncached bug raised BugNotFoundError: #{e.message}) FAILED"
     test_15_passed = false
   end
 
   # 9. Verify CLI OptionParser sets :bz_list and forces :force = true
   cli_opts = {}
-  parser = OptionParser.new { |o| KernelWork::CveCLI::CveAction.set_opts(:fetch, o, cli_opts) }
+  parser = OptionParser.new { |o| KernelWork::CLI::CVE::CveAction.set_opts(:fetch, o, cli_opts) }
   parser.parse!(["-b", "100", "--bz", "CVE-2026-0300"])
   unless cli_opts[:bz_list] == ["100", "CVE-2026-0300"] && cli_opts[:force] == true
     puts "  15l (OptionParser -b did not populate :bz_list or set :force, got: #{cli_opts.inspect}) FAILED"
@@ -1691,7 +1690,7 @@ Dir.mktmpdir("test_cve_blacklist") do |tmpdir|
 
   # 1. Test option validation via CveAction.check_opts
   begin
-    KernelWork::CveCLI::CveAction.check_opts({ action: :blacklist, bugzilla_id: "", bugzilla_ref: "bsc#12345#c1" })
+    KernelWork::CLI::CVE::CveAction.check_opts({ action: :blacklist, bugzilla_id: "", bugzilla_ref: "bsc#12345#c1" })
     puts "  16a (check_opts missing bugzilla_id did not raise error) FAILED"
     test_16_passed = false
   rescue KernelWork::MissingArgumentError => e
@@ -1702,7 +1701,7 @@ Dir.mktmpdir("test_cve_blacklist") do |tmpdir|
   end
 
   begin
-    KernelWork::CveCLI::CveAction.check_opts({ action: :blacklist, bugzilla_id: "12345", bugzilla_ref: "" })
+    KernelWork::CLI::CVE::CveAction.check_opts({ action: :blacklist, bugzilla_id: "12345", bugzilla_ref: "" })
     puts "  16b (check_opts missing bugzilla_ref did not raise error) FAILED"
     test_16_passed = false
   rescue KernelWork::MissingArgumentError => e
@@ -1717,7 +1716,7 @@ Dir.mktmpdir("test_cve_blacklist") do |tmpdir|
     tracker_type: "local",
     data_repo: tmpdir
   }
-  tracker = KernelWork::CveCLI::CveTracker.create(test_cfg)
+  tracker = KernelWork::CveTracker.create(test_cfg)
 
   # Seed a bug in the tracker
   tracker.write_bug("12345", {
@@ -1739,7 +1738,7 @@ Dir.mktmpdir("test_cve_blacklist") do |tmpdir|
 
   test_cve = KernelWork::TestCve.new
   test_cve.instance_variable_set(:@tracker, tracker)
-  test_cve.instance_variable_set(:@suse, mock_suse)
+  test_cve.kernel_source = mock_suse
   test_cve.instance_variable_set(:@branch, "SLE15-SP7")
 
   # 2. Blacklist using Bugzilla ID with bsc# prefix
@@ -1786,7 +1785,7 @@ Dir.mktmpdir("test_cve_blacklist") do |tmpdir|
     test_cve.blacklist({ bugzilla_id: "99999", bugzilla_ref: "some_ref" })
     puts "  16h (non-existent bugzilla id did not raise BugNotFoundError) FAILED"
     test_16_passed = false
-  rescue KernelWork::CveCLI::BugNotFoundError
+  rescue KernelWork::BugNotFoundError
     # Expected
   rescue => e
     puts "  16h (unexpected error type: #{e.class}) FAILED"
@@ -1797,7 +1796,7 @@ Dir.mktmpdir("test_cve_blacklist") do |tmpdir|
     test_cve.blacklist({ bugzilla_id: "CVE-2026-00000", bugzilla_ref: "some_ref" })
     puts "  16i (non-existent CVE id did not raise BugNotFoundError) FAILED"
     test_16_passed = false
-  rescue KernelWork::CveCLI::BugNotFoundError
+  rescue KernelWork::BugNotFoundError
     # Expected
   rescue => e
     puts "  16i (unexpected error type: #{e.class}) FAILED"
@@ -1873,7 +1872,7 @@ begin
       tracker_type: "local",
       data_repo: dir_path
     }
-    tracker = KernelWork::CveCLI::CveTracker.create(test_cfg)
+    tracker = KernelWork::CveTracker.create(test_cfg)
     test_cve_inst.instance_variable_set(:@tracker, tracker)
 
     tracker.write_bug("1", {

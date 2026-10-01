@@ -14,7 +14,7 @@ module KernelWork
       linux_git_env_var: "LINUX_GIT",
       kernel_source_dir_env_var: "KERNEL_SOURCE_DIR",
       hyperlinks: true,
-      upstream: {
+      linux: {
         default_j_opt: "$(nproc --all --ignore=4)",
         remote: "SUSE",
         git_fixes_url: "http://fixes.prg2.suse.org/current/",
@@ -45,7 +45,7 @@ module KernelWork
             }
         }
       },
-      suse: {
+      kernel_source: {
         remote: "origin",
         # Default branches
         branches: [
@@ -118,28 +118,30 @@ module KernelWork
         @settings[:hyperlinks].nil? ? true : @settings[:hyperlinks]
     end
 
-    # Get the path to LINUX_GIT from environment
+    attr_writer :linux_git, :kernel_source_dir
+
+    # Get the path to LINUX_GIT from environment or override
     # @return [String, nil]
     def linux_git
-        ENV[linux_git_env_var].chomp if ENV[linux_git_env_var]
+        @linux_git || (ENV[linux_git_env_var].chomp if ENV[linux_git_env_var])
     end
 
-    # Get the path to KERNEL_SOURCE_DIR from environment
+    # Get the path to KERNEL_SOURCE_DIR from environment or override
     # @return [String, nil]
     def kernel_source_dir
-        ENV[kernel_source_dir_env_var].chomp if ENV[kernel_source_dir_env_var]
+        @kernel_source_dir || (ENV[kernel_source_dir_env_var].chomp if ENV[kernel_source_dir_env_var])
     end
 
-    # Access upstream specific configuration
+    # Access Linux specific configuration
     # @return [RecursiveConfig]
-    def upstream
-        RecursiveConfig.new(@settings[:upstream])
+    def linux
+        RecursiveConfig.new(@settings[:linux])
     end
 
-    # Access SUSE specific configuration
+    # Access kernel-source specific configuration
     # @return [RecursiveConfig]
-    def suse
-        RecursiveConfig.new(@settings[:suse])
+    def kernel_source
+        RecursiveConfig.new(@settings[:kernel_source])
     end
 
     # Access CVE specific configuration
@@ -153,6 +155,12 @@ module KernelWork
         file = config_file
         if File.exist?(file)
             loaded = YAML.load_file(file, symbolize_names: true) || {}
+            if loaded.key?(:upstream) || loaded.key?("upstream")
+                raise DeprecatedConfigError.new(:upstream, :linux)
+            end
+            if loaded.key?(:suse) || loaded.key?("suse")
+                raise DeprecatedConfigError.new(:suse, :kernel_source)
+            end
             deep_merge!(@settings, loaded)
         else
             save_config # Save defaults if no config exists

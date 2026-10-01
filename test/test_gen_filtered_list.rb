@@ -1,7 +1,7 @@
 require_relative '../lib/kernel-work'
 
 module KernelWork
-  class TestUpstream < Upstream
+  class TestLinux < Linux
     attr_reader :last_git_command
 
     def initialize
@@ -27,7 +27,7 @@ module KernelWork
     attr_writer :commit_message
 
     def initialize(sha, opts = {})
-      super(sha, opts)
+      super(sha, **opts)
     end
 
     def runGit(cmd, opts = {}, raise_error = true)
@@ -42,7 +42,7 @@ module KernelWork
     attr_accessor :git_mocks, :git_calls, :debug_logs
 
     def initialize(sha, opts = {})
-      super(sha, opts)
+      super(sha, **opts)
       @git_mocks = {}
       @git_calls = []
       @debug_logs = []
@@ -67,12 +67,12 @@ module KernelWork
   end
 end
 
-test = KernelWork::TestUpstream.new
+test = KernelWork::TestLinux.new
 
 failures = 0
 
 # Test Case 1: Standard paths only
-test.genBackportList("HEAD", "HEAD~1", { :paths => ["drivers/net", "drivers/ib"] })
+test.gen_filtered_list("HEAD", "HEAD~1", KernelWork::CommitFilter.new(paths: ["drivers/net", "drivers/ib"]))
 expected1 = "rev-list --no-merges HEAD ^HEAD~1 -- drivers/net drivers/ib | git log --stdin --no-walk --format=oneline"
 if test.last_git_command == expected1
   puts "Test Case 1 Passed"
@@ -84,7 +84,7 @@ else
 end
 
 # Test Case 2: Exclude paths only
-test.genBackportList("HEAD", "HEAD~1", { :exclude_paths => ["drivers/net/wireless"] })
+test.gen_filtered_list("HEAD", "HEAD~1", KernelWork::CommitFilter.new(exclude_paths: ["drivers/net/wireless"]))
 expected2 = "rev-list --no-merges HEAD ^HEAD~1 -- ':(exclude)drivers/net/wireless' | git log --stdin --no-walk --format=oneline"
 if test.last_git_command == expected2
   puts "Test Case 2 Passed"
@@ -96,7 +96,7 @@ else
 end
 
 # Test Case 3: Both paths and exclude paths
-test.genBackportList("HEAD", "HEAD~1", { :paths => ["drivers/net"], :exclude_paths => ["drivers/net/wireless"] })
+test.gen_filtered_list("HEAD", "HEAD~1", KernelWork::CommitFilter.new(paths: ["drivers/net"], exclude_paths: ["drivers/net/wireless"]))
 expected3 = "rev-list --no-merges HEAD ^HEAD~1 -- drivers/net ':(exclude)drivers/net/wireless' | git log --stdin --no-walk --format=oneline"
 if test.last_git_command == expected3
   puts "Test Case 3 Passed"
@@ -108,7 +108,7 @@ else
 end
 
 # Test Case 4: Exclude path already starting with :(exclude)
-test.genBackportList("HEAD", "HEAD~1", { :paths => ["drivers/net"], :exclude_paths => [":(exclude)drivers/net/wireless"] })
+test.gen_filtered_list("HEAD", "HEAD~1", KernelWork::CommitFilter.new(paths: ["drivers/net"], exclude_paths: [":(exclude)drivers/net/wireless"]))
 expected4 = "rev-list --no-merges HEAD ^HEAD~1 -- drivers/net ':(exclude)drivers/net/wireless' | git log --stdin --no-walk --format=oneline"
 if test.last_git_command == expected4
   puts "Test Case 4 Passed"
@@ -120,22 +120,34 @@ else
 end
 
 # Test Case 4B: Message filters (fixes, grep, author)
-test.genBackportList("HEAD", "HEAD~1", { :fixes => true, :grep => "mlx5", :author => "Alice" })
+test.gen_filtered_list("HEAD", "HEAD~1", KernelWork::CommitFilter.new(fixes: true, grep: "mlx5", author: "Alice"))
 expected4b = "rev-list --no-merges HEAD ^HEAD~1 | git log --stdin --no-walk --format=oneline --grep='Fixes:' --grep='mlx5' --author='Alice'"
 if test.last_git_command == expected4b
   puts "Test Case 4B Passed"
 else
-  puts "Test Case 4B FAILED!"
-  puts "  Expected: #{expected4b}"
-  puts "  Got:      #{test.last_git_command}"
   failures += 1
 end
+
+# Test Case 4C: gen_filtered_list requires a CommitFilter
+raised_arg_error = false
+begin
+  test.gen_filtered_list("HEAD", "HEAD~1", nil)
+rescue ArgumentError
+  raised_arg_error = true
+end
+if raised_arg_error
+  puts "Test Case 4C Passed"
+else
+  puts "Test Case 4C FAILED! Expected ArgumentError when filter is not a CommitFilter"
+  failures += 1
+end
+
 
 # Test Case 5: Option Parsing for base_ref with -B
 require 'optparse'
 parser = OptionParser.new
 opts = {}
-KernelWork::TestUpstream.set_opts(:backport_todo, parser, opts)
+KernelWork::CLI::Kernel.set_opts(:backport_todo, parser, opts)
 parser.parse!(["-B", "my-custom-base"])
 if opts[:base_ref] == "my-custom-base"
   puts "Test Case 5 Passed"
@@ -149,7 +161,7 @@ end
 # Test Case 6: Option Parsing for base_ref with --base-ref
 parser = OptionParser.new
 opts = {}
-KernelWork::TestUpstream.set_opts(:backport_todo, parser, opts)
+KernelWork::CLI::Kernel.set_opts(:backport_todo, parser, opts)
 parser.parse!(["--base-ref", "another-custom-base"])
 if opts[:base_ref] == "another-custom-base"
   puts "Test Case 6 Passed"
@@ -161,8 +173,10 @@ else
 end
 
 # Test Case 7: backport_todo behavior with custom base_ref
-opts = { :upstream_ref => "origin/master", :base_ref => "custom-base-branch", :filter => {} }
-test.backport_todo(opts)
+opts = { :upstream_ref => "origin/master", :base_ref => "custom-base-branch", :filter => KernelWork::CommitFilter.new }
+cli = KernelWork::CLI::Kernel.new
+cli.linux = test
+cli.backport_todo(opts)
 expected7 = "rev-list --no-merges origin/master ^custom-base-branch | git log --stdin --no-walk --format=oneline"
 if test.last_git_command == expected7
   puts "Test Case 7 Passed"
@@ -174,8 +188,8 @@ else
 end
 
 # Test Case 8: backport_todo behavior with default base_ref (nil) falling back to local_branch()
-opts = { :upstream_ref => "origin/master", :base_ref => nil, :filter => {} }
-test.backport_todo(opts)
+opts = { :upstream_ref => "origin/master", :base_ref => nil, :filter => KernelWork::CommitFilter.new }
+cli.backport_todo(opts)
 expected8 = "rev-list --no-merges origin/master ^mock-local-branch | git log --stdin --no-walk --format=oneline"
 if test.last_git_command == expected8
   puts "Test Case 8 Passed"
@@ -389,51 +403,36 @@ if File.exist?(fixture_path)
   end
 end
 
-# Test Case 14: SCPQueueSeries raised on 'a' and processed by _scp
+# Test Case 14: SCPQueueSeries raised on 'a' and processed by backport_commits
 module KernelWork
   class ScpTestCommit < Commit
     def fixes_shas; []; end
     def desc; "#{@sha[0..11]} (\"#{@subject}\")"; end
   end
 
-  class ScpQueueTestUpstream < TestUpstream
-    attr_accessor :processed_commits, :confirm_responses, :allowed_reps_seen
+  class TestWorkflow < Workflow
+    attr_accessor :processed_commits, :confirm_responses, :allowed_reps_seen, :built_commits
 
-    def initialize
-      super
+    def initialize(linux, kernel_source)
+      super(linux: linux, kernel_source: kernel_source)
       @processed_commits = []
+      @built_commits = []
       @confirm_responses = []
       @allowed_reps_seen = []
-      @suse = Object.new
-      def @suse.is_applied?(c); false; end
-      def @suse.extract_single_patch(opts, c); true; end
-      def @suse.commit_ids; {}; end
     end
 
-    # Prompt the user for confirmation (mocked)
-    #
-    # @param opts [Hash] Options hash
-    # @param msg [String] Confirmation message
-    # @param confirm_opts [Hash] Optional confirmation options
-    # @return [String] User response
     def confirm(opts, msg, confirm_opts = {})
       @allowed_reps_seen << confirm_opts[:allowed_reps]
       @confirm_responses.shift || "y"
     end
 
-    def _cherry_pick_one(opts, commit)
-      @processed_commits << commit
-    end
-
-    def _tune_last_patch(opts)
+    def tune_last_patch(full_check: false)
       # no-op
     end
 
     def log(level, msg)
       # suppress test noise
     end
-
-    public :_scp_one
   end
 end
 
@@ -452,28 +451,42 @@ c_extra = KernelWork::ScpTestCommit.new("444444444444444444444444444444444444444
                                    :safe_sha => true )
 c_extra.series = []
 
-upstream = KernelWork::ScpQueueTestUpstream.new
+mock_linux = Object.new
+def mock_linux.path; "."; end
+def mock_linux.runGitInteractive(*); ""; end
+def mock_linux.cherry_pick_one(commit, skip_broken: false); @wf.processed_commits << commit; end
+def mock_linux.build_commit(commit, *args, **kwargs); @wf.built_commits << commit; end
+def mock_linux.is_ancestor?(*); false; end
 
-# 1. Test _scp_one directly when user selects 'a'
-upstream.confirm_responses = ["a"]
+mock_suse = Object.new
+def mock_suse.path; "."; end
+def mock_suse.is_applied?(c); false; end
+def mock_suse.extract_single_patch(*); true; end
+def mock_suse.commit_ids; {}; end
+
+wf = KernelWork::TestWorkflow.new(mock_linux, mock_suse)
+mock_linux.instance_variable_set(:@wf, wf)
+
+# 1. Test backport_single_commit directly when user selects 'a'
+wf.confirm_responses = ["a"]
 raised = false
 t14_ok_exception = false
 begin
-  upstream._scp_one({}, c2)
+  wf.backport_single_commit(c2)
 rescue KernelWork::SCPQueueSeries => e
   raised = true
   t14_ok_exception = (e.series == series)
 end
 
-# 2. Test _scp queue restructuring on 'a'
-upstream.confirm_responses = ["a", "y", "y", "y", "y"]
+# 2. Test backport_commits queue restructuring on 'a'
+wf.confirm_responses = ["a", "y", "y", "y", "y"]
 queue = [c2, c_extra]
-upstream._scp({}, queue)
+wf.backport_commits(queue)
 
 t14_ok = raised &&
          t14_ok_exception &&
-         upstream.allowed_reps_seen.first.include?("a") &&
-         upstream.processed_commits.map(&:sha) == [c1.sha, c2.sha, c3.sha, c_extra.sha] &&
+         wf.allowed_reps_seen.first.include?("a") &&
+         wf.processed_commits.map(&:sha) == [c1.sha, c2.sha, c3.sha, c_extra.sha] &&
          queue.empty?
 
 if t14_ok
@@ -481,49 +494,29 @@ if t14_ok
 else
   puts "Test Case 14 FAILED!"
   puts "  Raised SCPQueueSeries: #{raised}"
-  puts "  Processed commits: #{upstream.processed_commits.map(&:sha)}"
+  puts "  Processed commits: #{wf.processed_commits.map(&:sha)}"
   puts "  Expected commits:  #{[c1.sha, c2.sha, c3.sha, c_extra.sha]}"
   failures += 1
 end
 
-# Test Case 15: scp with opts[:build] invokes build_commit
-module KernelWork
-  class ScpBuildTestUpstream < ScpQueueTestUpstream
-    attr_accessor :built_commits
-
-    def initialize
-      super
-      @built_commits = []
-    end
-
-    def branch
-      "mock-branch"
-    end
-
-    def build_commit(opts, commit)
-      @built_commits << commit
-      0
-    end
-  end
-end
-
-build_upstream = KernelWork::ScpBuildTestUpstream.new
-build_upstream.confirm_responses = ["y"]
+# Test Case 15: backport_commits with build: true invokes build_commit
+wf_build = KernelWork::TestWorkflow.new(mock_linux, mock_suse)
+mock_linux.instance_variable_set(:@wf, wf_build)
+wf_build.confirm_responses = ["y"]
 c_build = KernelWork::ScpTestCommit.new("5555555555555555555555555555555555555555", :subject => "Build test", :safe_sha => true)
-build_opts = { :commits => [c_build], :build => true }
 
-build_upstream.scp(build_opts)
+wf_build.backport_commits([c_build], build_opts: KernelWork::LinuxBuildOpts.new(build: true))
 
-if build_upstream.built_commits.map(&:sha) == [c_build.sha]
+if wf_build.built_commits.map(&:sha) == [c_build.sha]
   puts "Test Case 15 Passed"
 else
   puts "Test Case 15 FAILED!"
   puts "  Expected built commits: #{[c_build.sha]}"
-  puts "  Got built commits:      #{build_upstream.built_commits.map(&:sha)}"
+  puts "  Got built commits:      #{wf_build.built_commits.map(&:sha)}"
   failures += 1
 end
 
-# Test Case 16: filterInHouse filtering logic with suse_commit_ids, exclude, and include
+# Test Case 16: filter_in_house filtering logic with suse commit_ids, exclude, and include
 module KernelWork
   class MockSuseCommitTracker
     attr_accessor :commit_ids
@@ -536,13 +529,6 @@ module KernelWork
       @commit_ids
     end
   end
-
-  class FilterInHouseTestUpstream < Upstream
-    def initialize(mock_suse)
-      @path = "."
-      @suse = mock_suse
-    end
-  end
 end
 
 c_normal = KernelWork::Commit.new("1111111111111111111111111111111111111111", safe_sha: true)
@@ -550,17 +536,16 @@ c_in_house = KernelWork::Commit.new("2222222222222222222222222222222222222222", 
 c_excluded = KernelWork::Commit.new("3333333333333333333333333333333333333333", safe_sha: true)
 c_forced = KernelWork::Commit.new("4444444444444444444444444444444444444444", safe_sha: true)
 
-mock_suse = KernelWork::MockSuseCommitTracker.new({
+mock_suse_16 = KernelWork::MockSuseCommitTracker.new({
   c_in_house.sha => true,
   c_forced.sha => true
 })
-filter_upstream = KernelWork::FilterInHouseTestUpstream.new(mock_suse)
-filter_opts = {
-  :backport_exclude => [c_excluded],
-  :backport_include => [c_forced]
-}
+mock_linux_16 = Object.new
+def mock_linux_16.is_ancestor?(*); false; end
+
+wf_filter = KernelWork::Workflow.new(linux: mock_linux_16, kernel_source: mock_suse_16)
 head_commits = [c_normal, c_in_house, c_excluded, c_forced]
-filter_upstream.filterInHouse(filter_opts, head_commits)
+wf_filter.filter_in_house(head_commits, include_shas: [c_forced], exclude_shas: [c_excluded])
 
 if head_commits.map(&:sha) == [c_normal.sha, c_forced.sha]
   puts "Test Case 16 Passed"

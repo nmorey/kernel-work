@@ -2,7 +2,7 @@ require 'net/http'
 require 'uri'
 require 'json'
 
-module KernelWork::CveCLI
+module KernelWork
     # A lightweight, reusable client for interacting with the Bugzilla REST API
     class BugzillaClient
         # Default timeout for Bugzilla requests in seconds.

@@ -173,4 +173,80 @@ module KernelWork
     class PatchSubsetNotFoundError < KernelWorkError
     end
 
+    # Exception raised when bugzilla request fails
+    class BugzillaError < KernelWorkError
+        # Initialize a new BugzillaError
+        # @param res_or_msg [Object, String] Bugzilla request error or message
+        def initialize(res_or_msg)
+            if res_or_msg.respond_to?(:code) && res_or_msg.respond_to?(:body)
+                super("Bugzilla request failed with code #{res_or_msg.code}: #{res_or_msg.body}")
+            else
+                super(res_or_msg.to_s)
+            end
+        end
+    end
+
+    # Exception raised when Bugzilla request times out
+    class BugzillaTimeoutError < BugzillaError
+        # Initialize a new BugzillaTimeoutError
+        # @param timeout [Integer, Float] The timeout duration in seconds
+        def initialize(timeout)
+            super("Bugzilla request timed out after #{timeout} seconds")
+        end
+    end
+
+    # Exception raised when no fix sha is found in a bugzilla report
+    class FixShaNotFoundError < KernelWorkError
+        # Initialize a new FixShaNotFound
+        # @param bug_id [String] Bugzilla bug id
+        def initialize(bug_id)
+            super("Unable to find Fix SHA for Bug ##{bug_id}")
+        end
+    end
+
+    # Exception when bug was not found
+    class BugNotFoundError < KernelWorkError
+    end
+
+    # Exception when bug JSON was not parsable
+    class CorruptedJSONError < KernelWorkError
+    end
+
+    # Exception raised when REST request fails
+    class RestError < KernelWorkError
+        # Initialize a new RestError
+        # @param query [String] Query type
+        # @param res [Object] REST request error
+        def initialize(query, res)
+            if res.respond_to?(:code) && res.respond_to?(:body)
+                super("REST request #{query} failed with code #{res.code}: #{res.body}")
+            else
+                super("REST request #{query} failed: #{res}")
+            end
+        end
+    end
+
+    # Exception when REST query are triggered but URL is not configured
+    class RestURLNotSetError < KernelWorkError
+    end
+
+    # Exception raised when a CVE branch state is invalid
+    class InvalidCveStateError < KernelWorkError
+        # Initialize a new InvalidCveStateError
+        # @param state [String] The invalid state value
+        def initialize(state)
+            super("Invalid CVE state '#{state}'")
+        end
+    end
+
+    # Exception raised when obsolete configuration keys are detected
+    class DeprecatedConfigError < KernelWorkError
+        # Initialize a new DeprecatedConfigError
+        # @param key [String, Symbol] The obsolete configuration key
+        # @param replacement [String, Symbol] The recommended replacement key
+        def initialize(key, replacement)
+            super("Deprecated configuration key '#{key}' found in configuration. Please update config.yml to use '#{replacement}'.")
+        end
+    end
+
 end

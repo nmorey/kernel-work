@@ -37,31 +37,29 @@ module KernelWork
         # Initialize a new Commit object
         #
         # @param sha [String] The commit SHA
-        # @param opts [Hash] Options hash
-        # @option opts [String, nil] :subject The commit subject (optional)
-        # @option opts [String, nil] :patch_id The patch ID (optional)
-        # @option opts [String, nil] :path The git repository path (defaults to KernelWork.config.linux_git)
-        # @option opts [String, nil] :extra_desc Additional description text (optional)
-        # @option opts [Object, nil] :data Associated arbitrary data or CVE object (optional)
-        # @option opts [Array<Commit>, nil] :series Cached patch series commits (optional)
-        # @option opts [String, nil] :message Commit message (optional)
-        # @option opts [String, nil] :author Commit author (optional)
-        # @option opts [String, nil] :commit_time Commit time (optional)
-        # @option opts [Bool, nil] :safe_sha If true, assume sha is valid full length SHA (optional)
-        def initialize(sha, opts = {})
-            opts ||= {}
-            @path = opts[:path] || KernelWork.config.linux_git
+        # @param subject [String, nil] The commit subject (optional)
+        # @param patch_id [String, nil] The patch ID (optional)
+        # @param path [String, nil] The git repository path (defaults to KernelWork.config.linux_git)
+        # @param extra_desc [String, nil] Additional description text (optional)
+        # @param data [Object, nil] Associated arbitrary data or CVE object (optional)
+        # @param series [Array<Commit>, nil] Cached patch series commits (optional)
+        # @param message [String, nil] Commit message (optional)
+        # @param author [String, nil] Commit author (optional)
+        # @param commit_time [Integer, nil] Commit time (optional)
+        # @param safe_sha [Boolean] If true, assume sha is valid full length SHA (optional)
+        def initialize(sha, path: nil, subject: nil, patch_id: nil, extra_desc: nil, data: nil, series: nil, message: nil, author: nil, commit_time: nil, safe_sha: false)
+            @path = path || KernelWork.config.linux_git
             @sha = sha
-            @subject = opts[:subject]
-            @patch_id = opts[:patch_id]
-            @extra_desc = opts[:extra_desc]
-            @data = opts[:data]
-            @series = opts[:series]
-            @message = opts[:message]
-            @author = opts[:author]
-            @commit_time = opts[:commit_time]
+            @subject = subject
+            @patch_id = patch_id
+            @extra_desc = extra_desc
+            @data = data
+            @series = series
+            @message = message
+            @author = author
+            @commit_time = commit_time
             @patchname = []
-            @f_sha = @sha if opts[:safe_sha] == true
+            @f_sha = @sha if safe_sha == true
         end
 
         # Retrieve the subject of the commit
@@ -122,21 +120,19 @@ module KernelWork
 
         # Check if the commit info is valid and present in tags or maintainer branches
         #
-        # @param opts [Hash] Options hash
-        # @option opts [Boolean] :ignore_tag Whether to ignore missing tags
+        # @param ignore_tag [Boolean] Whether to ignore missing tags
         # @return [void]
         # @raise [PatchInfoError] If commit is not in any tag/repo and ignore_tag is false
-        def check_patch_info(opts)
-            f_sha()
-            get_mainline()
+        def check_patch_info(ignore_tag: false)
+            f_sha
+            get_mainline
 
-            if @orig_tag == nil then
-                if opts[:ignore_tag] != true then
+            if @orig_tag == nil
+                if ignore_tag != true
                     raise PatchInfoError.new("Commit is not contained in any tag nor maintainer repo")
                 else
                     @f_sha = ""
-                    @orig_tag="Never, in-house patch"
-
+                    @orig_tag = "Never, in-house patch"
                 end
             end
         end
@@ -410,8 +406,8 @@ module KernelWork
             return "master" if is_ancestor?("master")
 
             # 3. Check maintainer branches from config
-            if KernelWork.config.upstream && KernelWork.config.upstream.maintainer_branches
-                KernelWork.config.upstream.maintainer_branches.each do |br|
+            if KernelWork.config.linux && KernelWork.config.linux.maintainer_branches
+                KernelWork.config.linux.maintainer_branches.each do |br|
                     return br if is_ancestor?(br)
                 end
             end
@@ -557,12 +553,12 @@ module KernelWork
                                      each().grep(/remotes\//).map(){|x|
                      x.lstrip.split(/[ \t]/)[0].gsub(/remotes\//,'')}.
                                      each(){|r|
-                     idx = KernelWork.config.upstream.maintainer_branches.index(r)
+                     idx = KernelWork.config.linux.maintainer_branches.index(r)
                      next if idx ==nil
 
-                     log(:INFO, "Found it in #{KernelWork.config.upstream.maintainer_branches[idx]}")
+                     log(:INFO, "Found it in #{KernelWork.config.linux.maintainer_branches[idx]}")
                      @orig_tag = "Queued in subsystem maintainer repository"
-                     remote=KernelWork.config.upstream.maintainer_branches[idx].gsub(/\/.*/,'')
+                     remote=KernelWork.config.linux.maintainer_branches[idx].gsub(/\/.*/,'')
                      @git_repo=runGit("config remote.#{remote}.url")
                      return
                  }

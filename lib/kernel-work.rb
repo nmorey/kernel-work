@@ -4,25 +4,34 @@ require 'readline'
 require 'cli_class_tool'
 
 require_relative 'kernel-work/error'
-require_relative 'kernel-work/kv'
-require_relative 'kernel-work/config'
 require_relative 'kernel-work/common'
 
 ###
-# Common objects
+# Models (domain classes)
 ###
-require_relative 'kernel-work/commit'
-require_relative 'kernel-work/config_cli'
-require_relative 'kernel-work/cve'
-require_relative 'kernel-work/patch'
+require_relative 'kernel-work/models/kv'
+require_relative 'kernel-work/models/config'
+require_relative 'kernel-work/models/commit'
+require_relative 'kernel-work/models/patch'
+require_relative 'kernel-work/models/bugzilla'
+require_relative 'kernel-work/models/cve_tracker'
+require_relative 'kernel-work/models/cve'
+require_relative 'kernel-work/models/commit_filter'
+require_relative 'kernel-work/models/linux_build_opts'
+require_relative 'kernel-work/models/linux'
+require_relative 'kernel-work/models/kernel_source'
+require_relative 'kernel-work/models/workflow'
 
 ###
-# Action Classes
+# CLI Controllers
 ###
-require_relative 'kernel-work/upstream'
-require_relative 'kernel-work/suse'
-require_relative 'kernel-work/wenv'
-require_relative 'kernel-work/cve_cli'
+require_relative 'kernel-work/cli/build_opts'
+require_relative 'kernel-work/cli/commit_filter'
+require_relative 'kernel-work/cli/model_access'
+require_relative 'kernel-work/cli/kernel'
+require_relative 'kernel-work/cli/config'
+require_relative 'kernel-work/cli/wenv'
+require_relative 'kernel-work/cli/cve'
 
 # Namespace for the Kernel Work tool suite.
 #
@@ -31,6 +40,15 @@ require_relative 'kernel-work/cve_cli'
 module KernelWork
   # The list of primary action classes included in the KernelWork module.
   # @return [Array<Class>] list of action classes
-  ACTION_CLASS = [ Suse, Upstream ]
+  ACTION_CLASS = [ CLI::Kernel ]
+
+  # Subcommand actions registry for CLIClassTool routing
+  # @return [Hash{String => Module}] mapping of subcommand names to CLI modules
+  CLI_SUB_ACTIONS = {
+    "cve"    => CLI::CVE,
+    "config" => CLI::Config,
+    "env"    => CLI::WEnv,
+  }
+
   extend CLIClassTool::Utils
 end

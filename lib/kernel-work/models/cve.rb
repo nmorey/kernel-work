@@ -26,7 +26,7 @@ module KernelWork
         # Validate that a state is a recognized workflow state and return its canonical form
         # @param state [String, Symbol, nil] The state value to validate
         # @return [String] The normalized state string
-        # @raise [CveCLI::InvalidCveStateError] If the state is unknown
+        # @raise [InvalidCveStateError] If the state is unknown
         def self.validate_state!(state)
             state_str = state.to_s.strip
             return "" if state_str.empty?
@@ -34,13 +34,13 @@ module KernelWork
             canonical = VALID_STATES.find { |s| s.casecmp?(state_str) }
             return canonical if canonical
 
-            raise CveCLI::InvalidCveStateError.new(state)
+            raise InvalidCveStateError.new(state)
         end
 
         # Validate that a state is a recognized workflow state and return its canonical form
         # @param state [String, Symbol, nil] The state value to validate
         # @return [String] The normalized state string
-        # @raise [CveCLI::InvalidCveStateError] If the state is unknown
+        # @raise [InvalidCveStateError] If the state is unknown
         def validate_state!(state)
             self.class.validate_state!(state)
         end
@@ -53,7 +53,7 @@ module KernelWork
             text = (text || state).to_s
             norm_state = begin
                 validate_state!(state)
-            rescue CveCLI::InvalidCveStateError
+            rescue InvalidCveStateError
                 state.to_s
             end
 
@@ -88,7 +88,7 @@ module KernelWork
 
         # Initialize a new CVE instance
         # @param attributes [Hash, CVE] The attributes hash or CVE instance
-        # @raise [CveCLI::InvalidCveStateError] If any branch state is unknown
+        # @raise [InvalidCveStateError] If any branch state is unknown
         def initialize(attributes = {})
             @bug_id = ""
             @cve = nil
@@ -102,7 +102,7 @@ module KernelWork
 
         # Copy attributes into internal fields from a Hash or CVE instance
         # @param attributes [Hash, CVE, nil] Attributes to copy
-        # @raise [CveCLI::InvalidCveStateError] If any branch state is unknown
+        # @raise [InvalidCveStateError] If any branch state is unknown
         # @return [CVE] self
         def copy(attributes)
             return self if attributes.nil?
@@ -133,7 +133,7 @@ module KernelWork
             begin
                 latest = @tracker.read_bug(@bug_id)
                 copy(latest) if latest
-            rescue CveCLI::BugNotFoundError
+            rescue BugNotFoundError
                 # Bug not found in tracker yet, retain current in-memory state
             end
             self
@@ -179,7 +179,7 @@ module KernelWork
         # Update the status of a specific branch
         # @param branch [String, Symbol] The branch name
         # @param status [String, Symbol] The new status value
-        # @raise [CveCLI::InvalidCveStateError] If the state is unknown
+        # @raise [InvalidCveStateError] If the state is unknown
         # @return [String]
         def set_status(branch, status)
             norm_status = self.class.validate_state!(status)
@@ -243,11 +243,10 @@ module KernelWork
         #
         # Optionally formats the output as an OSC 8 terminal hyperlink pointing to Bugzilla.
         #
-        # @param opts [Hash] Formatting options
-        # @option opts [Boolean] :hyperlinks Whether to format the string as a terminal hyperlink (defaults to KernelWork.config.hyperlinks)
+        # @param hyperlinks [Boolean, nil] Whether to format the string as a terminal hyperlink (defaults to Config#hyperlinks)
         # @return [String] The formatted string representation
-        def to_s(opts={})
-            use_hyperlinks = opts.key?(:hyperlinks) ? opts[:hyperlinks] : KernelWork.config.hyperlinks
+        def to_s(hyperlinks: nil)
+            use_hyperlinks = hyperlinks.nil? ? KernelWork.config.hyperlinks : hyperlinks
             bz_web_url = KernelWork.config.cve.bugzilla_url.sub("apibugzilla.", "bugzilla.") ||
                          "https://bugzilla.suse.com"
             raw_cve_str = "#{@cve} bsc##{@bug_id}"
