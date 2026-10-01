@@ -153,7 +153,6 @@ module KernelWork
                 def initialize
                     @path = KernelWork.config.kernel_source_dir
                     config = KernelWork.config.cve.to_h
-                    @tracker = CveTracker.create(config, self)
                     @bugzilla = BugzillaClient.new(config)
                 end
 
@@ -173,7 +172,7 @@ module KernelWork
                 # @param opts [Hash] Options hash containing :bugzilla_id and :bugzilla_ref.
                 # @return [void]
                 def blacklist(opts)
-                    cve = @tracker.read_id(opts[:bugzilla_id])
+                    cve = cve_tracker.read_id(opts[:bugzilla_id])
                     kernel_source.runSystem("./scripts/cve_tools/blacklist-cve add #{cve.cve} #{branch} '#{opts[:bugzilla_ref]}'")
                     cve.set_status(branch, KernelWork::CVE::STATE_BLACKLISTED)
                 end
@@ -206,7 +205,7 @@ module KernelWork
                 def reassign(opts)
                     fetch(opts) if opts[:fetch] != false
 
-                    cve_files = @tracker.read_all
+                    cve_files = cve_tracker.read_all
                     if cve_files.empty?
                         log(:INFO, "No CVE tracking data found.")
                         return
@@ -249,7 +248,7 @@ module KernelWork
                             }
                         })
 
-                        @tracker.delete_bug(cve.bug_id)
+                        cve_tracker.delete_bug(cve.bug_id)
                         log(:INFO, "Successfully reassigned #{cve_s} to #{assignee} and dropped from tracker.")
                         reassigned_count += 1
                     end

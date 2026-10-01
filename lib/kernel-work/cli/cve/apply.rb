@@ -9,7 +9,7 @@ module KernelWork
                 # @return [void]
                 def apply(opts)
                     initialize_repo
-                    cve_files = @tracker.read_all
+                    cve_files = cve_tracker.read_all
                     if cve_files.empty?
                         log(:INFO, "No CVE tracking data found.")
                         return
@@ -24,7 +24,7 @@ module KernelWork
                     workflow.backport_commits(
                         patchlist,
                         build_opts: BuildOpts.from_opts(opts),
-                        tracker: @tracker,
+                        tracker: cve_tracker,
                         skip_broken: opts[:skip_broken],
                         yn_default: opts[:yn_default],
                         ref: opts[:ref],

@@ -9,7 +9,7 @@ module KernelWork
                 # @return [void]
                 def refresh(_opts)
                     initialize_repo
-                    all_cves = @tracker.read_all.select do |cve|
+                    all_cves = cve_tracker.read_all.select do |cve|
                         cve.get_status(branch) != nil
                     end
 

@@ -46,13 +46,13 @@ module KernelWork
                     if opts[:force]
                         if bz_list.empty?
                             log(:INFO, "Force option specified. Clearing tracking data...")
-                            @tracker.delete_all
+                            cve_tracker.delete_all
                         else
                             log(:INFO, "Force option specified. Clearing tracking data for bugs #{bz_list.join(' ')}...")
                             bz_list.each do |bz|
                                 begin
-                                    cve = @tracker.read_id(bz)
-                                    @tracker.delete_bug(cve.bug_id)
+                                    cve = cve_tracker.read_id(bz)
+                                    cve_tracker.delete_bug(cve.bug_id)
                                 rescue BugNotFoundError
                                     # Ignore if we do not know this one
                                 end
@@ -60,12 +60,12 @@ module KernelWork
                         end
                     end
 
-                    local_bugs = @tracker.read_all
+                    local_bugs = cve_tracker.read_all
                     local_ids = local_bugs.map { |bug| bug[:bug_id].to_s }
                     orphaned_ids = local_ids - fetched_ids
                     unless orphaned_ids.empty?
                         log(:INFO, "Dropping #{orphaned_ids.length} reassigned/resolved bug(s) from cache: #{orphaned_ids.join(', ')}")
-                        orphaned_ids.each { |bug_id| @tracker.delete_bug(bug_id) }
+                        orphaned_ids.each { |bug_id| cve_tracker.delete_bug(bug_id) }
                     end
 
                     if filtered_bugs.empty?
@@ -99,7 +99,7 @@ module KernelWork
 
                         # Prepare/merge with existing local data
                         begin
-                            existing_data = @tracker.read_bug(bug_id)
+                            existing_data = cve_tracker.read_bug(bug_id)
                             branches = existing_data ? existing_data.branches : {}
                         rescue BugNotFoundError
                             existing_data = nil
@@ -119,9 +119,9 @@ module KernelWork
                             fix_sha: fix_info[:mainstream_sha],
                             distros: fix_info[:distros],
                             branches: branches,
-                            tracker: @tracker,
+                            tracker: cve_tracker,
                         )
-                        @tracker.write_bug(bug_id, bug_data)
+                        cve_tracker.write_bug(bug_id, bug_data)
                         updates_count += 1
                     end
 

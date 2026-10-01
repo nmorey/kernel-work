@@ -36,7 +36,7 @@ module KernelWork
       # Skip standard parent initialization which triggers git branch commands
       @path = "."
       config = KernelWork.config.cve.to_h
-      @tracker = KernelWork::CveTracker.create(config, self)
+      self.cve_tracker = KernelWork::CveTracker.create(config, self)
       @bugzilla = BugzillaClient.new(config)
 
       # Delegate bugzilla client request to our local mock proc
@@ -1091,7 +1091,7 @@ begin
     })
     test_cve_inst = KernelWork::TestCve.new
     tracker = KernelWork::CveTracker.create(test_cfg, test_cve_inst)
-    test_cve_inst.instance_variable_set(:@tracker, tracker)
+    test_cve_inst.cve_tracker = tracker
     tracker.write_bug("12345", {
       bug_id: "12345",
       cve: "CVE-2026-00001",
@@ -1305,7 +1305,7 @@ Dir.mktmpdir("test_cve_reassign") do |tmpdir|
   test_cve = KernelWork::TestCve.new
   # Replace tracker with tmpdir tracker
   tracker = KernelWork::CveTracker.create(test_cfg, test_cve)
-  test_cve.instance_variable_set(:@tracker, tracker)
+  test_cve.cve_tracker = tracker
 
   # Seed 3 bugs:
   # Bug 101: Fully merged/resolved across all target branches (using Merged and Blacklisted)
@@ -1737,7 +1737,7 @@ Dir.mktmpdir("test_cve_blacklist") do |tmpdir|
   mock_suse.define_singleton_method(:upstream) { nil }
 
   test_cve = KernelWork::TestCve.new
-  test_cve.instance_variable_set(:@tracker, tracker)
+  test_cve.cve_tracker = tracker
   test_cve.kernel_source = mock_suse
   test_cve.instance_variable_set(:@branch, "SLE15-SP7")
 
@@ -1873,7 +1873,7 @@ begin
       data_repo: dir_path
     }
     tracker = KernelWork::CveTracker.create(test_cfg)
-    test_cve_inst.instance_variable_set(:@tracker, tracker)
+    test_cve_inst.cve_tracker = tracker
 
     tracker.write_bug("1", {
       bug_id: "1",

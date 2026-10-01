@@ -47,7 +47,7 @@ module KernelWork
             # Access the CVE tracker domain model lazily
             # @return [CveTracker] CveTracker instance
             def cve_tracker
-                @cve_tracker ||= (defined?(@tracker) && @tracker) ? @tracker : CveTracker.create(KernelWork.config.cve.to_h)
+                @cve_tracker ||= CveTracker.create(KernelWork.config.cve.to_h, self)
             end
         end
     end

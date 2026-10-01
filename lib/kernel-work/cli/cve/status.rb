@@ -8,7 +8,7 @@ module KernelWork
                 # @param opts [Hash] Options hash
                 # @return [void]
                 def status(opts)
-                    cve_files = @tracker.read_all
+                    cve_files = cve_tracker.read_all
 
                     if cve_files.empty?
                         log(:INFO, "No CVE tracking data found.")
