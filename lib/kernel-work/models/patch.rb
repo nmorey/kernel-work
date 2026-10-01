@@ -178,7 +178,7 @@ module KernelWork
                 file.puts "Git-commit: #{@commit.f_sha}"
                 file.flush
 
-                @kernel_source.runSystem("suse-add-cves  -v $VULNS_GIT  #{file.path}")
+                @kernel_source.run_suse_add_cves(file.path)
                 file.reopen(file.path, 'r')
 
                 file.each do |line|

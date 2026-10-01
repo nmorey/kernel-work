@@ -82,4 +82,33 @@ TestHelper.with_test_repos do |env|
   puts "Test Case 3 (Patch Model API) Passed"
 end
 
+# Test Case 4: CVE reference extraction via run_suse_add_cves
+TestHelper.with_test_repos do |env|
+  linux = env[:linux]
+  ks = env[:kernel_source]
+  linux_dir = env[:linux_dir]
+
+  File.write(File.join(linux_dir, "cve_fix.c"), "int fixed = 1;\n")
+  TestHelper.run_git(linux_dir, "add cve_fix.c")
+  TestHelper.run_git(linux_dir, "commit -m 'security fix'")
+  sha = TestHelper.run_git(linux_dir, "rev-parse HEAD").strip
+  commit = KernelWork::Commit.new(sha, path: linux_dir)
+
+  # Override run_suse_add_cves to simulate finding a CVE reference
+  ks.define_singleton_method(:run_suse_add_cves) do |file_path|
+    File.open(file_path, "a") do |f|
+      f.puts "References: bsc#123456 CVE-2026-99999"
+    end
+  end
+
+  patch = KernelWork::Patch.new(ks, commit)
+  refs = patch.send(:cve_refs)
+  raise "Expected CVE references from suse-add-cves, got: #{refs.inspect}" unless refs == "bsc#123456 CVE-2026-99999"
+
+  patch.compute_ref
+  raise "Expected patch.ref to be populated from cve_refs, got: #{patch.ref.inspect}" unless patch.ref == "bsc#123456 CVE-2026-99999"
+
+  puts "Test Case 4 (CVE reference extraction via run_suse_add_cves) Passed"
+end
+
 puts "All KernelSource and Patch tests passed successfully!"

@@ -84,6 +84,9 @@ module TestHelper
 
       linux = KernelWork::Linux.new(linux_dir)
       kernel_source = KernelWork::KernelSource.new(kernel_source_dir)
+      kernel_source.define_singleton_method(:run_suse_add_cves) do |_file_path|
+        # In test environments, suse-add-cves is not available; default to no-op
+      end
       workflow = KernelWork::Workflow.new(linux: linux, kernel_source: kernel_source)
 
       begin

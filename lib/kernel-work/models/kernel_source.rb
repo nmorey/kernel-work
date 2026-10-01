@@ -475,5 +475,12 @@ module KernelWork
             unpushed_commits
             runGitInteractive("push #{p_opts}")
         end
+
+        # Run suse-add-cves on a file to query/update CVE references
+        # @param file_path [String] Path to file containing Git-commit header
+        # @return [void]
+        def run_suse_add_cves(file_path)
+            runSystem("suse-add-cves  -v $VULNS_GIT  #{file_path}")
+        end
     end
 end
