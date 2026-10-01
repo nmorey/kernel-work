@@ -34,6 +34,11 @@ module KernelWork
             end
         end
 
+        # Set the current branch name
+        # @param value [String] Branch name
+        # @return [String] Assigned branch name
+        attr_writer :branch
+
         # Get current branch
         # @return [String] Branch name
         # @raise [UnknownBranch] If branch is not detected

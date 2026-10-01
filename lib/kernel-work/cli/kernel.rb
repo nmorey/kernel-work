@@ -279,6 +279,7 @@ module KernelWork
                     workflow.backport_commits(
                         commits,
                         build_opts: BuildOpts.from_opts(opts),
+                        tracker: cve_tracker,
                         skip_broken: opts[:skip_broken],
                         yn_default: opts[:yn_default],
                         ref: opts[:ref],

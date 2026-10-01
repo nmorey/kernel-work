@@ -95,6 +95,7 @@ module KernelWork
         # Orchestrate backporting a sequence of commits across Linux and KernelSource
         # @param commits [Array<Commit>] List of commits to backport
         # @param build_opts [LinuxBuildOpts] Build options object
+        # @param tracker [CveTracker, nil] Optional CVE tracker to record status updates
         # @param skip_broken [Boolean] Automatically skip patches that fail to apply
         # @param yn_default [Symbol, nil] Default auto-reply (:yes or :no)
         # @param ref [String, nil] Reference string override
@@ -102,7 +103,7 @@ module KernelWork
         # @yieldparam commit [Commit] Current commit being processed
         # @yieldparam error [Exception, nil] Error encountered if any
         # @return [void]
-        def backport_commits(commits, build_opts: LinuxBuildOpts.new, skip_broken: false, yn_default: nil, ref: nil, full_check: false, &block)
+        def backport_commits(commits, build_opts: LinuxBuildOpts.new, tracker: nil, skip_broken: false, yn_default: nil, ref: nil, full_check: false, &block)
             b_opts = build_opts || LinuxBuildOpts.new
 
             while !commits.empty?
@@ -115,8 +116,12 @@ module KernelWork
                         if b_opts.build
                             @linux.build_commit(commit, b_opts)
                         end
+                        update_cve_status(commit, tracker: tracker) if tracker
                         yield(commit, nil) if block_given?
-                    rescue SCPSkip, SCPAlreadyApplied, SCPNotApplied => e
+                    rescue SCPAlreadyApplied => e
+                        update_cve_status(commit, tracker: tracker) if tracker
+                        yield(commit, e) if block_given?
+                    rescue SCPSkip, SCPNotApplied => e
                         yield(commit, e) if block_given?
                     rescue SCPQueueSeries => e
                         commits.shift
@@ -279,6 +284,26 @@ module KernelWork
             end
 
             tune_last_patch(full_check: full_check)
+        end
+
+        # Update the status of any tracked CVEs referenced by a commit to Applied
+        # @param commit [Commit] The commit that was processed
+        # @param tracker [CveTracker, nil] CVE tracker instance
+        # @return [void]
+        def update_cve_status(commit, tracker:)
+            return unless tracker
+
+            patch = commit.patch
+            return unless patch && patch.ref
+
+            patch.ref.scan(/(CVE-[0-9]+-[0-9]+)/) do |(cve_id)|
+                begin
+                    cve = tracker.read_cve(cve_id)
+                    cve.set_status(@kernel_source.branch, CVE::STATE_APPLIED)
+                rescue BugNotFoundError
+                    # Not in our tracker pool, ignore
+                end
+            end
         end
     end
 end

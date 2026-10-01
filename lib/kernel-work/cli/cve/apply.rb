@@ -24,33 +24,12 @@ module KernelWork
                     workflow.backport_commits(
                         patchlist,
                         build_opts: BuildOpts.from_opts(opts),
+                        tracker: @tracker,
                         skip_broken: opts[:skip_broken],
                         yn_default: opts[:yn_default],
                         ref: opts[:ref],
                         full_check: opts[:full_check]
-                    ) do |commit, error|
-                        next if error.is_a?(SCPSkip) || error.is_a?(SCPNotApplied)
-
-                        cve = nil
-                        patch = commit.patch
-                        if patch && patch.ref =~ /(CVE-[0-9]+-[0-9]+)/
-                            begin
-                                cve = @tracker.read_cve($1)
-                            rescue BugNotFoundError
-                                # Not a CVE in our pool. Ignore it
-                            end
-                        end
-
-                        new_state = nil
-                        if error.nil?
-                            new_state = KernelWork::CVE::STATE_APPLIED
-                        elsif error.is_a?(SCPAlreadyApplied)
-                            new_state = KernelWork::CVE::STATE_APPLIED
-                        end
-
-                        next if cve.nil? || new_state.nil?
-                        cve.set_status(branch, new_state)
-                    end
+                    )
                 end
 
                 private

@@ -21,6 +21,11 @@ module KernelWork
             # @return [Workflow] Assigned instance
             attr_writer :workflow
 
+            # Set the CVE tracker domain model instance
+            # @param value [CveTracker] CveTracker instance
+            # @return [CveTracker] Assigned instance
+            attr_writer :cve_tracker
+
             # Access the Linux domain model lazily
             # @return [Linux] Linux instance
             def linux
@@ -37,6 +42,12 @@ module KernelWork
             # @return [Workflow] Workflow instance
             def workflow
                 @workflow ||= Workflow.new(linux: linux, kernel_source: kernel_source)
+            end
+
+            # Access the CVE tracker domain model lazily
+            # @return [CveTracker] CveTracker instance
+            def cve_tracker
+                @cve_tracker ||= (defined?(@tracker) && @tracker) ? @tracker : CveTracker.create(KernelWork.config.cve.to_h)
             end
         end
     end

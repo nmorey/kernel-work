@@ -158,4 +158,56 @@ TestHelper.with_test_repos do |env|
   puts "Test Case 4 (Workflow with BuildOpts) Passed"
 end
 
+# Test Case 5: Workflow with CveTracker integration
+TestHelper.with_test_repos do |env|
+  linux = env[:linux]
+  ks = env[:kernel_source]
+  wf = env[:workflow]
+  linux_dir = env[:linux_dir]
+  ks.branch = "SLE15-SP7"
+
+  # Create a commit to backport with a CVE reference
+  TestHelper.run_git(linux_dir, "checkout -b branch_cve")
+  File.write(File.join(linux_dir, "f_cve.txt"), "cve fix\n")
+  TestHelper.run_git(linux_dir, "add f_cve.txt")
+  TestHelper.run_git(linux_dir, "commit -m 'Patch CVE-2026-1234'")
+  TestHelper.run_git(linux_dir, "tag v6.4-rc6")
+  sha = TestHelper.run_git(linux_dir, "rev-parse HEAD").strip
+  c_cve = KernelWork::Commit.new(sha, path: linux_dir)
+  TestHelper.run_git(linux_dir, "checkout master")
+
+  # Mock CVE and Mock Tracker
+  cve_updated_branch = nil
+  cve_updated_state = nil
+  mock_cve = Object.new
+  mock_cve.define_singleton_method(:set_status) do |branch, state|
+    cve_updated_branch = branch
+    cve_updated_state = state
+  end
+
+  mock_tracker = Object.new
+  mock_tracker.define_singleton_method(:read_cve) do |cve_id|
+    if cve_id == "CVE-2026-1234"
+      mock_cve
+    else
+      raise KernelWork::BugNotFoundError.new("Unknown CVE: #{cve_id}")
+    end
+  end
+
+  # Backport with tracker
+  wf.backport_commits([c_cve], tracker: mock_tracker, ref: "bsc#12345 CVE-2026-1234 CVE-2026-9999", yn_default: :yes)
+
+  raise "c_cve not applied to ks" unless ks.is_applied?(c_cve)
+  raise "CVE status not updated for branch" unless cve_updated_branch == ks.branch
+  raise "CVE state not set to Applied" unless cve_updated_state == KernelWork::CVE::STATE_APPLIED
+
+  # Test SCPAlreadyApplied: run again with tracker
+  cve_updated_branch = nil
+  cve_updated_state = nil
+  wf.backport_commits([c_cve], tracker: mock_tracker, ref: "bsc#12345 CVE-2026-1234", yn_default: :yes)
+  raise "CVE status not updated on SCPAlreadyApplied" unless cve_updated_state == KernelWork::CVE::STATE_APPLIED
+
+  puts "Test Case 5 (Workflow with CveTracker integration) Passed"
+end
+
 puts "All Workflow unit tests passed successfully!"
