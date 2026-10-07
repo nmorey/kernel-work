@@ -91,7 +91,7 @@ module KernelWork
                     when :apply
                         opts_parser.on("-S", "--skip-broken", "Automatically skip patches that do not apply.") { opts[:skip_broken] = true }
                         opts_parser.on("-y", "--yes", "Apply fixes automatically without confirmation.") { opts[:yn_default] = :yes }
-                        BuildOpts.add_options(opts_parser, opts, with_build: true)
+                        BuildOpts.add_options(opts_parser, opts, with_build_default: true)
                     when :push
                         opts_parser.on("-f", "--force", "Force push.") { opts[:force_push] = true }
                     when :status, :ls
