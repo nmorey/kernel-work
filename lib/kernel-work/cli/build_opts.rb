@@ -66,13 +66,21 @@ module KernelWork
             # @param opts_parser [OptionParser] Option parser
             # @param target [Hash, LinuxBuildOpts] Options destination
             # @param with_build [Boolean] Include -B / --build flag
+            # @param with_build_default [Boolean] Enable/Disable build mode by default
             # @param with_compiler [Boolean] Include -a, -j, -c, --hostcc
             # @param with_verbose [Boolean] Include -v / --verbose flag
             # @param with_old_kernel [Boolean] Include -o / --old-kernel flag
             # @param with_full [Boolean] Include -F / --full flag
             # @param with_subset [Boolean] Include -p, -I flags
             # @return [void]
-            def self.add_options(opts_parser, target, with_build: false, with_compiler: true, with_verbose: false, with_old_kernel: false, with_full: false, with_subset: false)
+            def self.add_options(opts_parser, target,
+                                 with_build: false,
+                                 with_build_default: false,
+                                 with_compiler: true,
+                                 with_verbose: false,
+                                 with_old_kernel: false,
+                                 with_full: false,
+                                 with_subset: false)
                 b_opts = target.is_a?(LinuxBuildOpts) ? target : (target[:build_opts] ||= new)
 
                 if with_build
@@ -81,7 +89,10 @@ module KernelWork
                         target[:build] = true if target.is_a?(Hash)
                     end
                 end
-
+                if with_build_default
+                    b_opts.build = with_build_default
+                    target[:build] = with_build_default if target.is_a?(Hash)
+                end
                 if with_compiler
                     add_arch_option(opts_parser, target)
 
