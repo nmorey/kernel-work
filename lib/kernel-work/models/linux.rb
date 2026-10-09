@@ -344,7 +344,7 @@ module KernelWork
             raise ShaNotCommitError.new() if !commit.is_a?(KernelWork::Commit)
 
             begin
-                runGitInteractive("cherry-pick #{commit.sha}")
+                runGitInteractive("cherry-pick -x #{commit.sha}")
             rescue
                 if skip_broken == true
                     e = SCPSkip.new(commit.to_s)
