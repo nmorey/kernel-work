@@ -91,6 +91,7 @@ module KernelWork
             # @return [CommitFilter] Resolved CommitFilter instance
             # @raise [SavedFilterNotFoundError] If named filter is not found in configuration and not may_be_missing
             def self.from_opts(opts, may_be_missing: false)
+                return opts[:filter_obj] if opts.is_a?(Hash) && opts[:filter_obj] != nil
                 base = new
 
                 if opts[:filter_name]
@@ -119,7 +120,7 @@ module KernelWork
                 base.author = cli_author if cli_author
                 base.skip_treewide = true if cli_skip_treewide
 
-                opts[:filter] = base if opts.is_a?(Hash)
+                opts[:filter_obj] = base if opts.is_a?(Hash)
                 base
             end
         end

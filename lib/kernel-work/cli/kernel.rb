@@ -144,7 +144,6 @@ module KernelWork
             # @param opts [Hash] The options hash
             # @raise [RuntimeError] If required options are missing
             def self.check_opts(opts)
-                opts[:filter] = CommitFilter.from_opts(opts) if opts[:action] == :backport_todo
                 case opts[:action]
                 when :fix_ref
                     if opts[:ref].nil?
@@ -323,14 +322,12 @@ module KernelWork
             def backport_todo(opts)
                 head = opts[:upstream_ref]
                 t_branch = opts[:base_ref] || linux.local_branch
+                filter = CommitFilter.from_opts(opts)
 
-                filter = CommitFilter.from_opts(opts[:filter] || opts)
                 in_head = linux.gen_filtered_list(head, t_branch, filter)
-                if linux.respond_to?(:filterInHouse)
-                    linux.filterInHouse(opts, in_head)
-                else
-                    workflow.filter_in_house(in_head, include_shas: opts[:backport_include], exclude_shas: opts[:backport_exclude])
-                end
+                workflow.filter_in_house(in_head,
+                                         include_shas: opts[:backport_include],
+                                         exclude_shas: opts[:backport_exclude])
 
                 if in_head.empty?
                     log(:INFO, "No patch left to backport ! Congrats !")
