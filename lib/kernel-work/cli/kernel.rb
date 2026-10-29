@@ -65,6 +65,7 @@ module KernelWork
                 opts[:backport_include] = []
                 opts[:backport_exclude] = []
                 opts[:full_check] = false
+                opts[:skip_unbackported] = false
                 opts[:autofix] = false
                 opts[:no_interactive] = false
                 opts[:ignore_tag] = false
@@ -103,6 +104,8 @@ module KernelWork
                     opts_parser.on("-c", "--sha1 <SHA1>", String, "Commit to backport.") { |val| opts[:commits] << { type: :sha, value: val } }
                     opts_parser.on("-b", "--bug <bugzilla id or CVE>", String, "Bugzilla ID or CVE to backport.") { |val| opts[:commits] << { type: :bug, value: val } }
                     opts_parser.on("-f", "--file <FILE>", String, "File containing list of SHA1 to backport.") { |val| opts[:file] = val; opts[:commits] << { type: :file, value: val } }
+                    opts_parser.on("-S", "--skip-unbackported", "Auto skip fixes for unbackported patches.") {
+                        |val| opts[:skip_unbackported] = true }
                 end
 
                 case action
@@ -274,7 +277,8 @@ module KernelWork
                         skip_broken: opts[:skip_broken],
                         yn_default: opts[:yn_default],
                         ref: opts[:ref],
-                        full_check: opts[:full_check]
+                        full_check: opts[:full_check],
+                        skip_unbackported: opts[:skip_unbackported]
                     )
                 ensure
                     save_scp_commits(opts, commits_to_backport)

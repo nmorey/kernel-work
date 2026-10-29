@@ -100,10 +100,18 @@ module KernelWork
         # @param yn_default [Symbol, nil] Default auto-reply (:yes or :no)
         # @param ref [String, nil] Reference string override
         # @param full_check [Boolean] Enable full checkpatch inspection
+        # @param skip_unbackported [Boolean] Aoto-skip patches with Fixes tag that points to non-backported commits
         # @yieldparam commit [Commit] Current commit being processed
         # @yieldparam error [Exception, nil] Error encountered if any
         # @return [void]
-        def backport_commits(commits, build_opts: LinuxBuildOpts.new, tracker: nil, skip_broken: false, yn_default: nil, ref: nil, full_check: false, &block)
+        def backport_commits(commits, build_opts: LinuxBuildOpts.new,
+                             tracker: nil,
+                             skip_broken: false,
+                             yn_default: nil,
+                             ref: nil,
+                             full_check: false,
+                             skip_unbackported: false,
+                             &block)
             b_opts = build_opts || LinuxBuildOpts.new
 
             while !commits.empty?
@@ -112,7 +120,9 @@ module KernelWork
                     log(:INFO, "# #{commits.length} commits left".grey)
 
                     begin
-                        backport_single_commit(commit, skip_broken: skip_broken, yn_default: yn_default, ref: ref, full_check: full_check)
+                        backport_single_commit(commit, skip_broken: skip_broken,
+                                               yn_default: yn_default, ref: ref,
+                                               full_check: full_check, skip_unbackported: skip_unbackported)
                         if b_opts.build
                             @linux.build_commit(commit, b_opts)
                         end
@@ -184,6 +194,7 @@ module KernelWork
         # @param yn_default [Symbol, nil] Default auto-reply (:yes or :no)
         # @param ref [String, nil] Reference string override
         # @param full_check [Boolean] Enable full checkpatch inspection
+        # @param skip_unbackported [Boolean] Aoto-skip patches with Fixes tag that points to non-backported commits
         # @return [void]
         # @raise [ShaNotCommitError] If commit is not a Commit object
         # @raise [ShaNotFoundError] If commit is not found in repository
@@ -191,7 +202,12 @@ module KernelWork
         # @raise [SCPNotApplied] If user rejects the commit
         # @raise [PatchExtractionError] If patch extraction fails in kernel-source
         # @raise [SCPQueueSeries] If user requests applying the whole series
-        def backport_single_commit(commit, skip_broken: false, yn_default: nil, ref: nil, full_check: false)
+        def backport_single_commit(commit,
+                                   skip_broken: false,
+                                   yn_default: nil,
+                                   ref: nil,
+                                   full_check: false,
+                                   skip_unbackported: false)
             current_ref = ref
             rep = "t"
             raise ShaNotCommitError.new() if !commit.is_a?(KernelWork::Commit)
@@ -214,6 +230,7 @@ module KernelWork
             log(:INFO, "Looking at #{desc.bold}")
             fixes = commit.fixes_shas
             if !fixes.empty?
+                fixes_unbackported_only = true
                 log(:INFO, "Patch fixes:")
                 fixes.each do |f_sha|
                     fixes_commit = KernelWork::Commit.new(f_sha, path: @linux.path)
@@ -221,12 +238,18 @@ module KernelWork
                         f_desc = fixes_commit.desc
                         if has_commit?(fixes_commit)
                             log(:INFO, "  backported #{f_desc}")
+                            fixes_unbackported_only = false
                         else
                             log(:WARNING, "  unbackported #{f_desc}")
                         end
                     rescue ShaNotFoundError
                         log(:WARNING, "  unknown sha #{f_sha}")
+                        fixes_unbackported_only = false
                     end
+                end
+                if fixes_unbackported_only == true  && skip_unbackported == true then
+                    log(:WARNING, "Skipping patch as it only fixes unbackported commits")
+                    raise SCPSkip.new("Only fixes unbackported patches")
                 end
             end
 
