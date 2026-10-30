@@ -166,7 +166,8 @@ module KernelWork
                     opts_parser.on("--[no-]grub", "Update or skip GRUB configuration on target.") { |val| opts[:grub] = val }
                     opts_parser.on("--force", "Override branch mismatch.") { |_val| opts[:force] = true }
                     opts_parser.on("--dry-run", "Show commands without executing.") { |_val| opts[:dry_run] = true }
-                    BuildOpts.add_options(opts_parser, opts, with_build: true, with_compiler: true, with_subset: true)
+                    BuildOpts.add_options(opts_parser, opts, with_build: false,
+                                          with_compiler: true, with_subset: true)
                 end
             end
 

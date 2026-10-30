@@ -209,7 +209,7 @@ module KernelWork
 
             # Build kernel if requested or if kernel image is absent
             kernel_img = @linux.kernel_image_path(b_opts.arch)
-            if b_opts.build || !File.exist?(kernel_img)
+            if !File.exist?(kernel_img)
                 log(:INFO, "Building kernel for deployment...")
                 if !dry_run
                     build(b_opts)
