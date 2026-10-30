@@ -242,7 +242,7 @@ TestHelper.with_test_repos do |env|
   target_opts.update_grub = false
   target_opts.reboot = false
 
-  wf.test_deploy(installer, target_opts, dry_run: true)
+  wf.deploy(installer, target_opts, dry_run: true)
 
   puts "Test Case 6 (Workflow#test_deploy dry_run with KernelInstaller) Passed"
 end

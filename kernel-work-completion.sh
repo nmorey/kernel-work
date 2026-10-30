@@ -181,12 +181,12 @@ _kernel_work_build(){
     esac;
 }
 
-_kernel_work_test(){
-    local OPT_LIST=$(_kernel_work_genoptlist kernel test)
+_kernel_work_deploy(){
+    local OPT_LIST=$(_kernel_work_genoptlist kernel deploy)
     _get_comp_words_by_ref cur
     _get_comp_words_by_ref prev
 
-    _kernel_work_filter_opts "$prev" kernel test && return
+    _kernel_work_filter_opts "$prev" kernel deploy && return
 
     case "$prev" in
 	*)

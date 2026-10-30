@@ -195,7 +195,7 @@ module KernelWork
         # @param hot_module [String, nil] Local path to a single kernel module to hot reload
         # @param dry_run [Boolean] Whether to execute in dry run mode
         # @return [void]
-        def test_deploy(installer, target_opts, build_opts: LinuxBuildOpts.new, hot_module: nil, dry_run: false)
+        def deploy(installer, target_opts, build_opts: LinuxBuildOpts.new, hot_module: nil, dry_run: false)
             target = installer.create_target(target_opts, dry_run: dry_run)
 
             # Hot reload single module if requested

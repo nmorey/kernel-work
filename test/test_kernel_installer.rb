@@ -277,7 +277,7 @@ puts "Test Case 7 (Target resolution and branch matching) Passed"
 # Test Case 8: CLI OptionParser test action options
 opts = { action: :test }
 parser = OptionParser.new
-KernelWork::CLI::Kernel.set_opts(:test, parser, opts)
+KernelWork::CLI::Kernel.set_opts(:deploy, parser, opts)
 
 # Test --no-dracut and --dracut
 parser.parse!(["--no-dracut"])

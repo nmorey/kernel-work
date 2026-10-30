@@ -26,7 +26,7 @@ module KernelWork
                 :kabi_check,
                 :backport_todo,
                 :git_fixes,
-                :test,
+                :deploy,
             ]
 
             # Help text for actions
@@ -49,7 +49,7 @@ module KernelWork
                 :kabi_check => "Check kABI compatibility",
                 :backport_todo => "List all patches in upstream reference that are not applied to the specified tree",
                 :git_fixes => "Fetch git-fixes list from configured upstream url and subtree and try to scp them",
-                :test => "Deploy and test built kernel on remote SLES server or VM",
+                :deploy => "Deploy and reboot to built kernel on remote SLES server or VM",
             }
 
             # Set options for Kernel CLI actions
@@ -142,7 +142,7 @@ module KernelWork
                 when :git_fixes
                     opts_parser.on("-s", "--subtree <subtree>", String, "Which subtree to check git-fixes from.") { |val| opts[:git_fixes_subtree] = val }
                     opts_parser.on("-l", "--list-only", "Only list pending patches.") { |_val| opts[:git_fixes_listonly] = true }
-                when :test
+                when :deploy
                     opts[:target] = nil
                     opts[:kexec] = false
                     opts[:reboot] = nil
@@ -177,7 +177,7 @@ module KernelWork
                     if opts[:ref].nil?
                         raise("Ref is required. Use -r <ref>")
                     end
-                when :test
+                when :deploy
                     if opts[:kexec] && opts[:reboot]
                         raise("Cannot specify both --kexec and --reboot")
                     end
@@ -331,10 +331,10 @@ module KernelWork
                 workflow.build(BuildOpts.from_opts(opts))
             end
 
-            # Test action: deploy, install, and test built kernel on target server or VM
+            # Deploy action: deploy, install, and reboot to built kernel on target server or VM
             # @param opts [Hash] Options hash
             # @return [void]
-            def test(opts)
+            def deploy(opts)
                 build_opts = BuildOpts.from_opts(opts)
                 current_branch = begin
                                      linux.branch
@@ -349,7 +349,7 @@ module KernelWork
                 target_opts.minimal_modules = false if opts[:all_modules]
                 target_opts.minimal_modules = opts[:minimal_modules] unless opts[:minimal_modules].nil?
 
-                workflow.test_deploy(
+                workflow.deploy(
                     kernel_installer,
                     target_opts,
                     build_opts: build_opts,
