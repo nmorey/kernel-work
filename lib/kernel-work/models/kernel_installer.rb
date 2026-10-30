@@ -215,7 +215,7 @@ module KernelWork
             def copy_to_target(local_src, target_dest, extra_args = [])
                 port_arg = (@opts.port && @opts.port.to_i != 22) ? "-e 'ssh -p #{@opts.port}' " : ""
                 flags = extra_args.empty? ? "" : "#{extra_args.join(' ')} "
-                cmd = "rsync -avzP --checksum #{port_arg}#{flags}#{local_src} #{@opts.host}:#{target_dest}"
+                cmd = "rsync -az --info=progress2 --checksum #{port_arg}#{flags}#{local_src} #{@opts.host}:#{target_dest}"
                 run_local(cmd)
             end
         end
@@ -247,7 +247,7 @@ module KernelWork
             def copy_to_target(local_src, target_dest, extra_args = [])
                 sudo_arg = @opts.sudo ? "--rsync-path='sudo rsync' " : ""
                 flags = extra_args.empty? ? "" : "#{extra_args.join(' ')} "
-                cmd = "rsync -avzP --checksum #{sudo_arg}#{flags}#{local_src} #{target_dest}"
+                cmd = "rsync -az --info=progress2 --checksum #{sudo_arg}#{flags}#{local_src} #{target_dest}"
                 run_local(cmd)
             end
         end
