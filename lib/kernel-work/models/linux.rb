@@ -137,6 +137,8 @@ module KernelWork
             comp_cc = comp_cc.gsub(/gcc/, gcc_ver)
             host_cc = host_cc.gsub(/gcc/, gcc_ver)
 
+            head = Commit.new("HEAD")
+
             if arch_info[:CROSS_COMPILE] != nil
                 comp_cc = comp_cc.gsub(/gcc/, arch_info[:CROSS_COMPILE] + "gcc")
                 cross_compile = "CROSS_COMPILE=\"#{arch_info[:CROSS_COMPILE]}\""
@@ -148,7 +150,7 @@ module KernelWork
                 host_cc = "HOSTCC=#{build_opts.hostcc}"
             end
             krel_base = kv.to_s
-            extra_opts = "KERNELRELEASE=\"#{krel_base}-devel\" KBUILD_NOCMDDEP=1 KBUILD_BUILD_TIMESTAMP=\"2024-01-01 00:00:00\""
+            extra_opts = "KERNELRELEASE=\"#{krel_base}-devel\" KBUILD_NOCMDDEP=1 KBUILD_BUILD_TIMESTAMP=\"2024-01-01 00:00:00\"  KBUILD_BUILD_VERSION=\"4-#{head.f_sha[0..11]}\" "
             if build_opts.verbose == true
                 extra_opts += " #{extra_opts} V=1"
             end
