@@ -75,7 +75,7 @@ _kernel_work_filter_opts(){
             return 0
             ;;
         -t|--target)
-            COMPREPLY=()
+            COMPREPLY=( $( compgen -W "$(kernel config target list --raw 2>/dev/null )" -- "$cur" ) )
             return 0
             ;;
         -m|--module)
@@ -143,6 +143,20 @@ _kernel_work_config(){
             local action=${words[3]}
             local opt_list=$(_kernel_work_genoptlist kernel config branch $action)
             _kernel_work_filter_opts "$prev" kernel config branch $action && return
+            case "$prev" in
+                *)
+                    __gitcomp_nl "$opt_list"
+                    ;;
+            esac
+            ;;
+        target)
+            if [ $cword -eq 3 ]; then
+                __gitcomp_nl "$(kernel config target list_actions)"
+                return
+            fi
+            local action=${words[3]}
+            local opt_list=$(_kernel_work_genoptlist kernel config target $action)
+            _kernel_work_filter_opts "$prev" kernel config target $action && return
             case "$prev" in
                 *)
                     __gitcomp_nl "$opt_list"

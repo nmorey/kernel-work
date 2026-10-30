@@ -448,6 +448,12 @@ Manage your global and project settings from the CLI:
   * `kernel config branch add -b <name> [-r <default-ref>] [--no-sorted-series]` — Register a SUSE release branch.
   * `kernel config branch list` — List all registered release branches.
   * `kernel config branch delete -b <name>` — Unregister a branch.
+* **Test Deployment Targets:**
+  * `kernel config target add -t <name> [-b <branch>] [-H <host>] [-p <port>] [--type <type>] [--[no-]sudo] [-r|--no-reboot] [--reboot-method <kexec|reboot>] [--default]` — Register or update a test target.
+  * `kernel config target list [--raw]` — List all registered deployment targets.
+  * `kernel config target show -t <name>` — Inspect target properties.
+  * `kernel config target delete -t <name>` — Remove a registered target.
+  * `kernel config target default [-t <name>] [--clear]` — Display, set, or clear the default test target.
 
 ### SUSE kernel-source Specific Commands
 

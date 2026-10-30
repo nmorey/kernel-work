@@ -64,6 +64,7 @@ module KernelWork
         end
 
         require_relative 'config/filter'
+        require_relative 'config/target'
 
         # Tertiary Level Branch Actions (config branch add/list/show/delete)
         module BranchCLI
@@ -223,7 +224,7 @@ module KernelWork
         end
 
         # Subcommand action/modules classes registered for Config module.
-        ACTION_CLASS = [ ConfigAction, FilterCLI, BranchCLI ]
+        ACTION_CLASS = [ ConfigAction, FilterCLI, BranchCLI, TargetCLI ]
         extend CLIClassTool::Utils
         end
     end

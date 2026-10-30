@@ -45,6 +45,43 @@ TestHelper.with_test_repos do |_env|
   filter_action = KernelWork::CLI::Config::FilterCLI::FilterAction.new
   filter_action.list({ raw: true })
 
+  target_action = KernelWork::CLI::Config::TargetCLI::TargetAction.new
+  # Test target add
+  target_action.add({ target: "testvm", host: "root@192.168.1.100", branch: "SLE15-SP6", port: 2222, default: true })
+  raise "Expected testvm in targets" unless KernelWork.config.settings.dig(:test, :targets, :testvm)
+  raise "Expected testvm to be default" unless KernelWork.config.settings.dig(:test, :default_target) == "testvm"
+
+  # Test target update
+  target_action.add({ target: "testvm", branch: "SLE15-SP7" })
+  raise "Expected updated branch SLE15-SP7" unless KernelWork.config.settings.dig(:test, :targets, :testvm, :branch) == "SLE15-SP7"
+
+  # Test target show
+  target_action.show({ target: "testvm" })
+
+  # Test target list
+  target_action.list({ raw: true })
+  target_action.list({ raw: false })
+
+  # Test target default
+  target_action.default({})
+  target_action.default({ clear: true })
+  raise "Expected default target cleared" unless KernelWork.config.settings.dig(:test, :default_target).nil?
+  target_action.default({ target: "testvm" })
+  raise "Expected testvm set as default" unless KernelWork.config.settings.dig(:test, :default_target) == "testvm"
+
+  # Test target delete
+  target_action.delete({ target: "testvm" })
+  raise "Expected testvm deleted" if KernelWork.config.settings.dig(:test, :targets, :testvm)
+  raise "Expected default cleared upon delete" unless KernelWork.config.settings.dig(:test, :default_target).nil?
+
+  # Test show/delete error on nonexistent target
+  begin
+    target_action.show({ target: "nonexistent" })
+    raise "Expected TestTargetNotFoundError"
+  rescue KernelWork::TestTargetNotFoundError
+    # Expected
+  end
+
   puts "Test Case 3 (CLI::Config actions) Passed"
 end
 
