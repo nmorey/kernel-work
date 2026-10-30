@@ -50,6 +50,7 @@ module TestHelper
       File.write(File.join(linux_dir, "file.txt"), "Initial content\n")
       run_git(linux_dir, "add .")
       run_git(linux_dir, "commit -m 'Initial commit'")
+      run_git(linux_dir, "tag v6.4")
       base_sha = run_git(linux_dir, "rev-parse HEAD").strip
 
       # Init KernelSource repo

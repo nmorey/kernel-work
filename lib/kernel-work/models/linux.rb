@@ -147,7 +147,8 @@ module KernelWork
             if build_opts.hostcc != nil
                 host_cc = "HOSTCC=#{build_opts.hostcc}"
             end
-            extra_opts = "KERNELRELEASE=\"devel\" KBUILD_NOCMDDEP=1 KBUILD_BUILD_TIMESTAMP=\"2024-01-01 00:00:00\""
+            krel_base = kv.to_s
+            extra_opts = "KERNELRELEASE=\"#{krel_base}-devel\" KBUILD_NOCMDDEP=1 KBUILD_BUILD_TIMESTAMP=\"2024-01-01 00:00:00\""
             if build_opts.verbose == true
                 extra_opts += " #{extra_opts} V=1"
             end
@@ -175,9 +176,9 @@ module KernelWork
             _arch_name, _arch_info, b_dir = arch_to_bdir(arch)
             rel_file = File.join(@path, b_dir, "include/config/kernel.release")
             if File.exist?(rel_file)
-                File.read(rel_file).strip
+                return File.read(rel_file).strip
             else
-                "devel"
+                return "#{kernel_base.to_s}-devel"
             end
         end
 

@@ -227,6 +227,15 @@ TestHelper.with_test_repos do |env|
   FileUtils.mkdir_p(File.join(linux_dir, bdir, "arch/x86/boot"))
   File.write(File.join(linux_dir, bdir, "arch/x86/boot/bzImage"), "fake-bzImage")
 
+  # Verify kernel_release
+  raise "Expected 6.4-devel, got #{linux.kernel_release(:x86_64)}" unless linux.kernel_release(:x86_64) == "6.4-devel"
+
+  # Test staging directory with UsrMerge (usr/lib/modules)
+  staging_base = File.join(linux_dir, bdir, "staging")
+  usr_staging = File.join(staging_base, "usr/lib/modules", "6.4-devel")
+  FileUtils.mkdir_p(usr_staging)
+  File.write(File.join(usr_staging, "modules.dep"), "kernel/drivers/net.ko:\n")
+
   # Dry run test_deploy with TargetOpts and overrides
   target_opts = KernelWork::TargetOpts.from_config("vm", target_config)
   target_opts.dracut = false
