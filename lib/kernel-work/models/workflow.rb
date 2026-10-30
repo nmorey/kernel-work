@@ -197,6 +197,7 @@ module KernelWork
         # @return [void]
         def deploy(installer, target_opts, build_opts: LinuxBuildOpts.new, hot_module: nil, dry_run: false)
             target = installer.create_target(target_opts, dry_run: dry_run)
+            log(:INFO, "Preparing for kernel deployment to #{target_opts.host}...")
 
             # Hot reload single module if requested
             if hot_module
@@ -209,10 +210,8 @@ module KernelWork
             # Build kernel if requested or if kernel image is absent
             kernel_img = @linux.kernel_image_path(b_opts.arch)
             if b_opts.build || !File.exist?(kernel_img)
-                if dry_run
-                    log(:INFO, "[DRY-RUN] Building kernel for deployment...")
-                else
-                    log(:INFO, "Building kernel for deployment...")
+                log(:INFO, "Building kernel for deployment...")
+                if !dry_run
                     build(b_opts)
                 end
             end

@@ -52,6 +52,7 @@ module KernelWork
             # @param kernel_image_path [String] Local path to kernel binary image
             # @return [void]
             def install_kernel(kernel_release, kernel_image_path)
+                log(:INFO, "Deploying kernel image")
                 dest = "#{@opts.boot_dir}/vmlinuz-#{kernel_release}"
                 copy_to_target(kernel_image_path, dest)
             end
@@ -62,6 +63,7 @@ module KernelWork
             # @param file_list [Array<String>, nil] List of relative files to sync, or nil for all
             # @return [void]
             def install_modules(kernel_release, staging_dir, file_list: nil)
+                log(:INFO, "Deploying modules")
                 dest = "#{@opts.modules_dir}/#{kernel_release}/"
                 if file_list && !file_list.empty?
                     file_list_content = file_list.join("\n") + "\n"
@@ -89,6 +91,7 @@ module KernelWork
             # @param run_dracut [Boolean] Whether to generate initrd via dracut
             # @return [void]
             def depmod_and_dracut(kernel_release, run_dracut: true)
+                log(:INFO, "Rebuilding initrd")
                 commands = ["depmod -a #{kernel_release}"]
                 if run_dracut
                     commands << "dracut -f #{@opts.boot_dir}/initrd-#{kernel_release} #{kernel_release}"
@@ -100,6 +103,7 @@ module KernelWork
             # @param kernel_release [String] Target kernel release version string
             # @return [void]
             def grub_setup(kernel_release)
+                log(:INFO, "Updating grub")
                 target_cmd = "grub2-mkconfig -o /boot/grub2/grub.cfg && (grub2-reboot \"vmlinuz-#{kernel_release}\" || grub2-once \"vmlinuz-#{kernel_release}\" || true)"
                 run_target(target_cmd)
             end
