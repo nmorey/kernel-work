@@ -470,6 +470,7 @@ The following commands operate specifically on the `LINUX_GIT` checkout:
 * `kernel build [-p <path>] [-I] [-j <jobs>]` — Build the kernel, or a subset/subtree (e.g., pass `-I` to build the infiniband subtree only).
 * `kernel kabi_check [-a <arch>]` — Check the kABI compatibility of your current kernel build using the SUSE `kabi.pl` script.
 * `kernel backport_todo [-R <upstream-ref>] [-B <base-ref>] [-A]` — Detects commits in `origin/master` that are missing in your SUSE branch. Pass `-A` to automatically launch an `scp` loop to backport all missing patches.
+* `kernel test [-t <target>] [-k] [-r|--no-reboot] [-m <path>] [--minimal-modules|--all-modules] [--[no-]dracut] [--[no-]grub] [--dry-run]` — Deploy and test locally built kernel or modules on a target server, VM, or local system. Targets are configured under `test.targets` in `config.yml` and associated with kernel branches. Uses `rsync` with target `lsmod` filtering, generates initrd via `dracut`, and boots via `kexec` or `reboot` (with optional GRUB boot order configuration). Supports single-module hot reloading with `-m <path.ko>`.
 
 ---
 

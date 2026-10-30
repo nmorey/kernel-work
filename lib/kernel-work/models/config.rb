@@ -82,6 +82,10 @@ module KernelWork
         tracker_url: "",
         reassign_to: "kernel-security-sentinel@lists.suse.com",
         reassign_comment: "Merged"
+      },
+      test: {
+        default_target: nil,
+        targets: {}
       }
     }
 
@@ -148,6 +152,44 @@ module KernelWork
     # @return [RecursiveConfig]
     def cve
         RecursiveConfig.new(@settings[:cve] || {})
+    end
+
+    # Access test target and deployment configuration
+    # @return [RecursiveConfig]
+    def test
+        RecursiveConfig.new(@settings[:test] || {})
+    end
+
+    # Find test target by explicit target name or by matching active branch
+    # @param target_name [String, Symbol, nil] Explicit target name, or nil for branch lookup
+    # @param branch [String, nil] Current working branch name
+    # @return [TargetOpts, nil] Found target configuration as a TargetOpts, or nil
+    def find_test_target(target_name = nil, branch = nil)
+        targets = @settings.dig(:test, :targets) || {}
+        if target_name
+            t_key = targets.keys.find { |k| k.to_s == target_name.to_s }
+            return nil unless t_key
+            return TargetOpts.from_config(t_key.to_s, targets[t_key])
+        end
+
+        if branch
+            t_key = targets.keys.find do |k|
+                targets[k][:branch].to_s == branch.to_s
+            end
+            if t_key
+                return TargetOpts.from_config(t_key.to_s, targets[t_key])
+            end
+        end
+
+        def_name = @settings.dig(:test, :default_target)
+        if def_name
+            t_key = targets.keys.find { |k| k.to_s == def_name.to_s }
+            if t_key
+                return TargetOpts.from_config(t_key.to_s, targets[t_key])
+            end
+        end
+
+        nil
     end
 
     # Load configuration from YAML file and merge with defaults

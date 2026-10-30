@@ -208,6 +208,34 @@ TestHelper.with_test_repos do |env|
   raise "CVE status not updated on SCPAlreadyApplied" unless cve_updated_state == KernelWork::CVE::STATE_APPLIED
 
   puts "Test Case 5 (Workflow with CveTracker integration) Passed"
+
+  # Test Case 6: test_deploy in dry_run mode with KernelInstaller
+  installer = KernelWork::KernelInstaller.new(linux)
+  target_config = {
+      host: "root@remote.test",
+      branch: "master",
+      dracut: true,
+      update_grub: true,
+      reboot: true
+  }
+  KernelWork.config.settings[:test] = {
+      targets: { vm: target_config }
+  }
+
+  # Fake kernel binary
+  arch_name, _arch, bdir = linux.arch_to_bdir(:x86_64)
+  FileUtils.mkdir_p(File.join(linux_dir, bdir, "arch/x86/boot"))
+  File.write(File.join(linux_dir, bdir, "arch/x86/boot/bzImage"), "fake-bzImage")
+
+  # Dry run test_deploy with TargetOpts and overrides
+  target_opts = KernelWork::TargetOpts.from_config("vm", target_config)
+  target_opts.dracut = false
+  target_opts.update_grub = false
+  target_opts.reboot = false
+
+  wf.test_deploy(installer, target_opts, dry_run: true)
+
+  puts "Test Case 6 (Workflow#test_deploy dry_run with KernelInstaller) Passed"
 end
 
 puts "All Workflow unit tests passed successfully!"

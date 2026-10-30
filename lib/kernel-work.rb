@@ -21,6 +21,8 @@ require_relative 'kernel-work/models/linux_build_opts'
 require_relative 'kernel-work/models/linux'
 require_relative 'kernel-work/models/kernel_source'
 require_relative 'kernel-work/models/workflow'
+require_relative 'kernel-work/models/target_opts'
+require_relative 'kernel-work/models/kernel_installer'
 
 ###
 # CLI Controllers

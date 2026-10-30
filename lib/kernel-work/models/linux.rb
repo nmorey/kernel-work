@@ -168,6 +168,41 @@ module KernelWork
             0
         end
 
+        # Get the kernel release string for built kernel
+        # @param arch [Symbol, String] Architecture name
+        # @return [String] Kernel release version
+        def kernel_release(arch = :x86_64)
+            _arch_name, _arch_info, b_dir = arch_to_bdir(arch)
+            rel_file = File.join(@path, b_dir, "include/config/kernel.release")
+            if File.exist?(rel_file)
+                File.read(rel_file).strip
+            else
+                "devel"
+            end
+        end
+
+        # Get path to the compiled kernel image
+        # @param arch [Symbol, String] Architecture name
+        # @return [String] Path to kernel image file
+        def kernel_image_path(arch = :x86_64)
+            arch_sym, _arch_info, b_dir = arch_to_bdir(arch)
+            candidates = case arch_sym
+                         when :x86_64
+                             ["arch/x86/boot/bzImage", "arch/x86_64/boot/bzImage", "vmlinux"]
+                         when :arm64
+                             ["arch/arm64/boot/Image.gz", "arch/arm64/boot/Image", "vmlinux"]
+                         when :s390x
+                             ["arch/s390/boot/bzImage", "vmlinux"]
+                         else
+                             ["arch/#{arch_sym}/boot/bzImage", "vmlinux"]
+                         end
+            candidates.each do |c|
+                p = File.join(@path, b_dir, c)
+                return p if File.exist?(p)
+            end
+            File.join(@path, b_dir, candidates.first)
+        end
+
 
         # Run oldconfig or olddefconfig
         # @param build_opts [LinuxBuildOpts] Build options instance

@@ -74,6 +74,16 @@ _kernel_work_filter_opts(){
             COMPREPLY=( $( compgen -W "x86_64 i386 s390x ppc64le arm aarch64 riscv64" -- "$cur" ) )
             return 0
             ;;
+        -t|--target)
+            COMPREPLY=()
+            return 0
+            ;;
+        -m|--module)
+            compopt -o filenames +o nospace
+            cd "$LINUX_GIT/" 2>/dev/null
+            COMPREPLY=( $(compgen -f -- "$cur") )
+            return 0
+            ;;
     esac
 
     if [[ "$cur" != -* ]] && _kernel_work_opt_takes_arg "$prev" "${cmd[@]}"; then
@@ -149,6 +159,20 @@ _kernel_work_build(){
     _get_comp_words_by_ref cur
 
     _kernel_work_filter_opts "$prev" kernel build && return
+
+    case "$prev" in
+	*)
+	    __gitcomp_nl "$OPT_LIST"
+	    ;;
+    esac;
+}
+
+_kernel_work_test(){
+    local OPT_LIST=$(_kernel_work_genoptlist kernel test)
+    _get_comp_words_by_ref cur
+    _get_comp_words_by_ref prev
+
+    _kernel_work_filter_opts "$prev" kernel test && return
 
     case "$prev" in
 	*)

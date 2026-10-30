@@ -26,6 +26,7 @@ module KernelWork
                 :kabi_check,
                 :backport_todo,
                 :git_fixes,
+                :test,
             ]
 
             # Help text for actions
@@ -48,6 +49,7 @@ module KernelWork
                 :kabi_check => "Check kABI compatibility",
                 :backport_todo => "List all patches in upstream reference that are not applied to the specified tree",
                 :git_fixes => "Fetch git-fixes list from configured upstream url and subtree and try to scp them",
+                :test => "Deploy and test built kernel on remote SLES server or VM",
             }
 
             # Set options for Kernel CLI actions
@@ -140,6 +142,29 @@ module KernelWork
                 when :git_fixes
                     opts_parser.on("-s", "--subtree <subtree>", String, "Which subtree to check git-fixes from.") { |val| opts[:git_fixes_subtree] = val }
                     opts_parser.on("-l", "--list-only", "Only list pending patches.") { |_val| opts[:git_fixes_listonly] = true }
+                when :test
+                    opts[:target] = nil
+                    opts[:kexec] = false
+                    opts[:reboot] = nil
+                    opts[:module] = nil
+                    opts[:minimal_modules] = nil
+                    opts[:all_modules] = false
+                    opts[:dracut] = nil
+                    opts[:grub] = nil
+                    opts[:force] = false
+                    opts[:dry_run] = false
+
+                    opts_parser.on("-t", "--target <name>", String, "Target name from config or host.") { |val| opts[:target] = val }
+                    opts_parser.on("-k", "--kexec", "Boot via kexec.") { |_val| opts[:kexec] = true }
+                    opts_parser.on("-r", "--[no-]reboot", "Reboot or do not reboot after installation.") { |val| opts[:reboot] = val }
+                    opts_parser.on("-m", "--module <path>", String, "Hot-reload a single module without rebooting.") { |val| opts[:module] = val }
+                    opts_parser.on("--minimal-modules", "Transfer only modules active in target lsmod.") { |_val| opts[:minimal_modules] = true }
+                    opts_parser.on("--all-modules", "Transfer all built modules without filtering.") { |_val| opts[:all_modules] = true }
+                    opts_parser.on("--[no-]dracut", "Run or skip dracut on target.") { |val| opts[:dracut] = val }
+                    opts_parser.on("--[no-]grub", "Update or skip GRUB configuration on target.") { |val| opts[:grub] = val }
+                    opts_parser.on("--force", "Override branch mismatch.") { |_val| opts[:force] = true }
+                    opts_parser.on("--dry-run", "Show commands without executing.") { |_val| opts[:dry_run] = true }
+                    BuildOpts.add_options(opts_parser, opts, with_build: true, with_compiler: true, with_subset: true)
                 end
             end
 
@@ -151,6 +176,13 @@ module KernelWork
                 when :fix_ref
                     if opts[:ref].nil?
                         raise("Ref is required. Use -r <ref>")
+                    end
+                when :test
+                    if opts[:kexec] && opts[:reboot]
+                        raise("Cannot specify both --kexec and --reboot")
+                    end
+                    if opts[:minimal_modules] && opts[:all_modules]
+                        raise("Cannot specify both --minimal-modules and --all-modules")
                     end
                 end
             end
@@ -297,6 +329,33 @@ module KernelWork
             # @return [void]
             def build(opts)
                 workflow.build(BuildOpts.from_opts(opts))
+            end
+
+            # Test action: deploy, install, and test built kernel on target server or VM
+            # @param opts [Hash] Options hash
+            # @return [void]
+            def test(opts)
+                build_opts = BuildOpts.from_opts(opts)
+                current_branch = begin
+                                     linux.branch
+                                 rescue UnknownBranch
+                                     nil
+                                 end
+                target_opts = kernel_installer.resolve_target(opts[:target], current_branch, force: opts[:force])
+                target_opts.dracut = opts[:dracut] unless opts[:dracut].nil?
+                target_opts.update_grub = opts[:grub] unless opts[:grub].nil?
+                target_opts.reboot = opts[:reboot] unless opts[:reboot].nil?
+                target_opts.reboot_method = :kexec if opts[:kexec]
+                target_opts.minimal_modules = false if opts[:all_modules]
+                target_opts.minimal_modules = opts[:minimal_modules] unless opts[:minimal_modules].nil?
+
+                workflow.test_deploy(
+                    kernel_installer,
+                    target_opts,
+                    build_opts: build_opts,
+                    hot_module: opts[:module],
+                    dry_run: opts[:dry_run]
+                )
             end
 
             # Diff paths action

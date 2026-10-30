@@ -31,6 +31,11 @@ module KernelWork
             # @return [BugzillaClient] Assigned instance
             attr_writer :bugzilla
 
+            # Set the KernelInstaller domain model instance
+            # @param value [KernelInstaller] KernelInstaller instance
+            # @return [KernelInstaller] Assigned instance
+            attr_writer :kernel_installer
+
             # Access the Linux domain model lazily
             # @return [Linux] Linux instance
             def linux
@@ -59,6 +64,12 @@ module KernelWork
             # @return [BugzillaClient] BugzillaClient instance
             def bugzilla
                 @bugzilla ||= BugzillaClient.new(KernelWork.config.cve.to_h)
+            end
+
+            # Access the KernelInstaller domain model lazily
+            # @return [KernelInstaller] KernelInstaller instance
+            def kernel_installer
+                @kernel_installer ||= KernelInstaller.new(linux)
             end
         end
     end

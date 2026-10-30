@@ -249,4 +249,45 @@ module KernelWork
         end
     end
 
+    # Exception raised when no test target is configured for the active kernel branch
+    class NoTestTargetForBranchError < KernelWorkError
+        # Initialize a new NoTestTargetForBranchError
+        # @param branch [String] The active branch name
+        def initialize(branch)
+            super("No test target configured for branch '#{branch}'. Please configure one under 'test.targets' in config.yml.")
+        end
+    end
+
+    # Exception raised when a requested test target cannot be found in configuration
+    class TestTargetNotFoundError < KernelWorkError
+        # Initialize a new TestTargetNotFoundError
+        # @param target_name [String] Name of the target that was not found
+        def initialize(target_name)
+            super("Test target '#{target_name}' not found in configuration.")
+        end
+    end
+
+    # Exception raised when a test target's configured branch does not match current branch
+    class TargetBranchMismatchError < KernelWorkError
+        # Initialize a new TargetBranchMismatchError
+        # @param target_branch [String] The branch configured for the target
+        # @param current_branch [String] The current active branch
+        def initialize(target_branch, current_branch)
+            super("Target branch mismatch: target is configured for '#{target_branch}' but current branch is '#{current_branch}'. Use --force to override.")
+        end
+    end
+
+    # Exception raised when a deployment or installation command fails
+    class InstallExecutionError < KernelWorkError
+        # Initialize a new InstallExecutionError
+        # @param cmd [String] The command that failed
+        # @param status [Integer] The exit status code
+        def initialize(cmd, status)
+            super("Install command failed with status #{status}: #{cmd}")
+        end
+    end
+
+    # Backward compatibility alias for InstallExecutionError
+    DeployExecutionError = InstallExecutionError
+
 end

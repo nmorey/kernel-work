@@ -34,6 +34,7 @@ task :test do
   sh "ruby test/test_kernel_source.rb"
   sh "ruby test/test_workflow.rb"
   sh "ruby test/test_cli.rb"
+  sh "ruby test/test_kernel_installer.rb"
 end
 
 task :test_docker do

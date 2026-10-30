@@ -188,6 +188,71 @@ module KernelWork
             0
         end
 
+        # Deploy, install, and test the built kernel on a target
+        # @param installer [KernelInstaller] Kernel installer instance
+        # @param target_opts [TargetOpts] Target configuration options
+        # @param build_opts [LinuxBuildOpts] Kernel compilation build options
+        # @param hot_module [String, nil] Local path to a single kernel module to hot reload
+        # @param dry_run [Boolean] Whether to execute in dry run mode
+        # @return [void]
+        def test_deploy(installer, target_opts, build_opts: LinuxBuildOpts.new, hot_module: nil, dry_run: false)
+            target = installer.create_target(target_opts, dry_run: dry_run)
+
+            # Hot reload single module if requested
+            if hot_module
+                target.hot_reload_module(hot_module)
+                return
+            end
+
+            b_opts = build_opts || LinuxBuildOpts.new
+
+            # Build kernel if requested or if kernel image is absent
+            kernel_img = @linux.kernel_image_path(b_opts.arch)
+            if b_opts.build || !File.exist?(kernel_img)
+                if dry_run
+                    log(:INFO, "[DRY-RUN] Building kernel for deployment...")
+                else
+                    log(:INFO, "Building kernel for deployment...")
+                    build(b_opts)
+                end
+            end
+
+            krel = @linux.kernel_release(b_opts.arch)
+            kernel_img = @linux.kernel_image_path(b_opts.arch)
+
+            # Install vmlinuz
+            target.install_kernel(krel, kernel_img)
+
+            # Prepare module staging directory
+            _arch_name, _arch_info, b_dir = @linux.arch_to_bdir(b_opts.arch)
+            staging_base = File.join(@linux.path, b_dir, "staging")
+            mod_path = File.join(staging_base, "lib/modules/#{krel}")
+
+            unless File.directory?(mod_path) || dry_run
+                log(:INFO, "Installing modules to local staging directory...")
+                make_flags = @linux.gen_make_flags(b_opts)
+                @linux.runSystem("make #{make_flags} modules_install INSTALL_MOD_PATH=#{staging_base}")
+            end
+
+            # Calculate modules to synchronize
+            file_list = nil
+            if target_opts.minimal_modules
+                log(:INFO, "Fetching active modules from target to filter transfer...")
+                active_mods = target.fetch_lsmod
+                file_list = installer.calculate_module_subset(mod_path, active_mods, extra_subsets: b_opts.build_subset)
+                log(:INFO, "Selected #{file_list.length} module files for upload")
+            end
+
+            # Install modules
+            target.install_modules(krel, mod_path, file_list: file_list)
+
+            # Target depmod and dracut
+            target.depmod_and_dracut(krel, run_dracut: target_opts.dracut)
+
+            # Boot target
+            target.boot(krel)
+        end
+
         # Process a single commit through the backport workflow
         # @param commit [Commit] The commit to backport
         # @param skip_broken [Boolean] Automatically skip patches that fail to apply
