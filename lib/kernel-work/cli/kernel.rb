@@ -338,11 +338,7 @@ module KernelWork
             # @return [void]
             def deploy(opts)
                 build_opts = BuildOpts.from_opts(opts)
-                current_branch = begin
-                                     linux.branch
-                                 rescue UnknownBranch
-                                     nil
-                                 end
+                current_branch = linux.branch
                 target_opts = kernel_installer.resolve_target(opts[:target], current_branch, force: opts[:force])
                 target_opts.dracut = opts[:dracut] unless opts[:dracut].nil?
                 target_opts.update_grub = opts[:grub] unless opts[:grub].nil?
