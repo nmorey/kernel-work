@@ -93,21 +93,6 @@ _kernel_work_filter_opts(){
     return 1
 }
 
-_kernel_work_backport_todo(){
-    local OPT_LIST=$(_kernel_work_genoptlist kernel backport_todo)
-    _get_comp_words_by_ref cur
-    _get_comp_words_by_ref prev
-    _get_comp_words_by_ref words
-
-    _kernel_work_filter_opts "$prev" kernel backport_todo && return
-
-    case "$prev" in
-	*)
-	    __gitcomp_nl "$OPT_LIST"
-	    ;;
-    esac;
-}
-
 _kernel_work_config(){
     _get_comp_words_by_ref cur
     _get_comp_words_by_ref prev
@@ -166,50 +151,6 @@ _kernel_work_config(){
         *)
             ;;
     esac
-}
-
-_kernel_work_build(){
-    local OPT_LIST=$(_kernel_work_genoptlist kernel build)
-    _get_comp_words_by_ref cur
-
-    _kernel_work_filter_opts "$prev" kernel build && return
-
-    case "$prev" in
-	*)
-	    __gitcomp_nl "$OPT_LIST"
-	    ;;
-    esac;
-}
-
-_kernel_work_deploy(){
-    local OPT_LIST=$(_kernel_work_genoptlist kernel deploy)
-    _get_comp_words_by_ref cur
-    _get_comp_words_by_ref prev
-
-    _kernel_work_filter_opts "$prev" kernel deploy && return
-
-    case "$prev" in
-	*)
-	    __gitcomp_nl "$OPT_LIST"
-	    ;;
-    esac;
-}
-
-_kernel_work_extract_patch(){
-    local OPT_LIST=$(_kernel_work_genoptlist kernel extract_patch)
-    _get_comp_words_by_ref cur
-
-    _kernel_work_filter_opts "$prev" kernel extract_patch && return
-
-    case "$prev" in
-	*)
-	    __gitcomp_nl "$OPT_LIST"
-	    ;;
-    esac;
-}
-
-_kernel_work_extract_path(){
-    _kernel_work_extract_patch "$@"
 }
 
 _kernel_work_cve(){
