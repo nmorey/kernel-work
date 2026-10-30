@@ -51,6 +51,7 @@ module KernelWork
                         opts[:reboot] = nil
                         opts[:reboot_method] = nil
                         opts[:minimal_modules] = nil
+                        opts[:strip_modules] = nil
                         opts[:dracut] = nil
                         opts[:update_grub] = nil
                         opts[:boot_dir] = nil
@@ -69,6 +70,7 @@ module KernelWork
                             optsParser.on("-r", "--[no-]reboot", "Reboot target after installation.") { |val| opts[:reboot] = val }
                             optsParser.on("--reboot-method <method>", String, "Boot method ('kexec' or 'reboot').") { |val| opts[:reboot_method] = val }
                             optsParser.on("--[no-]minimal-modules", "Install only active kernel modules.") { |val| opts[:minimal_modules] = val }
+                            optsParser.on("--[no-]strip", "Strip debug symbols from modules during deployment.") { |val| opts[:strip_modules] = val }
                             optsParser.on("--[no-]dracut", "Run dracut to generate initrd.") { |val| opts[:dracut] = val }
                             optsParser.on("--[no-]grub", "Update GRUB bootloader configuration.") { |val| opts[:update_grub] = val }
                             optsParser.on("--boot-dir <dir>", String, "Boot directory path (default '/boot').") { |val| opts[:boot_dir] = val }
@@ -124,6 +126,7 @@ module KernelWork
                             target_obj.reboot = opts[:reboot] unless opts[:reboot].nil?
                             target_obj.reboot_method = opts[:reboot_method].to_sym unless opts[:reboot_method].nil?
                             target_obj.minimal_modules = opts[:minimal_modules] unless opts[:minimal_modules].nil?
+                            target_obj.strip_modules = opts[:strip_modules] unless opts[:strip_modules].nil?
                             target_obj.dracut = opts[:dracut] unless opts[:dracut].nil?
                             target_obj.update_grub = opts[:update_grub] unless opts[:update_grub].nil?
                             target_obj.boot_dir = opts[:boot_dir] unless opts[:boot_dir].nil?
@@ -147,6 +150,7 @@ module KernelWork
                                 reboot: opts[:reboot],
                                 reboot_method: opts[:reboot_method],
                                 minimal_modules: opts[:minimal_modules],
+                                strip_modules: opts[:strip_modules],
                                 dracut: opts[:dracut],
                                 update_grub: opts[:update_grub],
                                 boot_dir: opts[:boot_dir],

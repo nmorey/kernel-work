@@ -149,6 +149,7 @@ module KernelWork
                     opts[:module] = nil
                     opts[:minimal_modules] = nil
                     opts[:all_modules] = false
+                    opts[:strip_modules] = nil
                     opts[:dracut] = nil
                     opts[:grub] = nil
                     opts[:force] = false
@@ -160,6 +161,7 @@ module KernelWork
                     opts_parser.on("-m", "--module <path>", String, "Hot-reload a single module without rebooting.") { |val| opts[:module] = val }
                     opts_parser.on("--minimal-modules", "Transfer only modules active in target lsmod.") { |_val| opts[:minimal_modules] = true }
                     opts_parser.on("--all-modules", "Transfer all built modules without filtering.") { |_val| opts[:all_modules] = true }
+                    opts_parser.on("--[no-]strip", "Strip debug symbols from modules during installation.") { |val| opts[:strip_modules] = val }
                     opts_parser.on("--[no-]dracut", "Run or skip dracut on target.") { |val| opts[:dracut] = val }
                     opts_parser.on("--[no-]grub", "Update or skip GRUB configuration on target.") { |val| opts[:grub] = val }
                     opts_parser.on("--force", "Override branch mismatch.") { |_val| opts[:force] = true }
@@ -348,6 +350,7 @@ module KernelWork
                 target_opts.reboot_method = :kexec if opts[:kexec]
                 target_opts.minimal_modules = false if opts[:all_modules]
                 target_opts.minimal_modules = opts[:minimal_modules] unless opts[:minimal_modules].nil?
+                target_opts.strip_modules = opts[:strip_modules] unless opts[:strip_modules].nil?
 
                 workflow.deploy(
                     kernel_installer,

@@ -226,12 +226,13 @@ module KernelWork
             # Prepare module staging directory
             _arch_name, _arch_info, b_dir = @linux.arch_to_bdir(b_opts.arch)
             staging_base = File.join(@linux.path, b_dir, "staging")
-            mod_path = File.join(staging_base, "lib/modules/#{krel}")
+            mod_path = File.join(staging_base, "usr/lib/modules/#{krel}")
 
             unless File.directory?(mod_path) || dry_run
                 log(:INFO, "Installing modules to local staging directory...")
                 make_flags = @linux.gen_make_flags(b_opts)
-                @linux.runSystem("make #{make_flags} modules_install INSTALL_MOD_PATH=#{staging_base}")
+                strip_arg = target_opts.strip_modules ? " INSTALL_MOD_STRIP=1" : ""
+                @linux.runSystem("make #{make_flags} modules_install INSTALL_MOD_PATH=#{staging_base}#{strip_arg}")
             end
 
             # Calculate modules to synchronize

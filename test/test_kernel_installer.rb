@@ -15,6 +15,7 @@ raise "Expected default sudo false for remote" unless target_remote.sudo == fals
 raise "Expected default reboot true" unless target_remote.reboot == true
 raise "Expected default reboot_method :kexec" unless target_remote.reboot_method == :kexec
 raise "Expected default minimal_modules true" unless target_remote.minimal_modules == true
+raise "Expected default strip_modules true" unless target_remote.strip_modules == true
 raise "Expected default dracut true" unless target_remote.dracut == true
 raise "Expected default update_grub true" unless target_remote.update_grub == true
 
@@ -38,6 +39,7 @@ cfg_hash = {
     "reboot_method" => "reboot",
     "reboot" => false,
     "minimal_modules" => false,
+    "strip_modules" => false,
     "dracut" => false,
     "update_grub" => false,
     "boot_dir" => "/custom/boot",
@@ -49,6 +51,7 @@ raise "Expected port 2222" unless target_from_cfg.port == 2222
 raise "Expected reboot_method :reboot" unless target_from_cfg.reboot_method == :reboot
 raise "Expected reboot false" unless target_from_cfg.reboot == false
 raise "Expected minimal_modules false" unless target_from_cfg.minimal_modules == false
+raise "Expected strip_modules false" unless target_from_cfg.strip_modules == false
 raise "Expected dracut false" unless target_from_cfg.dracut == false
 raise "Expected update_grub false" unless target_from_cfg.update_grub == false
 raise "Expected custom boot dir" unless target_from_cfg.boot_dir == "/custom/boot"
@@ -299,6 +302,15 @@ raise "Expected reboot: false" unless opts[:reboot] == false
 
 parser.parse!(["--reboot"])
 raise "Expected reboot: true" unless opts[:reboot] == true
+
+# Test --no-strip and --strip
+parser.parse!(["--no-strip"])
+raise "Expected strip_modules: false" unless opts[:strip_modules] == false
+
+parser.parse!(["--strip"])
+raise "Expected strip_modules: true" unless opts[:strip_modules] == true
+
+puts "Test Case 8 (CLI OptionParser deploy action options) Passed"
 
 puts "Test Case 8 (CLI OptionParser [no-] overrides) Passed"
 
