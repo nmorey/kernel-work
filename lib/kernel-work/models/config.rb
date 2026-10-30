@@ -85,6 +85,7 @@ module KernelWork
       },
       test: {
         default_target: nil,
+        defaults: {},
         targets: {}
       }
     }
@@ -160,16 +161,24 @@ module KernelWork
         RecursiveConfig.new(@settings[:test] || {})
     end
 
+    # Access global test target defaults
+    # @return [Hash]
+    def test_defaults
+        @settings.dig(:test, :defaults) || {}
+    end
+
     # Find test target by explicit target name or by matching active branch
     # @param target_name [String, Symbol, nil] Explicit target name, or nil for branch lookup
     # @param branch [String, nil] Current working branch name
     # @return [TargetOpts, nil] Found target configuration as a TargetOpts, or nil
     def find_test_target(target_name = nil, branch = nil)
         targets = @settings.dig(:test, :targets) || {}
+        defaults = test_defaults
+
         if target_name
             t_key = targets.keys.find { |k| k.to_s == target_name.to_s }
             return nil unless t_key
-            return TargetOpts.from_config(t_key.to_s, targets[t_key])
+            return TargetOpts.from_config(t_key.to_s, targets[t_key], defaults: defaults)
         end
 
         if branch
@@ -177,7 +186,7 @@ module KernelWork
                 targets[k][:branch].to_s == branch.to_s
             end
             if t_key
-                return TargetOpts.from_config(t_key.to_s, targets[t_key])
+                return TargetOpts.from_config(t_key.to_s, targets[t_key], defaults: defaults)
             end
         end
 
@@ -185,7 +194,7 @@ module KernelWork
         if def_name
             t_key = targets.keys.find { |k| k.to_s == def_name.to_s }
             if t_key
-                return TargetOpts.from_config(t_key.to_s, targets[t_key])
+                return TargetOpts.from_config(t_key.to_s, targets[t_key], defaults: defaults)
             end
         end
 

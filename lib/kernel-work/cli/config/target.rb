@@ -24,7 +24,7 @@ module KernelWork
                     end
 
                     # List of supported target actions.
-                    ACTION_LIST = [ :add, :list, :show, :delete, :default ]
+                    ACTION_LIST = [ :add, :list, :show, :delete, :default, :defaults ]
 
                     # Help text for target actions.
                     ACTION_HELP = {
@@ -32,7 +32,8 @@ module KernelWork
                         :list => "List all registered test targets",
                         :show => "Show the detailed options of a registered target",
                         :delete => "Delete a registered test target from config.yml",
-                        :default => "Get, set, or clear the default test target"
+                        :default => "Get, set, or clear the default test target",
+                        :defaults => "Get, set, or clear global default options applied to all test targets"
                     }
 
                     # Define and configure CLI command-line options for target actions.
@@ -90,6 +91,24 @@ module KernelWork
                         when :default
                             optsParser.on("-t", "--target <name>", String, "Set target as default.") { |val| opts[:target] = val }
                             optsParser.on("--clear", "Clear default target.") { opts[:clear] = true }
+                        when :defaults
+                            optsParser.on("-p", "--port <port>", Integer, "SSH port.") { |val| opts[:port] = val }
+                            optsParser.on("--type <type>", String, "Target type ('remote' or 'local').") { |val| opts[:type] = val }
+                            optsParser.on("--[no-]sudo", "Execute commands with sudo.") { |val| opts[:sudo] = val }
+                            optsParser.on("-r", "--[no-]reboot", "Reboot target after installation.") { |val| opts[:reboot] = val }
+                            optsParser.on("--reboot-method <method>", String, "Boot method ('kexec' or 'reboot').") { |val| opts[:reboot_method] = val }
+                            optsParser.on("--[no-]minimal-modules", "Install only active kernel modules.") { |val| opts[:minimal_modules] = val }
+                            optsParser.on("-e", "--extra-module <module>", String, "Extra module to include when using --minimal-modules (comma-separated or repeatable).") do |val|
+                                opts[:extra_modules] ||= []
+                                opts[:extra_modules].concat(val.split(',').map(&:strip))
+                            end
+                            optsParser.on("--clear-extra-modules", "Clear extra modules list for defaults.") { opts[:clear_extra_modules] = true }
+                            optsParser.on("--[no-]strip", "Strip debug symbols from modules during deployment.") { |val| opts[:strip_modules] = val }
+                            optsParser.on("--[no-]dracut", "Run dracut to generate initrd.") { |val| opts[:dracut] = val }
+                            optsParser.on("--[no-]grub", "Update GRUB bootloader configuration.") { |val| opts[:update_grub] = val }
+                            optsParser.on("--boot-dir <dir>", String, "Boot directory path (default '/boot').") { |val| opts[:boot_dir] = val }
+                            optsParser.on("--modules-dir <dir>", String, "Modules directory path (default '/lib/modules').") { |val| opts[:modules_dir] = val }
+                            optsParser.on("--clear", "Clear all global test target defaults.") { opts[:clear] = true }
                         end
                     end
 
@@ -296,6 +315,61 @@ module KernelWork
                                 puts def_target
                             else
                                 log(:INFO, "No default test target configured.")
+                            end
+                        end
+                    end
+
+                    # Get, set, or clear global test target defaults.
+                    # @param opts [Hash] Options hash.
+                    # @return [void]
+                    def defaults(opts)
+                        cfg = KernelWork.config.settings
+                        cfg[:test] ||= {}
+                        cfg[:test][:defaults] ||= {}
+
+                        if opts[:clear]
+                            cfg[:test][:defaults] = {}
+                            KernelWork.config.save_config
+                            log(:INFO, "Cleared global test target defaults in #{KernelWork.config.config_file}")
+                            return
+                        end
+
+                        modifications = false
+                        defs = cfg[:test][:defaults]
+
+                        [:port, :sudo, :reboot, :minimal_modules, :strip_modules, :dracut, :update_grub, :boot_dir, :modules_dir].each do |k|
+                            unless opts[k].nil?
+                                defs[k] = opts[k]
+                                modifications = true
+                            end
+                        end
+
+                        if opts[:type]
+                            defs[:type] = opts[:type].to_sym
+                            modifications = true
+                        end
+
+                        if opts[:reboot_method]
+                            defs[:reboot_method] = opts[:reboot_method].to_sym
+                            modifications = true
+                        end
+
+                        if opts[:clear_extra_modules]
+                            defs[:extra_modules] = []
+                            modifications = true
+                        elsif opts[:extra_modules] && !opts[:extra_modules].empty?
+                            defs[:extra_modules] = ((defs[:extra_modules] || []) + opts[:extra_modules]).uniq
+                            modifications = true
+                        end
+
+                        if modifications
+                            KernelWork.config.save_config
+                            log(:INFO, "Updated global test target defaults in #{KernelWork.config.config_file}")
+                        else
+                            if defs.empty?
+                                log(:INFO, "No global test target defaults configured.")
+                            else
+                                puts defs.to_yaml
                             end
                         end
                     end

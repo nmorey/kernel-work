@@ -137,25 +137,32 @@ module KernelWork
         # Construct a TargetOpts from configuration hash
         # @param name [String, Symbol] Target identifier name
         # @param config [Hash, nil] Raw configuration hash
+        # @param defaults [Hash, nil] Optional global default options hash
         # @return [TargetOpts] Initialized TargetOpts object
-        def self.from_config(name, config)
+        def self.from_config(name, config, defaults: nil)
+            base_cfg = defaults ? defaults.transform_keys(&:to_sym) : {}
             cfg = config ? config.transform_keys(&:to_sym) : {}
+            merged_cfg = base_cfg.merge(cfg)
+
+            combined_extra = (Array(base_cfg[:extra_modules]) + Array(cfg[:extra_modules])).map(&:to_s).reject(&:empty?).uniq
+            merged_cfg[:extra_modules] = combined_extra unless combined_extra.empty?
+
             new(
                 name: name,
-                branch: cfg[:branch],
-                type: cfg[:type],
-                host: cfg[:host],
-                port: cfg[:port],
-                sudo: cfg[:sudo],
-                reboot: cfg[:reboot],
-                reboot_method: cfg[:reboot_method],
-                minimal_modules: cfg[:minimal_modules],
-                strip_modules: cfg[:strip_modules],
-                extra_modules: cfg[:extra_modules],
-                dracut: cfg[:dracut],
-                update_grub: cfg[:update_grub],
-                boot_dir: cfg[:boot_dir],
-                modules_dir: cfg[:modules_dir]
+                branch: merged_cfg[:branch],
+                type: merged_cfg[:type],
+                host: merged_cfg[:host],
+                port: merged_cfg[:port],
+                sudo: merged_cfg[:sudo],
+                reboot: merged_cfg[:reboot],
+                reboot_method: merged_cfg[:reboot_method],
+                minimal_modules: merged_cfg[:minimal_modules],
+                strip_modules: merged_cfg[:strip_modules],
+                extra_modules: merged_cfg[:extra_modules] || [],
+                dracut: merged_cfg[:dracut],
+                update_grub: merged_cfg[:update_grub],
+                boot_dir: merged_cfg[:boot_dir],
+                modules_dir: merged_cfg[:modules_dir]
             )
         end
 

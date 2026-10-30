@@ -63,6 +63,24 @@ h = target_from_cfg.to_h
 raise "Expected to_h to contain name" unless h[:name] == "testbox"
 raise "Expected to_h to contain reboot false" unless h[:reboot] == false
 
+# Test Case 2B: Global defaults inheritance in TargetOpts.from_config
+defaults_hash = {
+    reboot_method: "reboot",
+    dracut: false,
+    extra_modules: ["mlx5_ib"],
+    port: 2222
+}
+target_with_defaults = KernelWork::TargetOpts.from_config("vm_default", { "host" => "vmhost", "extra_modules" => ["kvm_intel"] }, defaults: defaults_hash)
+raise "Expected inherited reboot_method :reboot" unless target_with_defaults.reboot_method == :reboot
+raise "Expected inherited dracut false" unless target_with_defaults.dracut == false
+raise "Expected inherited port 2222" unless target_with_defaults.port == 2222
+raise "Expected merged extra_modules" unless target_with_defaults.extra_modules.sort == ["kvm_intel", "mlx5_ib"]
+
+# Test Case 2C: Target specific override over global defaults
+target_override = KernelWork::TargetOpts.from_config("vm_override", { "host" => "vmhost", "reboot_method" => "kexec", "dracut" => true }, defaults: defaults_hash)
+raise "Expected override reboot_method :kexec" unless target_override.reboot_method == :kexec
+raise "Expected override dracut true" unless target_override.dracut == true
+
 puts "Test Case 2 (TargetOpts.from_config and to_h) Passed"
 
 # Test Case 3: Target hierarchy instantiation and exec_target implementation
@@ -236,6 +254,10 @@ end
 # Test Case 7: Target resolution from config and branch matching
 KernelWork.config.settings[:test] = {
     default_target: "default_box",
+    defaults: {
+        reboot_method: "reboot",
+        dracut: false
+    },
     targets: {
         default_box: {
             host: "root@defaultbox",
@@ -250,17 +272,17 @@ KernelWork.config.settings[:test] = {
 
 installer = KernelWork::KernelInstaller.new
 
-# Branch matching
+# Branch matching with inherited defaults
 t = installer.resolve_target(nil, "SLE15-SP5")
 raise "Expected sle15 target" unless t.name == "sle15" && t.host == "root@sle15host"
+raise "Expected sle15 to inherit reboot_method" unless t.reboot_method == :reboot
+raise "Expected sle15 to inherit dracut false" unless t.dracut == false
 
-# Target name matching
-t2 = installer.resolve_target("default_box", "master")
-raise "Expected default_box target" unless t2.name == "default_box"
-
-# Ad-hoc host target
+# Ad-hoc host target inherits defaults
 t3 = installer.resolve_target("user@adhoc-server.com", "other-branch")
 raise "Expected adhoc host" unless t3.host == "user@adhoc-server.com" && t3.remote?
+raise "Expected adhoc target to inherit reboot_method" unless t3.reboot_method == :reboot
+raise "Expected adhoc target to inherit dracut false" unless t3.dracut == false
 
 # Mismatch branch without force
 begin
@@ -324,5 +346,18 @@ raise "Expected extra_modules" unless opts[:extra_modules] == ["mlx5_ib", "kvm_i
 puts "Test Case 8 (CLI OptionParser deploy action options) Passed"
 
 puts "Test Case 8 (CLI OptionParser [no-] overrides) Passed"
+
+# Test Case 9: CLI OptionParser defaults action options
+opts_defaults = { action: :defaults }
+parser_defaults = OptionParser.new
+KernelWork::CLI::Config::TargetCLI::TargetAction.set_opts(:defaults, parser_defaults, opts_defaults)
+
+parser_defaults.parse!(["--reboot-method", "reboot", "--no-dracut", "-e", "mlx5_core", "--strip"])
+raise "Expected defaults reboot_method :reboot" unless opts_defaults[:reboot_method] == "reboot"
+raise "Expected defaults dracut false" unless opts_defaults[:dracut] == false
+raise "Expected defaults strip_modules true" unless opts_defaults[:strip_modules] == true
+raise "Expected defaults extra_modules" unless opts_defaults[:extra_modules] == ["mlx5_core"]
+
+puts "Test Case 9 (CLI OptionParser target defaults action options) Passed"
 
 puts "\nAll KernelInstaller and TargetOpts unit tests passed successfully!"

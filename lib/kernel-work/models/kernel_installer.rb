@@ -287,7 +287,7 @@ module KernelWork
 
             if target_name && target.nil?
                 if target_name.to_s.include?("@") || target_name.to_s.include?(".") || %w[localhost local].include?(target_name.to_s)
-                    target = TargetOpts.new(name: target_name.to_s, host: target_name.to_s)
+                    target = TargetOpts.from_config(target_name.to_s, { host: target_name.to_s }, defaults: KernelWork.config.test_defaults)
                 else
                     raise TestTargetNotFoundError.new(target_name)
                 end
