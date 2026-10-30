@@ -43,6 +43,10 @@ module KernelWork
         #   @return [Boolean] Whether to strip debug symbols from installed modules
         attr_accessor :strip_modules
 
+        # @!attribute [rw] extra_modules
+        #   @return [Array<String>] List of extra module names to install with minimal modules
+        attr_accessor :extra_modules
+
         # @!attribute [rw] dracut
         #   @return [Boolean] Whether to generate initrd via dracut on target
         attr_accessor :dracut
@@ -70,13 +74,14 @@ module KernelWork
         # @param reboot_method [Symbol] Boot method (:kexec or :reboot)
         # @param minimal_modules [Boolean] Whether to install only active lsmod modules
         # @param strip_modules [Boolean] Whether to strip debug symbols from installed modules
+        # @param extra_modules [Array<String>, nil] List of extra module names to install
         # @param dracut [Boolean] Whether to generate initrd via dracut
         # @param update_grub [Boolean] Whether to update grub default boot entry
         # @param boot_dir [String] Target boot directory path
         # @param modules_dir [String] Target kernel modules directory path
         def initialize(name: nil, branch: nil, type: nil, host: nil, port: nil, sudo: nil,
                        reboot: true, reboot_method: :kexec, minimal_modules: true,
-                       strip_modules: true, dracut: true, update_grub: true,
+                       strip_modules: true, extra_modules: [], dracut: true, update_grub: true,
                        boot_dir: "/boot", modules_dir: "/lib/modules")
             @name = name
             @branch = branch
@@ -88,6 +93,7 @@ module KernelWork
             @reboot_method = (reboot_method || :kexec).to_sym
             @minimal_modules = minimal_modules.nil? ? true : !!minimal_modules
             @strip_modules = strip_modules.nil? ? true : !!strip_modules
+            @extra_modules = Array(extra_modules).map(&:to_s).reject(&:empty?)
             @dracut = dracut.nil? ? true : !!dracut
             @update_grub = update_grub.nil? ? true : !!update_grub
             @boot_dir = boot_dir || "/boot"
@@ -120,6 +126,7 @@ module KernelWork
                 reboot_method: @reboot_method,
                 minimal_modules: @minimal_modules,
                 strip_modules: @strip_modules,
+                extra_modules: @extra_modules,
                 dracut: @dracut,
                 update_grub: @update_grub,
                 boot_dir: @boot_dir,
@@ -144,6 +151,7 @@ module KernelWork
                 reboot_method: cfg[:reboot_method],
                 minimal_modules: cfg[:minimal_modules],
                 strip_modules: cfg[:strip_modules],
+                extra_modules: cfg[:extra_modules],
                 dracut: cfg[:dracut],
                 update_grub: cfg[:update_grub],
                 boot_dir: cfg[:boot_dir],

@@ -40,6 +40,7 @@ cfg_hash = {
     "reboot" => false,
     "minimal_modules" => false,
     "strip_modules" => false,
+    "extra_modules" => ["mlx5_ib", "kvm_intel"],
     "dracut" => false,
     "update_grub" => false,
     "boot_dir" => "/custom/boot",
@@ -52,6 +53,7 @@ raise "Expected reboot_method :reboot" unless target_from_cfg.reboot_method == :
 raise "Expected reboot false" unless target_from_cfg.reboot == false
 raise "Expected minimal_modules false" unless target_from_cfg.minimal_modules == false
 raise "Expected strip_modules false" unless target_from_cfg.strip_modules == false
+raise "Expected extra_modules" unless target_from_cfg.extra_modules == ["mlx5_ib", "kvm_intel"]
 raise "Expected dracut false" unless target_from_cfg.dracut == false
 raise "Expected update_grub false" unless target_from_cfg.update_grub == false
 raise "Expected custom boot dir" unless target_from_cfg.boot_dir == "/custom/boot"
@@ -223,6 +225,11 @@ Dir.mktmpdir do |dir|
     raise "Missing modules.builtin" unless needed.include?("modules.builtin")
     raise "Missing modules.order" unless needed.include?("modules.order")
 
+    # Test with extra_modules
+    needed_with_extra = installer.calculate_module_subset(dir, ["e1000e"], extra_modules: ["btrfs"])
+    raise "Missing btrfs.ko from extra_modules" unless needed_with_extra.include?("kernel/fs/btrfs/btrfs.ko")
+    raise "Missing zstd.ko dependency for extra module btrfs" unless needed_with_extra.include?("kernel/lib/zstd/zstd.ko")
+
     puts "Test Case 6 (calculate_module_subset transitive dependencies) Passed"
 end
 
@@ -309,6 +316,10 @@ raise "Expected strip_modules: false" unless opts[:strip_modules] == false
 
 parser.parse!(["--strip"])
 raise "Expected strip_modules: true" unless opts[:strip_modules] == true
+
+# Test -e and --extra-module
+parser.parse!(["-e", "mlx5_ib,kvm_intel", "--extra-module", "e1000e"])
+raise "Expected extra_modules" unless opts[:extra_modules] == ["mlx5_ib", "kvm_intel", "e1000e"]
 
 puts "Test Case 8 (CLI OptionParser deploy action options) Passed"
 

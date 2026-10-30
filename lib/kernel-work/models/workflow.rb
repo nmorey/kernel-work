@@ -239,7 +239,12 @@ module KernelWork
             if target_opts.minimal_modules
                 log(:INFO, "Fetching active modules from target to filter transfer...")
                 active_mods = target.fetch_lsmod
-                file_list = installer.calculate_module_subset(mod_path, active_mods, extra_subsets: b_opts.build_subset)
+                file_list = installer.calculate_module_subset(
+                    mod_path,
+                    active_mods,
+                    extra_modules: target_opts.extra_modules,
+                    extra_subsets: b_opts.build_subset
+                )
                 log(:INFO, "Selected #{file_list.length} module files for upload")
             end
 

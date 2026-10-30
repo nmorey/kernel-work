@@ -150,6 +150,7 @@ module KernelWork
                     opts[:minimal_modules] = nil
                     opts[:all_modules] = false
                     opts[:strip_modules] = nil
+                    opts[:extra_modules] = []
                     opts[:dracut] = nil
                     opts[:grub] = nil
                     opts[:force] = false
@@ -161,6 +162,9 @@ module KernelWork
                     opts_parser.on("-m", "--module <path>", String, "Hot-reload a single module without rebooting.") { |val| opts[:module] = val }
                     opts_parser.on("--minimal-modules", "Transfer only modules active in target lsmod.") { |_val| opts[:minimal_modules] = true }
                     opts_parser.on("--all-modules", "Transfer all built modules without filtering.") { |_val| opts[:all_modules] = true }
+                    opts_parser.on("-e", "--extra-module <module>", String, "Extra module to include when using --minimal-modules (comma-separated or repeatable).") do |val|
+                        opts[:extra_modules].concat(val.split(',').map(&:strip))
+                    end
                     opts_parser.on("--[no-]strip", "Strip debug symbols from modules during installation.") { |val| opts[:strip_modules] = val }
                     opts_parser.on("--[no-]dracut", "Run or skip dracut on target.") { |val| opts[:dracut] = val }
                     opts_parser.on("--[no-]grub", "Update or skip GRUB configuration on target.") { |val| opts[:grub] = val }
@@ -348,6 +352,9 @@ module KernelWork
                 target_opts.minimal_modules = false if opts[:all_modules]
                 target_opts.minimal_modules = opts[:minimal_modules] unless opts[:minimal_modules].nil?
                 target_opts.strip_modules = opts[:strip_modules] unless opts[:strip_modules].nil?
+                if opts[:extra_modules] && !opts[:extra_modules].empty?
+                    target_opts.extra_modules = (target_opts.extra_modules + opts[:extra_modules]).uniq
+                end
 
                 workflow.deploy(
                     kernel_installer,

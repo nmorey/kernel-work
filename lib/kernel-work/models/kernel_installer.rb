@@ -307,9 +307,10 @@ module KernelWork
         # Calculate minimal module file list based on active modules and dependencies
         # @param staging_modules_dir [String] Path to local modules directory containing modules.dep
         # @param active_modules [Array<String>] Active module names from target
+        # @param extra_modules [Array<String>] Additional module names to force include
         # @param extra_subsets [Array<String>] Additional subtree paths to include
         # @return [Array<String>] Relative file paths of required modules and metadata
-        def calculate_module_subset(staging_modules_dir, active_modules, extra_subsets: [])
+        def calculate_module_subset(staging_modules_dir, active_modules, extra_modules: [], extra_subsets: [])
             dep_file = File.join(staging_modules_dir, "modules.dep")
             mod_map = {}
 
@@ -329,7 +330,12 @@ module KernelWork
 
             needed_paths = Set.new
             visited_mods = Set.new
-            queue = active_modules.dup
+
+            normalized_extra = Array(extra_modules).map do |m|
+                File.basename(m.to_s).sub(/\.ko(\.zst|\.xz|\.gz)?$/, '').tr('-', '_')
+            end
+
+            queue = (Array(active_modules) + normalized_extra).uniq
 
             while !queue.empty?
                 mod_name = queue.shift
