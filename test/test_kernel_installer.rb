@@ -174,20 +174,27 @@ mock = KernelWork::MockTarget.new(dummy_target_opts)
 mods = mock.fetch_lsmod
 raise "Expected ['dummy_module'], got: #{mods}" unless mods == ["dummy_module"]
 
-# install_kernel
+# install_kernel (kexec: installs to modules_dir)
 mock.install_kernel("6.4.0-default", "/tmp/vmlinuz")
+mkdir_cmd = mock.log_commands[-2]
+raise "Expected mkdir -p on target, got: #{mkdir_cmd}" unless mkdir_cmd[0] == :target && mkdir_cmd[1] == "mkdir -p /lib/modules/6.4.0-default"
 last_local = mock.log_commands.last
-raise "Expected rsync in run_local, got: #{last_local}" unless last_local[0] == [:local][0] && last_local[1].include?("rsync") && last_local[1].include?("/boot/vmlinuz-6.4.0-default")
+raise "Expected rsync in run_local, got: #{last_local}" unless last_local[0] == :local && last_local[1].include?("rsync") && last_local[1].include?("/lib/modules/6.4.0-default/vmlinuz")
+
+# install_modules (verifies exclusion of vmlinuz and initrd)
+mock.install_modules("6.4.0-default", "/tmp/staging")
+last_local = mock.log_commands.last
+raise "Expected exclude args in module rsync, got: #{last_local}" unless last_local[1].include?("--exclude=vmlinuz*") && last_local[1].include?("--exclude=initrd*")
 
 # depmod_and_dracut with dracut: false
 mock.depmod_and_dracut("6.4.0-default", run_dracut: false)
 last_target = mock.log_commands.last
 raise "Expected depmod only" unless last_target[1] == "depmod -a 6.4.0-default"
 
-# depmod_and_dracut with dracut: true
+# depmod_and_dracut with dracut: true (kexec: builds initrd in modules_dir)
 mock.depmod_and_dracut("6.4.0-default", run_dracut: true)
 last_target = mock.log_commands.last
-raise "Expected depmod and dracut" unless last_target[1].include?("depmod") && last_target[1].include?("dracut -f /boot/initrd-6.4.0-default")
+raise "Expected depmod and dracut in modules_dir" unless last_target[1].include?("depmod") && last_target[1].include?("dracut -f /lib/modules/6.4.0-default/initrd")
 
 # grub_setup
 mock.grub_setup("6.4.0-default")
@@ -197,7 +204,19 @@ raise "Expected grub2-mkconfig" unless last_target[1].include?("grub2-mkconfig")
 # boot with kexec
 mock.boot("6.4.0-default", method: :kexec)
 last_target = mock.log_commands.last
-raise "Expected kexec boot" unless last_target[1].include?("kexec -l") && last_target[1].include?("systemctl kexec")
+raise "Expected kexec boot" unless last_target[1].include?("kexec -l /lib/modules/6.4.0-default/vmlinuz --initrd=/lib/modules/6.4.0-default/initrd") && last_target[1].include?("systemctl kexec")
+
+# Test :reboot method behavior (installs to boot_dir)
+mock.opts.reboot_method = :reboot
+mock.install_kernel("6.4.0-default", "/tmp/vmlinuz")
+last_local = mock.log_commands.last
+raise "Expected rsync to boot_dir, got: #{last_local}" unless last_local[1].include?("/boot/vmlinuz-6.4.0-default")
+
+mock.depmod_and_dracut("6.4.0-default", run_dracut: true)
+last_target = mock.log_commands.last
+raise "Expected dracut to boot_dir, got: #{last_target}" unless last_target[1].include?("dracut -f /boot/initrd-6.4.0-default")
+
+mock.opts.reboot_method = :kexec
 
 # boot with reboot
 mock.boot("6.4.0-default", method: :reboot, update_grub: false)

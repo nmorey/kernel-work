@@ -47,13 +47,40 @@ module KernelWork
                 end.compact.reject(&:empty?).uniq
             end
 
+            # Calculate target destination path for kernel image based on boot method
+            # @param kernel_release [String] Target kernel release version string
+            # @param method [Symbol, nil] Boot method override (:kexec or :reboot)
+            # @return [String] Absolute path to kernel image on target
+            def kernel_dest_path(kernel_release, method: nil)
+                boot_method = (method || @opts.reboot_method || :kexec).to_sym
+                if boot_method == :kexec
+                    "#{@opts.modules_dir}/#{kernel_release}/vmlinuz"
+                else
+                    "#{@opts.boot_dir}/vmlinuz-#{kernel_release}"
+                end
+            end
+
+            # Calculate target destination path for initrd image based on boot method
+            # @param kernel_release [String] Target kernel release version string
+            # @param method [Symbol, nil] Boot method override (:kexec or :reboot)
+            # @return [String] Absolute path to initrd image on target
+            def initrd_dest_path(kernel_release, method: nil)
+                boot_method = (method || @opts.reboot_method || :kexec).to_sym
+                if boot_method == :kexec
+                    "#{@opts.modules_dir}/#{kernel_release}/initrd"
+                else
+                    "#{@opts.boot_dir}/initrd-#{kernel_release}"
+                end
+            end
+
             # Synchronize kernel binary image to target boot directory
             # @param kernel_release [String] Target kernel release version string
             # @param kernel_image_path [String] Local path to kernel binary image
             # @return [void]
             def install_kernel(kernel_release, kernel_image_path)
                 log(:INFO, "Deploying kernel image")
-                dest = "#{@opts.boot_dir}/vmlinuz-#{kernel_release}"
+                dest = kernel_dest_path(kernel_release)
+                run_target("mkdir -p #{File.dirname(dest)}")
                 copy_to_target(kernel_image_path, dest)
             end
 
@@ -65,6 +92,7 @@ module KernelWork
             def install_modules(kernel_release, staging_dir, file_list: nil)
                 log(:INFO, "Deploying modules")
                 dest = "#{@opts.modules_dir}/#{kernel_release}/"
+                exclude_args = ["--exclude=vmlinuz*", "--exclude=initrd*"]
                 if file_list && !file_list.empty?
                     file_list_content = file_list.join("\n") + "\n"
                     if @dry_run
@@ -76,13 +104,13 @@ module KernelWork
                     begin
                         temp.write(file_list_content)
                         temp.flush
-                        copy_to_target("#{staging_dir}/", dest, ["--files-from=#{temp.path}"])
+                        copy_to_target("#{staging_dir}/", dest, ["--files-from=#{temp.path}"] + exclude_args)
                     ensure
                         temp.close
                         temp.unlink
                     end
                 else
-                    copy_to_target("#{staging_dir}/", dest)
+                    copy_to_target("#{staging_dir}/", dest, exclude_args)
                 end
             end
 
@@ -94,7 +122,7 @@ module KernelWork
                 log(:INFO, "Rebuilding initrd")
                 commands = ["depmod -a #{kernel_release}"]
                 if run_dracut
-                    commands << "dracut -f #{@opts.boot_dir}/initrd-#{kernel_release} #{kernel_release}"
+                    commands << "dracut -f #{initrd_dest_path(kernel_release)} #{kernel_release}"
                 end
                 run_target(commands.join(" && "))
             end
@@ -118,7 +146,9 @@ module KernelWork
 
                 boot_method = (method || @opts.reboot_method || :kexec).to_sym
                 if boot_method == :kexec
-                    target_cmd = "kexec -l #{@opts.boot_dir}/vmlinuz-#{kernel_release} --initrd=#{@opts.boot_dir}/initrd-#{kernel_release} --reuse-cmdline && systemctl kexec"
+                    k_path = kernel_dest_path(kernel_release, method: :kexec)
+                    i_path = initrd_dest_path(kernel_release, method: :kexec)
+                    target_cmd = "kexec -l #{k_path} --initrd=#{i_path} --reuse-cmdline && systemctl kexec"
                     log(:INFO, "Rebooting target via kexec...") unless @dry_run
                     run_target(target_cmd, catch_err: true)
                 else
